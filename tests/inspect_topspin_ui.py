@@ -50,10 +50,6 @@ class Capture(Runnable):
         windows=[]
         for w in Window.getWindows():
             if hasattr(w,'getTitle') and 'Bruker TopSpin' in str(w.getTitle()): windows.append(walk(w,'topspin'))
-            if hasattr(w,'getTitle') and str(w.getTitle())=='Error':
-                owner=w.getOwner()
-                if owner is not None and hasattr(owner,'getTitle') and 'Bruker TopSpin' in str(owner.getTitle()):
-                    w.dispose()
         info={'laf':str(UIManager.getLookAndFeel().__class__),'javaVersion':System.getProperty('java.version'),'windows':windows}
         with open('Z:/home/maxlang/Projects/topspin-viewer/evidence/ui/component-tree.json','w') as f:json.dump(info,f,indent=2)
 

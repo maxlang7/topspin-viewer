@@ -18,6 +18,10 @@ public class DisplayMappingReference {
                     if(x.mapToScreen(value)!=rebuiltX.screen(value,1))throw new AssertionError("X mapping");
                     if(y.mapToScreen(value)!=rebuiltY.screen(value,gain))throw new AssertionError("Y mapping "+Arrays.toString(physical)+" "+Arrays.toString(screen)+" gain="+gain+" value="+Double.toHexString(value)+" original="+y.mapToScreen(value)+" rebuilt="+rebuiltY.screen(value,gain)+" mapping="+rebuiltY+" range="+y.getPhysicalMapping());
                     count+=2;
+                    int position=random.nextInt(20000)-2000;
+                    if(Double.doubleToRawLongBits(x.mapToPhysical(position))!=Double.doubleToRawLongBits(rebuiltX.physical(position)))throw new AssertionError("Inverse X mapping");
+                    if(Double.doubleToRawLongBits(y.mapToPhysical(position))!=Double.doubleToRawLongBits(rebuiltY.physical(position)))throw new AssertionError("Inverse Y mapping");
+                    count+=2;
                 }
             }
         }

@@ -323,15 +323,8 @@ public final class Viewer extends JFrame {
             g.setClip(x,y,w,h);g.setColor(Color.BLUE);
             int previousX=0,previousY=0;boolean first=true;
             double[] visible=mode==Mode.PHASE?data:Arrays.copyOfRange(data,from,to+1);
-            var compressed=VisualNumerics.compress(visible,from,w);
-            if(visible.length<2*w)compressed=null;
-            double[] drawing=compressed==null?visible:compressed.values();
             var xMapper=VisualNumerics.horizontal(viewLeft,viewRight,x,x+w-1);
-            for(int i=0;i<drawing.length;i++) {
-                int px=compressed==null?xMapper.screen(spectrum.ppm(from+i),1):x+i/2;
-                int py=mapper.screen(drawing[i],gain);
-                if(!first)g.drawLine(previousX,previousY,px,py);previousX=px;previousY=py;first=false;
-            }
+            SpectrumPainter.paint(g,visible,from,x,y,w,h,xMapper,mapper,spectrum.left,spectrum.right,spectrum.real.length,gain);
             if(mode==Mode.PHASE){g.setColor(new Color(255,70,70));int px=(int)Math.round(pixel(spectrum.ppm(pivot)));g.drawLine(px,y,px,y+h);}
             if(mode==Mode.INTEGRATE || !spectrum.integrals.regions().isEmpty()) {
                 var regions=spectrum.integrals.regions();double integralExtent=0;
