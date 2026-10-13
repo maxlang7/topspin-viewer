@@ -4,7 +4,12 @@ import java.util.*;
 
 /** Manual integration regions, using TopSpin's inclusive bounds and file units. */
 public final class IntegrationRegions {
-    public record Region(double left,double right,double bias,double slope) {}
+    public record Region(double left,double right,double bias,double slope) {
+        public Region {
+            if(!Double.isFinite(left) || !Double.isFinite(right) || !Double.isFinite(bias) || !Double.isFinite(slope) || left<right)
+                throw new IllegalArgumentException("Invalid integral region");
+        }
+    }
     private final List<Region> regions=new ArrayList<>();
     private final Deque<List<Region>> history=new ArrayDeque<>();
     public double normalizingFactor=1;
@@ -14,11 +19,29 @@ public final class IntegrationRegions {
         result.normalizingFactor=normalizingFactor;return result;
     }
     private void checkpoint() {history.push(List.copyOf(regions));}
-    public void add(double a,double b) {checkpoint();regions.add(new Region(Math.max(a,b),Math.min(a,b),0,0));sort();}
+    public void add(double a,double b) {checkpoint();regions.add(new Region(Math.max(a,b),Math.min(a,b),0,0));}
     public void remove(int index) {checkpoint();regions.remove(index);}
-    public void replace(int index,Region region) {checkpoint();regions.set(index,region);sort();}
+    public void replace(int index,Region region) {checkpoint();regions.set(index,region);}
+    public void adjustBias(int index,double amount,double sensitivity) {
+        Region r=regions.get(index);double correction=amount*sensitivity*1000.0;
+        replace(index,new Region(r.left(),r.right(),r.bias()-correction,r.slope()));
+    }
+    public void adjustSlope(int index,double amount,double sensitivity,double[] spectrum,double left,double right) {
+        Region r=regions.get(index);double correction=amount*sensitivity*1000.0;
+        int points=calculate(r,spectrum,left,right).curve().length;
+        replace(index,new Region(r.left(),r.right(),r.bias(),r.slope()-correction/points));
+    }
+    public void split(int index,double position,double fullLeft,double fullRight,int size) {
+        Region r=regions.get(index);
+        if(!Double.isFinite(position) || position<r.right() || position>r.left())return;
+        double start=Math.min((r.left()-fullLeft)/(fullRight-fullLeft)*size,size-1.0);
+        double cut=Math.min((position-fullLeft)/(fullRight-fullLeft)*size,size-1.0);
+        checkpoint();regions.remove(index);
+        regions.add(new Region(r.left(),position,r.bias(),r.slope()));
+        regions.add(new Region(Math.min(fullLeft,position+1e-16),r.right(),r.bias()+(cut-start)*r.slope(),r.slope()));
+    }
     public void undo() {if(!history.isEmpty()){regions.clear();regions.addAll(history.pop());}}
-    private void sort() {regions.sort(Comparator.comparingDouble(Region::left).reversed());}
+    private List<Region> sorted() {List<Region> sorted=new ArrayList<>(regions);sorted.sort(Comparator.comparingDouble(Region::left).reversed());return sorted;}
     public Numerics.Integral calculate(Region region,double[] spectrum,double fullLeft,double fullRight) {
         double a=Math.min(fullLeft,region.left()),b=Math.max(fullRight,region.right());
         if(a<b)throw new IllegalArgumentException("Integral region is outside the spectrum");
@@ -47,13 +70,13 @@ public final class IntegrationRegions {
                 result.regions.add(new Region(a,b,bias,slope));
             } catch(NumberFormatException e) {throw new IOException("Invalid integration-region number",e);}
         }
-        result.sort();return result;
+        return result;
     }
     public String serialize(int nc) {
         double scale=Math.pow(2.0,nc);
         StringBuilder text=new StringBuilder("A 1.0 #regions in PPM\n# low field   high field  bias        slope\n");
         int index=0;
-        for(Region r:regions)text.append("  ").append(r.left()).append("  ").append(r.right()).append("  ")
+        for(Region r:sorted())text.append("  ").append(r.left()).append("  ").append(r.right()).append("  ")
             .append(-1.0*r.bias()/scale).append("  ").append(-1.0*r.slope()/scale)
             .append("  # for region ").append(++index).append('\n');
         return text.toString();
@@ -66,7 +89,7 @@ public final class IntegrationRegions {
             .append("\n\n   Number   Integrated Region     Integral\n");
         java.text.DecimalFormat format=new java.text.DecimalFormat("0.000",java.text.DecimalFormatSymbols.getInstance(Locale.ROOT));
         int index=0;
-        for(Region r:regions) {
+        for(Region r:sorted()) {
             String number=Integer.toString(++index);format.applyPattern("0.000");
             String a=padDecimal(format.format(r.left()),7),b=padDecimal(format.format(r.right()),7);
             double value=calculate(r,spectrum,left,right).normalized(normalizingFactor);

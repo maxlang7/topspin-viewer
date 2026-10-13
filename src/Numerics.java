@@ -3,6 +3,17 @@ import java.util.Arrays;
 /** Reconstructed operations. No Bruker classes are needed at runtime. */
 public final class Numerics {
     private static final double DEGREES = 0.017453292519943295;
+    public record PhaseAngles(double zero,double first) {}
+    public static PhaseAngles dragPhase(double zero,double first,int order,double amount,
+            double increment,double sensitivity,int pivot,int stripStart,int ftSize,int size) {
+        if(order==0)zero+=amount*increment*sensitivity;
+        else {
+            double delta=4.0*amount*increment*sensitivity;
+            zero-=(-delta*(stripStart+(double)pivot)/(ftSize>0?ftSize:size));
+            first-=delta;
+        }
+        return new PhaseAngles(zero,first);
+    }
 
     public static double[] phasePreview(double[] re, double[] im, double ph0,
             double ph1, int ftSize, int stripStart, int start, int count) {

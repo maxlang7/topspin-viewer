@@ -14,6 +14,7 @@ The application does not load Bruker classes, executables, processing libraries,
 - Combined raw-FID `efp`, including exponential windowing centered on group delay, native FFT cache splitting, accumulated phase, scaling and truncation, for integer and floating-point FIDs. All 85 acquisitions in the user's current lab folder and five additional parameter variants pass bitwise comparisons, including their ppm axes.
 - Integration regions and saved `intrng` and `integrals.txt` text against original Java routines, including regions touching the complete spectral endpoint. Three regions captured from the actual interactive module match every curve value, default normalization and saved scaling parameter.
 - Display compression, forward coordinate mapping and complex-magnitude phase pivots against original Java routines.
+- Phase-drag arithmetic matches 540 original-controller transitions. Manual bias, slope and region splitting match 15,171 values captured from the actual interactive integration controller, including the second segment's shifted bias.
 - Saving and reopening preserves every stored real and imaginary spectrum byte in the tested captures.
 - Loose acquisitions, nested dataset folders, raw filenames and ZIP archives open without changing numerical data. The UI workflow test covers phase preset/cancel/save/reopen and manual-region drag/undo/cancel.
 
