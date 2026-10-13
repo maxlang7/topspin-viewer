@@ -15,7 +15,7 @@ public class IntegrationFileReference {
             data.getProperties().setProperty("1s NC_proc",Integer.toString(nc));
             data.getProperties().setProperty("1s INTSCL","0.123456789");
             IntegrationRegions model=new IntegrationRegions();List<Integral> original=new ArrayList<>();
-            for(double[] bounds:new double[][]{{10.3,9.6},{6.01,5.011},{1.342,0.134},{11.98,11.978}}) {
+            for(double[] bounds:new double[][]{{12,-2},{10.3,9.6},{6.01,5.011},{1.342,0.134},{11.98,11.978},{-.99,-2}}) {
                 double bias=random.nextDouble()*150,slope=random.nextDouble()*0.002;
                 model.add(bounds[0],bounds[1]);int index=0;
                 while(model.regions().get(index).left()!=bounds[0])index++;
@@ -30,6 +30,13 @@ public class IntegrationFileReference {
             String expected=data.getProperties().getProperty("DF_PROCFILE intrng");
             String actual=model.serialize(nc);
             if(!expected.equals(actual))throw new AssertionError("intrng text mismatch\nEXPECTED:\n"+expected+"ACTUAL:\n"+actual);
+            IntegralRange.saveAsIntegrals(data,original.iterator());
+            Path debug=Path.of("artifacts","integration-table-reference-"+nc+".txt");
+            Files.writeString(debug,data.getProperties().getProperty("DF_PROCFILE integrals.txt"));
+            IntegralRange.saveAsIntegrals(data,original.iterator(),"sample","10","2","/isolated/reference");
+            String expectedTable=data.getProperties().getProperty("DF_PROCFILE integrals.txt");
+            String actualTable=model.table("sample","10","2","/isolated/reference",samples,12,-2);
+            if(!expectedTable.equals(actualTable))throw new AssertionError("integrals.txt mismatch\nEXPECTED:\n"+expectedTable+"ACTUAL:\n"+actualTable);
             cases++;compared+=expected.length();
         }
         System.out.println("PASS "+cases+" integration-file cases, "+compared+" exact characters, "+VendorDifferential.comparisons+" bitwise sample comparisons");

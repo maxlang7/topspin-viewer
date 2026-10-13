@@ -63,6 +63,16 @@ public final class Numerics {
     public static int index(double physical, double fullStart, double fullEnd, int size) {
         return (int) (((physical - fullStart) / (fullEnd - fullStart)) * size + 0.5);
     }
+    public static int pivot(double[] real,double[] imaginary,int start,int count) {
+        if(imaginary==null || imaginary.length!=real.length || start<0 || count<0 || start+count>real.length)
+            throw new IllegalArgumentException("Invalid phase-pivot range");
+        int best=start;double maximum=0;
+        for(int i=start;i<start+count;i++) {
+            double magnitude=real[i]*real[i]+imaginary[i]*imaginary[i];
+            if(magnitude>maximum){maximum=magnitude;best=i;}
+        }
+        return best;
+    }
 
     private Numerics() {}
 }

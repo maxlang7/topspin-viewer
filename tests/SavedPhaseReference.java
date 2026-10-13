@@ -11,7 +11,7 @@ public class SavedPhaseReference {
                 Map<String,String> input=BrukerDataset.readParameters(folder.resolve("pk-manual/proc"));
                 var actual=NativeKernel.savePhase(before.real,before.imaginary,
                     Double.parseDouble(input.get("PHC0")),Double.parseDouble(input.get("PHC1")),before.integer("NC_proc"));
-                if(actual.nc()!=expected.integer("NC_proc"))throw new AssertionError("NC_proc mismatch");
+                if(actual.nc()!=expected.integer("NC_proc"))throw new AssertionError(folder+" NC_proc "+actual.nc()+" != "+expected.integer("NC_proc"));
                 for(int i=0;i<before.real.length;i++) {
                     if(Double.doubleToRawLongBits(actual.real()[i])!=Double.doubleToRawLongBits(expected.real[i]))
                         throw new AssertionError(folder+" real sample "+i);

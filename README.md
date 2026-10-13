@@ -10,15 +10,17 @@ The application does not load Bruker classes, executables, processing libraries,
 
 - Processed int32 reader, including byte order, `NC_proc` amplitude units and ppm axis, against captured TopSpin API data.
 - Phase preview and integration curves against original Java routines, including 84 cases captured inside TopSpin's actual Windows Java 11.0.28 process.
-- Saved phase against actual native Windows TopSpin output.
-- Combined raw-FID `efp`, including exponential windowing centered on group delay, native FFT cache splitting, accumulated phase, scaling and truncation, for integer and floating-point FIDs. Twelve actual acquisitions and parameter variants currently pass bitwise comparisons.
-- Integration regions and saved `intrng` text against original Java routines.
+- Saved phase against actual native Windows TopSpin output on all 85 lab acquisitions. Phase-only saves preserve the existing `NC_proc` exponent.
+- Combined raw-FID `efp`, including exponential windowing centered on group delay, native FFT cache splitting, accumulated phase, scaling and truncation, for integer and floating-point FIDs. All 85 acquisitions in the user's current lab folder and five additional parameter variants pass bitwise comparisons, including their ppm axes.
+- Integration regions and saved `intrng` and `integrals.txt` text against original Java routines, including regions touching the complete spectral endpoint. Three regions captured from the actual interactive module match every curve value, default normalization and saved scaling parameter.
+- Display compression, forward coordinate mapping and complex-magnitude phase pivots against original Java routines.
 - Saving and reopening preserves every stored real and imaginary spectrum byte in the tested captures.
+- Loose acquisitions, nested dataset folders, raw filenames and ZIP archives open without changing numerical data. The UI workflow test covers phase preset/cancel/save/reopen and manual-region drag/undo/cancel.
 
 Run `bash verify.sh` for the saved-reference and vendor Java comparisons. Reference data is local under ignored `artifacts/`; reference-generation scripts require the licensed TopSpin installation and operate only on isolated dataset copies. Original source inventories are checked separately by SHA256.
 
 ## Remaining work
 
-The app is not yet an equivalent replacement. UI layout, spectrum drawing, interaction defaults and complete integration workflows are still being reconstructed and tested. Unsupported raw modes, fractional group delay, other transform sizes and second-level FFT cache splitting are rejected until validated. Archive opening and complete saved integration-table interoperability remain unfinished.
+The app is not yet an equivalent replacement. UI layout, spectrum drawing, interaction defaults and remaining integration controls are still being reconstructed and tested. Unsupported raw modes, fractional group delay, other transform sizes and second-level FFT cache splitting are rejected until validated. Every acquisition in the current lab inventory uses the validated raw formats and transform size. Saved integration-table reopening in TopSpin still needs an interoperability check.
 
 Saving creates a separate processing number and never overwrites existing dataset files.

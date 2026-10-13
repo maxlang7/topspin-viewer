@@ -41,7 +41,9 @@ JNIEXPORT jdoubleArray JNICALL Java_NativeKernel_phaseSaved(JNIEnv* env, jclass 
     (*env)->ReleaseDoubleArrayElements(env,real,re,JNI_ABORT);
     (*env)->ReleaseDoubleArrayElements(env,imag,im,JNI_ABORT);
     reconstructed_phase(positive_angle(ph0),positive_angle(ph1/(double)n),data,n,NULL,0);
-    int shift=reconstructed_getscale(data,n*2);
+    // A phase-only operation keeps NC_proc. The FFT path selects a new scale;
+    // pk preserves the existing exponent and truncates in those same units.
+    int shift=0;
     reconstructed_convdio((unsigned long)data,n*2,shift);
     int32_t* integers=(int32_t*)data;
     int output_nc=nc+shift;

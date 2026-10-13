@@ -33,6 +33,12 @@ public final class BrukerWriter {
             Files.writeString(target.resolve(name),replace(template,params),StandardCharsets.ISO_8859_1,StandardOpenOption.CREATE_NEW);
         }
         Files.writeString(target.resolve("intrng"),spectrum.integrals.serialize(spectrum.nc),StandardOpenOption.CREATE_NEW);
+        if(spectrum.experiment!=null) {
+            String table=spectrum.integrals.table(spectrum.experiment.getParent().getFileName().toString(),
+                spectrum.experiment.getFileName().toString(),target.getFileName().toString(),
+                spectrum.experiment.getParent().getParent().toString(),spectrum.real,spectrum.left,spectrum.right);
+            Files.writeString(target.resolve("integrals.txt"),table.replace("\n","\r\n"),StandardOpenOption.CREATE_NEW);
+        }
         Path title=spectrum.path.resolve("title");
         if(Files.isRegularFile(title))Files.copy(title,target.resolve("title"));
     }

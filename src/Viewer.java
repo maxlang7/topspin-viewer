@@ -18,10 +18,12 @@ public final class Viewer extends JFrame {
     private final JTextField command=new JTextField();
     private final DefaultMutableTreeNode root=new DefaultMutableTreeNode("Data");
     private final JTree tree=new JTree(root);
-    private double ph0,ph1,sensitivity=.2;
+    private double ph0,ph1,sensitivity=.00625;
     private int phaseOrder;
     private int selectedIntegral=-1;
     private boolean defineRegion=true;
+    private IntegrationRegions sessionIntegrals;
+    private double savedBaseline;
     private final ArrayDeque<double[]> zoomHistory=new ArrayDeque<>();
 
     Viewer() {
@@ -40,8 +42,9 @@ public final class Viewer extends JFrame {
     }
 
     private JPanel header() {
-        Color top=new Color(7,62,97),lower=new Color(4,48,77),ink=new Color(195,208,217);
-        JPanel header=new JPanel(new GridLayout(2,1));header.setPreferredSize(new Dimension(1,102));
+        Color top=new Color(5,65,105),lower=new Color(4,48,77),ink=new Color(195,208,217);
+        JPanel header=new JPanel(new BorderLayout());header.setPreferredSize(new Dimension(1,104));header.setBackground(top);
+        JPanel rows=new JPanel(new GridLayout(2,1));rows.setBorder(BorderFactory.createEmptyBorder(1,1,1,0));
         JPanel first=new JPanel(new BorderLayout());first.setBackground(top);
         JPanel nav=new JPanel(new FlowLayout(FlowLayout.LEFT,0,0));nav.setOpaque(false);
         JButton menu=Assets.button("phase","<html><b>Click here to access commands",this::fileMenu,66,50);
@@ -58,12 +61,14 @@ public final class Viewer extends JFrame {
         second.add(flowButton("Proc. Spectrum",()->perform(()->{requireSpectrum();spectrum.processRaw();plot.full();status.setText("efp: finished");}),125));
         second.add(flowButton("Adjust Phase",()->setMode(Mode.PHASE),111));
         second.add(flowButton("Integrate",()->setMode(Mode.INTEGRATE),105));
-        header.add(first);header.add(second);return header;
+        rows.add(first);rows.add(second);header.add(rows);
+        JLabel logo=new JLabel(Assets.image("4d72af01e262c2de.png"),SwingConstants.CENTER);logo.setPreferredSize(new Dimension(132,104));header.add(logo,BorderLayout.EAST);return header;
     }
     private JButton flowButton(String text,Runnable action,int width) {
         JButton button=new JButton(text,Assets.icon("phase","text."+text));
         button.setHorizontalAlignment(SwingConstants.LEFT);button.setFont(Assets.regular.deriveFont(14f));
         button.setForeground(new Color(195,208,217));button.setBackground(new Color(4,48,77));
+        button.setMargin(new Insets(0,16,0,24));
         button.setBorder(BorderFactory.createLineBorder(new Color(0,24,43)));button.setPreferredSize(new Dimension(width+44,51));
         button.addActionListener(e->action.run());return button;
     }
@@ -77,7 +82,7 @@ public final class Viewer extends JFrame {
                     case 0 -> plot.gain*=2;case 1 -> plot.gain/=2;
                     case 2 -> plot.dragAction="scale";case 3 -> plot.dragAction="zoom";
                     case 4 -> plot.dragAction="baseline";case 5 -> plot.dragAction="pan";
-                    case 6 -> plot.baseline=.16;case 7 -> plot.zoom(.5);case 8 -> plot.zoom(2);
+                    case 6 -> plot.baseline=.05;case 7 -> plot.zoom(.5);case 8 -> plot.zoom(2);
                     case 9 -> plot.previous();case 10 -> plot.full();
                 }plot.repaint();
             },34,34);bar.add(b);
@@ -115,7 +120,7 @@ public final class Viewer extends JFrame {
                 }
             }
         }catch(Exception e){status.setText(e.getMessage());}
-        ((DefaultTreeModel)tree.getModel()).reload();tree.expandRow(0);
+        ((DefaultTreeModel)tree.getModel()).reload();if(!filter.isEmpty())tree.expandRow(0);
     }
     private JPanel workbench() {
         JPanel panel=new JPanel(new BorderLayout());panel.setBackground(new Color(207,207,207));
@@ -132,12 +137,22 @@ public final class Viewer extends JFrame {
         JMenuItem save=new JMenuItem("Save as new processing number");save.addActionListener(e->save());menu.add(save);menu.show(getContentPane(),8,50);
     }
     private void chooseOpen() {JFileChooser chooser=new JFileChooser(System.getProperty("user.home")+"/Documents/IGB Lab/NMRs");chooser.setFileSelectionMode(JFileChooser.FILES_AND_DIRECTORIES);if(chooser.showOpenDialog(this)==JFileChooser.APPROVE_OPTION)open(chooser.getSelectedFile().toPath());}
-    public void open(Path path) {perform(()->{spectrum=new Spectrum(path);selectedIntegral=-1;ph0=ph1=0;mode=Mode.VIEW;datasetLabel.setText(spectrum.label()+"  "+spectrum.path);plot.full();rebuildModeBar();status.setText("Dataset opened");});}
+    public void open(Path path) {perform(()->{
+        java.util.List<Path> candidates=DatasetOpener.candidates(path);Path selected=candidates.get(0);
+        if(candidates.size()>1) {
+            Object choice=JOptionPane.showInputDialog(this,"Dataset","Open Bruker data",JOptionPane.PLAIN_MESSAGE,null,candidates.toArray(),selected);
+            if(choice==null)return;selected=(Path)choice;
+        }
+        spectrum=new Spectrum(selected);selectedIntegral=-1;ph0=ph1=0;mode=Mode.VIEW;datasetLabel.setText(spectrum.label()+"  "+spectrum.path);plot.full();rebuildModeBar();status.setText("Dataset opened");
+    });}
     private void requireSpectrum() {if(spectrum==null)throw new IllegalStateException("Open a dataset first");}
     private void setMode(Mode next) {
         if(next!=Mode.VIEW && spectrum==null)return;
         if(next==Mode.PHASE && spectrum.imaginary==null){status.setText("Imaginary spectrum is required for phase correction");return;}
-        mode=next;ph0=ph1=0;sensitivity=.2;phaseOrder=0;
+        if(mode==Mode.INTEGRATE && next!=Mode.INTEGRATE)plot.baseline=savedBaseline;
+        mode=next;ph0=ph1=0;phaseOrder=0;
+        plot.showFid=false;
+        if(next==Mode.INTEGRATE){sessionIntegrals=spectrum.integrals.copy();savedBaseline=plot.baseline;plot.baseline=.15;defineRegion=!spectrum.integrals.regions().isEmpty();}
         if(next==Mode.PHASE)plot.pivot=maxAmplitude(plot.start(),plot.end());
         rebuildModeBar();plot.repaint();
     }
@@ -157,7 +172,7 @@ public final class Viewer extends JFrame {
                 tool("phase","Reset phase angles",()->{ph0=ph1=0;plot.repaint();});
                 tool("phase","Add 90 degrees",()->{ph0+=90;plot.repaint();});tool("phase","Subtract 90 degrees",()->{ph0-=90;plot.repaint();});tool("phase","Add 180 degrees",()->{ph0+=180;plot.repaint();});
                 tool("phase","Increase mouse sensitivity",()->sensitivity*=2);tool("phase","Decrease mouse sensitivity",()->sensitivity/=2);tool("phase","Reset mouse sensitivity",()->sensitivity=.2);
-                tool("phase","Return & save phased spectrum",()->perform(()->{spectrum.phase(ph0,ph1);save();setMode(Mode.VIEW);}));
+                tool("phase","Return & save phased spectrum",()->perform(()->{spectrum.phase(ph0,ph1);saveResult();setMode(Mode.VIEW);}));
                 tool("phase","Return, do NOT save",()->setMode(Mode.VIEW));
             } else {
                 tool("integration","Define new region using cursor (toggle)",()->defineRegion=!defineRegion);
@@ -166,7 +181,7 @@ public final class Viewer extends JFrame {
                 tool("integration","Undo last region operation",()->{spectrum.integrals.undo();selectedIntegral=-1;plot.repaint();});
                 tool("integration","Set slope and bias to zero",()->{if(selectedIntegral>=0){var r=spectrum.integrals.regions().get(selectedIntegral);spectrum.integrals.replace(selectedIntegral,new IntegrationRegions.Region(r.left(),r.right(),0,0));plot.repaint();}});
                 JButton calibrate=new JButton("Calibrate");calibrate.addActionListener(e->calibrate());modeBar.add(calibrate);
-                tool("integration","Return, save regions",()->{save();setMode(Mode.VIEW);});tool("integration","Return, do NOT save regions",()->setMode(Mode.VIEW));
+                tool("integration","Return, save regions",()->perform(()->{saveResult();setMode(Mode.VIEW);}));tool("integration","Return, do NOT save regions",this::cancelIntegration);
             }
         }
         modeBar.revalidate();modeBar.repaint();
@@ -174,7 +189,11 @@ public final class Viewer extends JFrame {
     private void tool(String mode,String tooltip,Runnable action) {modeBar.add(Assets.button(mode,tooltip,action,30,32));}
     private void phaseControl(String tooltip,int order) {
         JButton button=Assets.button("phase",tooltip,()->phaseOrder=order,30,32);
-        button.addMouseMotionListener(new MouseMotionAdapter(){private int lastY;@Override public void mouseMoved(MouseEvent e){lastY=e.getYOnScreen();}@Override public void mouseDragged(MouseEvent e){int y=e.getYOnScreen();adjustPhase(order,lastY-y);lastY=y;}});
+        MouseAdapter drag=new MouseAdapter(){private int lastY;
+            @Override public void mousePressed(MouseEvent e){lastY=e.getYOnScreen();}
+            @Override public void mouseDragged(MouseEvent e){int y=e.getYOnScreen();adjustPhase(order,lastY-y);lastY=y;}
+        };
+        button.addMouseListener(drag);button.addMouseMotionListener(drag);
         modeBar.add(button);
     }
     private void adjustPhase(int order,double amount) {
@@ -182,75 +201,156 @@ public final class Viewer extends JFrame {
         else {double delta=4.0*amount*1.0*sensitivity;ph0-=(-delta*(spectrum.stripStart+(double)plot.pivot)/(spectrum.ftSize>0?spectrum.ftSize:spectrum.real.length));ph1-=delta;}
         plot.repaint();
     }
-    private int maxAmplitude(int start,int end) {int best=start;for(int i=start;i<=end;i++)if(Math.abs(spectrum.real[i])>Math.abs(spectrum.real[best]))best=i;return best;}
+    private int maxAmplitude(int start,int end) {return Numerics.pivot(spectrum.real,spectrum.imaginary,start,end-start+1);}
     private void regionDialog() {
         JTextField left=new JTextField(),right=new JTextField();JPanel panel=new JPanel(new GridLayout(2,2,8,8));panel.add(new JLabel("Low field [ppm]"));panel.add(left);panel.add(new JLabel("High field [ppm]"));panel.add(right);
-        if(JOptionPane.showConfirmDialog(this,panel,"Define integration region",JOptionPane.OK_CANCEL_OPTION)==JOptionPane.OK_OPTION)perform(()->{spectrum.integrals.add(Double.parseDouble(left.getText()),Double.parseDouble(right.getText()));plot.repaint();});
+        if(JOptionPane.showConfirmDialog(this,panel,"Define integration region",JOptionPane.OK_CANCEL_OPTION)==JOptionPane.OK_OPTION)perform(()->{addRegion(Double.parseDouble(left.getText()),Double.parseDouble(right.getText()));plot.repaint();});
     }
     private void calibrate() {
         if(selectedIntegral<0)return;String value=JOptionPane.showInputDialog(this,"Integral value","Calibrate integral",JOptionPane.PLAIN_MESSAGE);
         if(value!=null)perform(()->{spectrum.integrals.calibrate(selectedIntegral,Double.parseDouble(value),spectrum.real,spectrum.left,spectrum.right);plot.repaint();});
     }
-    private void save() {perform(()->{requireSpectrum();Path saved=BrukerWriter.saveNext(spectrum);status.setText("Saved processing "+saved.getFileName());});}
+    private void addRegion(double a,double b) {
+        boolean first=spectrum.integrals.regions().isEmpty();spectrum.integrals.add(a,b);
+        if(first){double value=spectrum.integrals.calculate(spectrum.integrals.regions().get(0),spectrum.real,spectrum.left,spectrum.right).value();spectrum.integrals.normalizingFactor=1.0/(value==0?1.0:value);}
+    }
+    private void cancelIntegration() {if(sessionIntegrals!=null)spectrum.integrals=sessionIntegrals;setMode(Mode.VIEW);}
+    private void saveResult() throws Exception {requireSpectrum();Path saved=BrukerWriter.saveNext(spectrum);status.setText("Saved processing "+saved.getFileName());}
+    private void save() {perform(this::saveResult);}
     private void execute(String input) {String text=input.trim();command.setText("");switch(text){case ".ph"->setMode(Mode.PHASE);case ".int"->setMode(Mode.INTEGRATE);case ".ret"->setMode(Mode.VIEW);case ".all"->plot.full();case ".zi"->plot.zoom(.5);case ".zo"->plot.zoom(2);case ".zl"->plot.previous();case "*2"->{plot.gain*=2;plot.repaint();}case "/2"->{plot.gain/=2;plot.repaint();}case "open"->chooseOpen();default->status.setText("Unknown command: "+text);}}
     @FunctionalInterface private interface Operation {void run() throws Exception;}
     private void perform(Operation op) {try{op.run();plot.repaint();}catch(Exception e){status.setText(e.getMessage());JOptionPane.showMessageDialog(this,e.getMessage(),"Error",JOptionPane.ERROR_MESSAGE);}}
 
     private final class Plot extends JPanel {
-        double viewLeft,viewRight,gain=1,baseline=.16;int pivot;
+        double viewLeft,viewRight,gain=1,baseline=.05;int pivot;
         boolean showFid;String dragAction="zoom";
         int pressX,pressY,lastY,lastX,dragX=-1;
         Plot() {
             setBackground(new Color(245,245,245));
             MouseAdapter mouse=new MouseAdapter(){
-                @Override public void mousePressed(MouseEvent e){pressX=lastX=e.getX();pressY=lastY=e.getY();dragX=pressX;if(spectrum!=null && SwingUtilities.isRightMouseButton(e)){if(mode==Mode.PHASE){pivot=spectrum.index(ppm(e.getX()));repaint();}else if(mode==Mode.INTEGRATE){selectRegion(ppm(e.getX()));JPopupMenu menu=new JPopupMenu();JMenuItem cal=new JMenuItem("Calibrate...");cal.addActionListener(x->calibrate());menu.add(cal);menu.show(Plot.this,e.getX(),e.getY());}}}
+                @Override public void mousePressed(MouseEvent e){pressX=lastX=e.getX();pressY=lastY=e.getY();dragX=pressX;if(spectrum!=null && SwingUtilities.isRightMouseButton(e)){if(mode==Mode.PHASE){pivot=pickPivot(e.getX());repaint();}else if(mode==Mode.INTEGRATE){selectRegion(ppm(e.getX()));JPopupMenu menu=new JPopupMenu();JMenuItem cal=new JMenuItem("Calibrate...");cal.addActionListener(x->calibrate());menu.add(cal);menu.show(Plot.this,e.getX(),e.getY());}}}
                 @Override public void mouseDragged(MouseEvent e){if(spectrum==null)return;dragX=e.getX();int dy=lastY-e.getY();if(mode==Mode.PHASE)adjustPhase(phaseOrder,dy);else if(mode==Mode.VIEW){switch(dragAction){case "scale"->gain*=Math.pow(2,dy/100.0);case "baseline"->baseline+=dy/(double)height();case "pan"->{double shift=(viewRight-viewLeft)*(lastX-e.getX())/width();viewLeft+=shift;viewRight+=shift;}}}lastY=e.getY();lastX=e.getX();repaint();}
-                @Override public void mouseReleased(MouseEvent e){if(spectrum!=null && SwingUtilities.isLeftMouseButton(e)){if(Math.abs(e.getX()-pressX)>3 && mode==Mode.INTEGRATE && defineRegion){spectrum.integrals.add(ppm(pressX),ppm(e.getX()));}else if(Math.abs(e.getX()-pressX)>3 && mode==Mode.VIEW && dragAction.equals("zoom")){setRange(Math.max(ppm(pressX),ppm(e.getX())),Math.min(ppm(pressX),ppm(e.getX())));}else if(mode==Mode.INTEGRATE)selectRegion(ppm(e.getX()));}dragX=-1;repaint();}
+                @Override public void mouseReleased(MouseEvent e){if(spectrum!=null && SwingUtilities.isLeftMouseButton(e)){if(Math.abs(e.getX()-pressX)>3 && mode==Mode.INTEGRATE && defineRegion){addRegion(ppm(pressX),ppm(e.getX()));}else if(Math.abs(e.getX()-pressX)>3 && mode==Mode.VIEW && dragAction.equals("zoom")){setRange(Math.max(ppm(pressX),ppm(e.getX())),Math.min(ppm(pressX),ppm(e.getX())));}else if(mode==Mode.INTEGRATE)selectRegion(ppm(e.getX()));}dragX=-1;repaint();}
                 @Override public void mouseWheelMoved(MouseWheelEvent e){if(spectrum==null)return;if(e.isControlDown())zoom(Math.pow(1.2,e.getPreciseWheelRotation()));else{gain*=Math.pow(1.2,-e.getPreciseWheelRotation());repaint();}}
             };addMouseListener(mouse);addMouseMotionListener(mouse);addMouseWheelListener(mouse);
         }
         int width(){return Math.max(1,getWidth()-40);}int height(){return Math.max(1,getHeight()-54);}int top(){return mode==Mode.PHASE?18:10;}
-        double ppm(int x){return viewLeft+(viewRight-viewLeft)*(x-2)/(double)width();}
-        double pixel(double value){return 2+width()*(value-viewLeft)/(viewRight-viewLeft);}
+        double ppm(int x){return VisualNumerics.horizontal(viewLeft,viewRight,2,2+width()-1).physical(x);}
+        double pixel(double value){return VisualNumerics.horizontal(viewLeft,viewRight,2,2+width()-1).screen(value,1);}
         int start(){return spectrum.index(viewLeft);}int end(){return spectrum.index(viewRight);}
-        void full(){if(spectrum!=null){viewLeft=spectrum.left;viewRight=spectrum.right;}gain=1;baseline=.16;zoomHistory.clear();repaint();}
+        void full(){if(spectrum!=null){viewLeft=spectrum.left;viewRight=spectrum.right;}gain=1;baseline=.05;zoomHistory.clear();repaint();}
         void setRange(double a,double b){zoomHistory.push(new double[]{viewLeft,viewRight});viewLeft=a;viewRight=b;repaint();}
         void zoom(double factor){if(spectrum==null)return;double center=(viewLeft+viewRight)/2,half=(viewLeft-viewRight)*factor/2;setRange(Math.min(spectrum.left,center+half),Math.max(spectrum.right,center-half));}
         void previous(){if(!zoomHistory.isEmpty()){double[] range=zoomHistory.pop();viewLeft=range[0];viewRight=range[1];repaint();}}
         void selectRegion(double ppm){selectedIntegral=-1;var regions=spectrum.integrals.regions();for(int i=0;i<regions.size();i++)if(ppm<=regions.get(i).left() && ppm>=regions.get(i).right()){selectedIntegral=i;break;}repaint();}
+        int pickPivot(int px) {
+            int from=start(),to=end();var compressed=VisualNumerics.compress(Arrays.copyOfRange(spectrum.real,from,to+1),from,width());
+            if(compressed==null)return spectrum.index(ppm(px));
+            int column=Math.max(0,Math.min(width()-1,px-2));int[] boundaries=compressed.boundaries();
+            int a=Math.max(from,Math.min(to,boundaries[column])),b=Math.max(a,Math.min(to,boundaries[column+1]));
+            return maxAmplitude(a,b);
+        }
+        void paintFid(Graphics2D g,int x,int y,int w,int h) {
+            double[] raw=spectrum.raw.fid;int count=raw.length/2;
+            double scale=Math.scalb(1.0,spectrum.raw.nc);double[] samples=new double[count];
+            double min=Double.POSITIVE_INFINITY,max=Double.NEGATIVE_INFINITY;
+            for(int i=0;i<count;i++){samples[i]=raw[i*2]*scale;min=Math.min(min,samples[i]);max=Math.max(max,samples[i]);}
+            double extent=max-min;if(extent==0)extent=1;
+            var yMapper=VisualNumerics.vertical(-extent*.5,extent*.5,y,y+h);
+            var compressed=VisualNumerics.compress(samples,0,w);
+            double[] drawing=compressed==null?samples:compressed.values();
+            g.setClip(x,y,w,h);g.setColor(Color.BLUE);int lastX=0,lastY=0;
+            for(int i=0;i<drawing.length;i++) {
+                int px=compressed==null?x+(int)(.5+i*w/(double)count):x+i/2;
+                int py=yMapper.screen(drawing[i],gain);if(i>0)g.drawLine(lastX,lastY,px,py);lastX=px;lastY=py;
+            }
+            g.setClip(null);g.setColor(new Color(135,135,135));g.setFont(Assets.bold);
+            double seconds=count/spectrum.raw.spectralWidth;
+            for(int i=0;i<=4;i++){int px=x+i*w/4;g.drawLine(px,y+h,px,y+h+6);g.drawString(String.format(Locale.ROOT,"%.2f",seconds*i/4),px-12,y+h+21);}
+            g.drawString("[sec]",x+w-35,y+h+21);
+        }
         @Override protected void paintComponent(Graphics graphics) {
             super.paintComponent(graphics);Graphics2D g=(Graphics2D)graphics.create();g.setFont(Assets.regular);
             int x=2,y=top(),w=width(),h=height();g.setColor(Color.WHITE);g.fillRect(x,y,w,h);g.setColor(new Color(135,135,135));g.drawRect(x,y,w,h);
             if(spectrum==null){g.dispose();return;}
-            if(mode==Mode.PHASE){g.setFont(new Font(Font.MONOSPACED,Font.PLAIN,11));g.setColor(new Color(255,70,70));g.drawString(String.format(Locale.ROOT,"pivot = %.2f ppm  Phase increment = %.6g  ph0 = %.2f  ph1 = %.2f",spectrum.ppm(pivot),sensitivity,ph0,ph1),8,11);}
+            if(mode==Mode.PHASE){g.setFont(Assets.mono);g.setColor(new Color(255,70,70));g.drawString(String.format(Locale.ROOT,"pivot = %.2f ppm  Phase increment = %.6g  ph0 = %.2f  ph1 = %.2f",spectrum.ppm(pivot),sensitivity,ph0,ph1),8,11);}
             g.setFont(Assets.bold.deriveFont(14f));g.setColor(new Color(135,135,135));g.drawString(spectrum.label(),6,y+16);
+            if(showFid && spectrum.raw!=null){paintFid(g,x,y,w,h);g.dispose();return;}
             int from=start(),to=end();double[] data=spectrum.real;
             if(mode==Mode.PHASE){data=Numerics.phasePreview(spectrum.real,spectrum.imaginary,ph0,ph1,spectrum.ftSize,spectrum.stripStart,from,to-from+1);}
-            double max=0;for(double value:spectrum.real)max=Math.max(max,Math.abs(value));if(max==0)max=1;
-            double scale=h*.72/max*gain,zero=y+h*(1-baseline);
+            double minimum=Double.POSITIVE_INFINITY,maximum=Double.NEGATIVE_INFINITY;
+            for(double value:spectrum.real){minimum=Math.min(minimum,value);maximum=Math.max(maximum,value);}
+            double extent=maximum-minimum;if(extent==0)extent=1;
+            double valueLeft=-extent*baseline,valueRight=valueLeft+extent;
+            var mapper=VisualNumerics.vertical(valueLeft,valueRight,y,y+h-1);
+            double zero=mapper.screen(0,gain);
             g.setClip(x,y,w,h);g.setColor(Color.BLUE);
             int previousX=0,previousY=0;boolean first=true;
-            for(int i=from;i<=to;i++) {
-                int px=(int)Math.round(pixel(spectrum.ppm(i)));double sample=data[mode==Mode.PHASE?i-from:i];
-                int py=(int)Math.round(zero-sample*scale);
+            double[] visible=mode==Mode.PHASE?data:Arrays.copyOfRange(data,from,to+1);
+            var compressed=VisualNumerics.compress(visible,from,w);
+            if(visible.length<2*w)compressed=null;
+            double[] drawing=compressed==null?visible:compressed.values();
+            var xMapper=VisualNumerics.horizontal(viewLeft,viewRight,x,x+w-1);
+            for(int i=0;i<drawing.length;i++) {
+                int px=compressed==null?xMapper.screen(spectrum.ppm(from+i),1):x+i/2;
+                int py=mapper.screen(drawing[i],gain);
                 if(!first)g.drawLine(previousX,previousY,px,py);previousX=px;previousY=py;first=false;
             }
             if(mode==Mode.PHASE){g.setColor(new Color(255,70,70));int px=(int)Math.round(pixel(spectrum.ppm(pivot)));g.drawLine(px,y,px,y+h);}
             if(mode==Mode.INTEGRATE || !spectrum.integrals.regions().isEmpty()) {
-                var regions=spectrum.integrals.regions();double integralMax=0;for(var r:regions)integralMax=Math.max(integralMax,Math.abs(spectrum.integrals.calculate(r,spectrum.real,spectrum.left,spectrum.right).value()));
-                if(integralMax==0)integralMax=1;
+                var regions=spectrum.integrals.regions();double integralExtent=0;
+                java.util.List<Numerics.Integral> integrals=new ArrayList<>();
+                for(var r:regions) {
+                    var area=spectrum.integrals.calculate(r,spectrum.real,spectrum.left,spectrum.right);integrals.add(area);
+                    double low=Double.POSITIVE_INFINITY,high=Double.NEGATIVE_INFINITY;
+                    for(double value:area.curve()){low=Math.min(low,value);high=Math.max(high,value);}
+                    integralExtent=Math.max(integralExtent,high-low);
+                }
+                if(integralExtent==0)integralExtent=1;
+                double intLeft=-integralExtent*.2,intRight=intLeft+integralExtent;
+                double scaledExtent=intRight/.8-intLeft/.8;
+                intLeft=-scaledExtent*.2;intRight=intLeft+scaledExtent;
+                var intMapper=VisualNumerics.vertical(intLeft,intRight,y,y+h-1);
+                java.text.DecimalFormat labelFormat=new java.text.DecimalFormat("0.0000",java.text.DecimalFormatSymbols.getInstance(Locale.ROOT));
                 for(int index=0;index<regions.size();index++) {
-                    var r=regions.get(index);var integral=spectrum.integrals.calculate(r,spectrum.real,spectrum.left,spectrum.right);double[] curve=integral.curve();int begin=spectrum.index(r.left());
-                    g.setColor(index==selectedIntegral?new Color(220,40,40):new Color(0,140,0));first=true;
-                    for(int i=0;i<curve.length;i++){int px=(int)Math.round(pixel(spectrum.ppm(begin+i))),py=(int)Math.round(zero-h*.08-curve[i]/integralMax*h*.25);if(!first)g.drawLine(previousX,previousY,px,py);first=false;previousX=px;previousY=py;}
-                    g.setFont(Assets.regular);g.drawString(String.format(Locale.ROOT,"%.2f",integral.normalized(spectrum.integrals.normalizingFactor)),(int)pixel((r.left()+r.right())/2), (int)zero+20);
+                    var r=regions.get(index);var integral=integrals.get(index);double[] curve=integral.curve();
+                    int begin=(int)pixel(r.left()),finish=(int)pixel(r.right()),regionWidth=Math.max(1,finish-begin);
+                    g.setColor(new Color(237,28,36));first=true;
+                    var comp=VisualNumerics.compress(curve,0,regionWidth);
+                    double[] vertices=comp==null || curve.length<2*regionWidth?curve:comp.values();
+                    boolean reduced=vertices!=curve;
+                    for(int i=0;i<vertices.length;i++) {
+                        double physical=r.left()+(r.right()-r.left())/curve.length*i;
+                        int px=reduced?begin+i/2:(int)pixel(physical),py=intMapper.screen(vertices[i],1);
+                        if(!first)g.drawLine(previousX,previousY,px,py);first=false;previousX=px;previousY=py;
+                    }
+                    g.setClip(null);g.setFont(Assets.bold.deriveFont(14f));
+                    String label=labelFormat.format(integral.normalized(spectrum.integrals.normalizingFactor));
+                    int middle=(begin+finish)/2,bottom=y+h-1,labelHeight=g.getFontMetrics().stringWidth(label);
+                    int half=g.getFontMetrics().getHeight()/2;
+                    int[] bx={begin,begin,middle-half,middle-half,middle+half,middle+half,finish,finish};
+                    int[] by={bottom,bottom-8,bottom-12,bottom-12-labelHeight,bottom-12-labelHeight,bottom-12,bottom-8,bottom};
+                    g.drawPolyline(bx,by,bx.length);
+                    Graphics2D text=(Graphics2D)g.create();text.translate(middle+5,bottom-14);text.rotate(-Math.PI/2);text.drawString(label,0,0);text.dispose();
+                    g.setClip(x,y,w,h);
                 }
             }
             if(dragX>=0 && mode!=Mode.PHASE){g.setColor(new Color(100,150,190,35));g.fillRect(Math.min(pressX,dragX),y,Math.abs(pressX-dragX),h);}
-            g.setClip(null);g.setColor(new Color(135,135,135));g.setFont(Assets.bold);
+            g.setClip(null);g.setColor(new Color(128,128,128));g.setFont(Assets.bold.deriveFont(14f));
             double span=viewLeft-viewRight,major=Math.pow(10,Math.floor(Math.log10(span/4)));if(span/major>10)major*=5;else if(span/major>5)major*=2;
-            for(double tick=Math.ceil(viewRight/major)*major;tick<=viewLeft;tick+=major){int px=(int)Math.round(pixel(tick));g.drawLine(px,y+h,px,y+h+6);String label=String.format(Locale.ROOT,major>=1?"%.0f":"%.2f",tick);g.drawString(label,px-g.getFontMetrics().stringWidth(label)/2,y+h+21);}
+            for(double tick=Math.ceil(viewRight/major)*major;tick<=viewLeft;tick+=major){int px=(int)Math.round(pixel(tick));g.drawLine(px,y+h,px,y+h+6);String label=String.format(Locale.ROOT,major>=1?"%.0f":"%.2f",tick==0?0.0:tick);g.drawString(label,px-g.getFontMetrics().stringWidth(label)/2,y+h+21);}
+            for(double tick=Math.ceil(viewRight/(major/5))*(major/5);tick<=viewLeft;tick+=major/5){int px=(int)pixel(tick);g.drawLine(px,y+h,px,y+h+4);}
             g.drawString("[ppm]",x+w-40,y+h+21);
+            double reference=maximum==0?1:15.0/maximum;
+            double relLeft=valueLeft*reference/gain,relRight=valueRight*reference/gain;
+            double yStep=Math.pow(10,Math.floor(Math.log10((relRight-relLeft)/4)));
+            if((relRight-relLeft)/yStep>10)yStep*=5;else if((relRight-relLeft)/yStep>5)yStep*=2;
+            for(double tick=Math.ceil(relLeft/yStep)*yStep;tick<=relRight;tick+=yStep) {
+                int py=mapper.screen(tick/reference,gain);g.drawLine(x+w,py,x+w+6,py);
+                Graphics2D text=(Graphics2D)g.create();text.translate(x+w+20,py+4);text.rotate(-Math.PI/2);
+                text.drawString(String.format(Locale.ROOT,yStep>=1?"%.0f":"%.2f",tick==0?0.0:tick),0,0);text.dispose();
+            }
+            Graphics2D units=(Graphics2D)g.create();units.translate(x+w+20,y+33);units.rotate(-Math.PI/2);units.drawString("[rel]",0,0);units.dispose();
             g.dispose();
         }
     }

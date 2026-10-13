@@ -10,9 +10,11 @@ import javax.swing.*;
 public final class Assets {
     private static final Map<String,ImageIcon> icons=new LinkedHashMap<>();
     public static Font regular=new Font("Arial",Font.PLAIN,12),bold=new Font("Arial",Font.BOLD,12);
+    public static Font mono=new Font(Font.MONOSPACED,Font.PLAIN,12);
     public static void load() throws Exception {
         regular=Font.createFont(Font.TRUETYPE_FONT,Path.of("assets/fonts/arial.ttf").toFile()).deriveFont(12f);
         bold=Font.createFont(Font.TRUETYPE_FONT,Path.of("assets/fonts/arialbd.ttf").toFile()).deriveFont(12f);
+        mono=Font.createFont(Font.TRUETYPE_FONT,Path.of("assets/fonts/cour.ttf").toFile()).deriveFont(12f);
         for(String line:Files.readAllLines(Path.of("assets/icon-catalog.tsv"))) {
             String[] pair=line.split("\t",2);
             if(pair.length==2) {
@@ -24,6 +26,11 @@ public final class Assets {
     public static ImageIcon icon(String mode,String tooltipPrefix) {
         for(var item:icons.entrySet())if(item.getKey().startsWith(mode+"."+tooltipPrefix))return item.getValue();
         return null;
+    }
+    public static ImageIcon image(String name) {
+        Path base=Path.of("assets/icons",name),high=base.resolveSibling(name.replace(".png","@2x.png"));
+        try {return Files.isRegularFile(high)?new ImageIcon(new BaseMultiResolutionImage(ImageIO.read(base.toFile()),ImageIO.read(high.toFile()))):new ImageIcon(base.toString());}
+        catch(IOException e){throw new IllegalStateException("Missing interface asset "+name,e);}
     }
     public static JButton button(String mode,String tooltip,Runnable action,int width,int height) {
         JButton button=new JButton(icon(mode,tooltip));button.setToolTipText(tooltip);
