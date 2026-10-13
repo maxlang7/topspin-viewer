@@ -1,0 +1,263 @@
+import java.awt.*;
+import java.awt.event.*;
+import java.awt.geom.*;
+import java.nio.file.*;
+import java.util.*;
+import javax.swing.*;
+import javax.swing.tree.*;
+import com.formdev.flatlaf.FlatLightLaf;
+
+/** Standalone workbench for the measured TopSpin subset. */
+public final class Viewer extends JFrame {
+    enum Mode { VIEW, PHASE, INTEGRATE }
+    private Spectrum spectrum;
+    private Mode mode=Mode.VIEW;
+    private final JPanel modeBar=new JPanel(new FlowLayout(FlowLayout.LEFT,0,0));
+    private final Plot plot=new Plot();
+    private final JLabel datasetLabel=new JLabel(" "),status=new JLabel(" ");
+    private final JTextField command=new JTextField();
+    private final DefaultMutableTreeNode root=new DefaultMutableTreeNode("Data");
+    private final JTree tree=new JTree(root);
+    private double ph0,ph1,sensitivity=.2;
+    private int phaseOrder;
+    private int selectedIntegral=-1;
+    private boolean defineRegion=true;
+    private final ArrayDeque<double[]> zoomHistory=new ArrayDeque<>();
+
+    Viewer() {
+        super("TopSpin Viewer");setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
+        setSize(1438,927);setMinimumSize(new Dimension(960,640));
+        JPanel content=new JPanel(new BorderLayout());setContentPane(content);
+        content.add(header(),BorderLayout.NORTH);
+        JPanel center=new JPanel(new BorderLayout());center.add(viewToolbar(),BorderLayout.NORTH);
+        JSplitPane split=new JSplitPane(JSplitPane.HORIZONTAL_SPLIT,browser(),workbench());
+        split.setDividerLocation(328);split.setDividerSize(12);split.setBorder(BorderFactory.createEmptyBorder(0,9,0,9));
+        center.add(split);content.add(center);content.add(footer(),BorderLayout.SOUTH);
+        command.addActionListener(e->execute(command.getText()));
+        getRootPane().registerKeyboardAction(e->chooseOpen(),KeyStroke.getKeyStroke(KeyEvent.VK_O,InputEvent.CTRL_DOWN_MASK),JComponent.WHEN_IN_FOCUSED_WINDOW);
+        getRootPane().registerKeyboardAction(e->setMode(Mode.VIEW),KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE,0),JComponent.WHEN_IN_FOCUSED_WINDOW);
+        setMode(Mode.VIEW);
+    }
+
+    private JPanel header() {
+        Color top=new Color(7,62,97),lower=new Color(4,48,77),ink=new Color(195,208,217);
+        JPanel header=new JPanel(new GridLayout(2,1));header.setPreferredSize(new Dimension(1,102));
+        JPanel first=new JPanel(new BorderLayout());first.setBackground(top);
+        JPanel nav=new JPanel(new FlowLayout(FlowLayout.LEFT,0,0));nav.setOpaque(false);
+        JButton menu=Assets.button("phase","<html><b>Click here to access commands",this::fileMenu,66,50);
+        menu.setBackground(top);nav.add(menu);
+        for(String name:new String[]{"Process","Analyze"}) {
+            JButton tab=new JButton(name);tab.setForeground(ink);tab.setBackground(lower);
+            tab.setFont(Assets.regular.deriveFont(14f));
+            tab.setPreferredSize(new Dimension(75,50));tab.setBorder(BorderFactory.createLineBorder(new Color(0,24,43)));
+            tab.addActionListener(e->{if(name.equals("Analyze"))setMode(Mode.INTEGRATE);else setMode(Mode.VIEW);});nav.add(tab);
+        }
+        first.add(nav,BorderLayout.WEST);
+        JLabel title=new JLabel("TopSpin Processing",SwingConstants.CENTER);title.setForeground(Color.WHITE);title.setFont(Assets.regular.deriveFont(14f));first.add(title);
+        JPanel second=new JPanel(new FlowLayout(FlowLayout.LEFT,0,0));second.setBackground(lower);
+        second.add(flowButton("Proc. Spectrum",()->perform(()->{requireSpectrum();spectrum.processRaw();plot.full();status.setText("efp: finished");}),125));
+        second.add(flowButton("Adjust Phase",()->setMode(Mode.PHASE),111));
+        second.add(flowButton("Integrate",()->setMode(Mode.INTEGRATE),105));
+        header.add(first);header.add(second);return header;
+    }
+    private JButton flowButton(String text,Runnable action,int width) {
+        JButton button=new JButton(text,Assets.icon("phase","text."+text));
+        button.setHorizontalAlignment(SwingConstants.LEFT);button.setFont(Assets.regular.deriveFont(14f));
+        button.setForeground(new Color(195,208,217));button.setBackground(new Color(4,48,77));
+        button.setBorder(BorderFactory.createLineBorder(new Color(0,24,43)));button.setPreferredSize(new Dimension(width+44,51));
+        button.addActionListener(e->action.run());return button;
+    }
+    private JPanel viewToolbar() {
+        JPanel bar=new JPanel(new FlowLayout(FlowLayout.LEFT,0,0));bar.setPreferredSize(new Dimension(1,38));
+        String[] tools={"Larger by factor 2","Smaller by factor 2","Smaller/larger","Smooth zoom","Shift baseline up/down","Shift spectrum left","Shift baseline to bottom","Zoom in","Zoom out","Show the last zoom","Show full spectrum"};
+        for(int i=0;i<tools.length;i++) {
+            final int index=i;
+            JButton b=Assets.button("phase",tools[i],()->{
+                switch(index) {
+                    case 0 -> plot.gain*=2;case 1 -> plot.gain/=2;
+                    case 2 -> plot.dragAction="scale";case 3 -> plot.dragAction="zoom";
+                    case 4 -> plot.dragAction="baseline";case 5 -> plot.dragAction="pan";
+                    case 6 -> plot.baseline=.16;case 7 -> plot.zoom(.5);case 8 -> plot.zoom(2);
+                    case 9 -> plot.previous();case 10 -> plot.full();
+                }plot.repaint();
+            },34,34);bar.add(b);
+            if(i==1 || i==3 || i==6) {JSeparator s=new JSeparator(SwingConstants.VERTICAL);s.setPreferredSize(new Dimension(8,24));bar.add(s);}
+        }return bar;
+    }
+    private JPanel browser() {
+        JPanel panel=new JPanel(new BorderLayout());panel.setBackground(new Color(207,207,207));
+        panel.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(new Color(142,142,142)),BorderFactory.createEmptyBorder(8,8,8,8)));
+        JPanel title=new JPanel(new BorderLayout());title.setOpaque(false);
+        JButton data=new JButton("☷  Data");data.setBackground(new Color(175,201,216));data.setPreferredSize(new Dimension(72,32));
+        data.addActionListener(e->chooseOpen());title.add(data,BorderLayout.WEST);
+        JPanel searchPanel=new JPanel(new BorderLayout(6,8));searchPanel.setBackground(Color.WHITE);
+        searchPanel.setBorder(BorderFactory.createEmptyBorder(8,4,8,4));
+        JTextField search=new JTextField();search.putClientProperty("JTextField.placeholderText","Search...");
+        searchPanel.add(search);JButton open=new JButton("Open...");open.addActionListener(e->chooseOpen());searchPanel.add(open,BorderLayout.EAST);
+        JPanel north=new JPanel(new BorderLayout(0,8));north.setOpaque(false);north.add(title,BorderLayout.NORTH);north.add(searchPanel);panel.add(north,BorderLayout.NORTH);
+        tree.setRootVisible(false);tree.setBackground(Color.WHITE);tree.setRowHeight(18);
+        tree.addMouseListener(new MouseAdapter(){@Override public void mouseClicked(MouseEvent e){
+            if(e.getClickCount()==2 && tree.getLastSelectedPathComponent() instanceof DefaultMutableTreeNode node && node.getUserObject() instanceof Path p)open(p);
+        }});
+        JScrollPane scroll=new JScrollPane(tree);scroll.setBorder(BorderFactory.createEmptyBorder());panel.add(scroll);
+        search.addActionListener(e->populateTree(search.getText()));
+        populateTree("");return panel;
+    }
+    private void populateTree(String filter) {
+        root.removeAllChildren();Path base=Path.of(System.getProperty("user.home"),"Documents/IGB Lab/NMRs");
+        DefaultMutableTreeNode folder=new DefaultMutableTreeNode(base);root.add(folder);
+        if(Files.isDirectory(base))try(var dirs=Files.list(base)) {
+            for(Path p:dirs.filter(Files::isDirectory).sorted().toList()) {
+                if(p.getFileName().toString().startsWith(".") || !p.getFileName().toString().toLowerCase().contains(filter.toLowerCase()))continue;
+                DefaultMutableTreeNode n=new DefaultMutableTreeNode(p);folder.add(n);
+                try(var experiments=Files.find(p,3,(path,attr)->attr.isRegularFile() && path.getFileName().toString().equals("acqus"))) {
+                    for(Path acq:experiments.sorted().toList())n.add(new DefaultMutableTreeNode(acq.getParent()));
+                }
+            }
+        }catch(Exception e){status.setText(e.getMessage());}
+        ((DefaultTreeModel)tree.getModel()).reload();tree.expandRow(0);
+    }
+    private JPanel workbench() {
+        JPanel panel=new JPanel(new BorderLayout());panel.setBackground(new Color(207,207,207));
+        panel.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(new Color(142,142,142)),BorderFactory.createEmptyBorder(8,8,2,8)));
+        modeBar.setOpaque(false);modeBar.setPreferredSize(new Dimension(1,42));panel.add(modeBar,BorderLayout.NORTH);panel.add(plot);return panel;
+    }
+    private JPanel footer() {
+        JPanel panel=new JPanel(new BorderLayout(65,0));panel.setBorder(BorderFactory.createEmptyBorder(8,9,8,9));
+        command.setPreferredSize(new Dimension(360,30));command.putClientProperty("JTextField.placeholderText","Command...");panel.add(command,BorderLayout.WEST);
+        panel.add(datasetLabel);status.setPreferredSize(new Dimension(280,30));panel.add(status,BorderLayout.EAST);return panel;
+    }
+    private void fileMenu() {
+        JPopupMenu menu=new JPopupMenu();JMenuItem open=new JMenuItem("Open...",KeyEvent.VK_O);open.addActionListener(e->chooseOpen());menu.add(open);
+        JMenuItem save=new JMenuItem("Save as new processing number");save.addActionListener(e->save());menu.add(save);menu.show(getContentPane(),8,50);
+    }
+    private void chooseOpen() {JFileChooser chooser=new JFileChooser(System.getProperty("user.home")+"/Documents/IGB Lab/NMRs");chooser.setFileSelectionMode(JFileChooser.FILES_AND_DIRECTORIES);if(chooser.showOpenDialog(this)==JFileChooser.APPROVE_OPTION)open(chooser.getSelectedFile().toPath());}
+    public void open(Path path) {perform(()->{spectrum=new Spectrum(path);selectedIntegral=-1;ph0=ph1=0;mode=Mode.VIEW;datasetLabel.setText(spectrum.label()+"  "+spectrum.path);plot.full();rebuildModeBar();status.setText("Dataset opened");});}
+    private void requireSpectrum() {if(spectrum==null)throw new IllegalStateException("Open a dataset first");}
+    private void setMode(Mode next) {
+        if(next!=Mode.VIEW && spectrum==null)return;
+        if(next==Mode.PHASE && spectrum.imaginary==null){status.setText("Imaginary spectrum is required for phase correction");return;}
+        mode=next;ph0=ph1=0;sensitivity=.2;phaseOrder=0;
+        if(next==Mode.PHASE)plot.pivot=maxAmplitude(plot.start(),plot.end());
+        rebuildModeBar();plot.repaint();
+    }
+    private void rebuildModeBar() {
+        modeBar.removeAll();
+        if(mode==Mode.VIEW) {
+            for(String name:new String[]{"SPECTRUM","INTEGRALS","FID"}) {
+                JButton tab=new JButton(name);tab.setMargin(new Insets(0,8,0,8));tab.setPreferredSize(new Dimension(name.equals("SPECTRUM")?90:80,32));
+                tab.addActionListener(e->{if(name.equals("INTEGRALS"))setMode(Mode.INTEGRATE);else if(name.equals("FID"))perform(()->{requireSpectrum();if(spectrum.raw==null)spectrum.raw=new RawDataset(spectrum.experiment,spectrum.path.resolve("proc"));plot.showFid=true;plot.repaint();});else{plot.showFid=false;plot.repaint();}});modeBar.add(tab);
+            }
+        } else {
+            JLabel label=new JLabel(mode==Mode.PHASE?"Interactive phase correction":"Integration",Assets.icon(mode==Mode.PHASE?"phase":"integration","text."+(mode==Mode.PHASE?"Interactive phase correction":"Integration")),SwingConstants.LEFT);
+            label.setOpaque(true);label.setBackground(new Color(175,201,216));label.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(new Color(55,76,86)),BorderFactory.createEmptyBorder(4,12,4,12)));
+            label.setPreferredSize(new Dimension(mode==Mode.PHASE?198:130,32));modeBar.add(label);modeBar.add(Box.createHorizontalStrut(8));
+            if(mode==Mode.PHASE) {
+                phaseControl("0 order correction",0);phaseControl("1st order correction",1);
+                tool("phase","Reset phase angles",()->{ph0=ph1=0;plot.repaint();});
+                tool("phase","Add 90 degrees",()->{ph0+=90;plot.repaint();});tool("phase","Subtract 90 degrees",()->{ph0-=90;plot.repaint();});tool("phase","Add 180 degrees",()->{ph0+=180;plot.repaint();});
+                tool("phase","Increase mouse sensitivity",()->sensitivity*=2);tool("phase","Decrease mouse sensitivity",()->sensitivity/=2);tool("phase","Reset mouse sensitivity",()->sensitivity=.2);
+                tool("phase","Return & save phased spectrum",()->perform(()->{spectrum.phase(ph0,ph1);save();setMode(Mode.VIEW);}));
+                tool("phase","Return, do NOT save",()->setMode(Mode.VIEW));
+            } else {
+                tool("integration","Define new region using cursor (toggle)",()->defineRegion=!defineRegion);
+                tool("integration","Define new region via dialog",this::regionDialog);
+                tool("integration","Delete selected regions",()->{if(selectedIntegral>=0){spectrum.integrals.remove(selectedIntegral);selectedIntegral=-1;plot.repaint();}});
+                tool("integration","Undo last region operation",()->{spectrum.integrals.undo();selectedIntegral=-1;plot.repaint();});
+                tool("integration","Set slope and bias to zero",()->{if(selectedIntegral>=0){var r=spectrum.integrals.regions().get(selectedIntegral);spectrum.integrals.replace(selectedIntegral,new IntegrationRegions.Region(r.left(),r.right(),0,0));plot.repaint();}});
+                JButton calibrate=new JButton("Calibrate");calibrate.addActionListener(e->calibrate());modeBar.add(calibrate);
+                tool("integration","Return, save regions",()->{save();setMode(Mode.VIEW);});tool("integration","Return, do NOT save regions",()->setMode(Mode.VIEW));
+            }
+        }
+        modeBar.revalidate();modeBar.repaint();
+    }
+    private void tool(String mode,String tooltip,Runnable action) {modeBar.add(Assets.button(mode,tooltip,action,30,32));}
+    private void phaseControl(String tooltip,int order) {
+        JButton button=Assets.button("phase",tooltip,()->phaseOrder=order,30,32);
+        button.addMouseMotionListener(new MouseMotionAdapter(){private int lastY;@Override public void mouseMoved(MouseEvent e){lastY=e.getYOnScreen();}@Override public void mouseDragged(MouseEvent e){int y=e.getYOnScreen();adjustPhase(order,lastY-y);lastY=y;}});
+        modeBar.add(button);
+    }
+    private void adjustPhase(int order,double amount) {
+        if(order==0)ph0+=amount*1.0*sensitivity;
+        else {double delta=4.0*amount*1.0*sensitivity;ph0-=(-delta*(spectrum.stripStart+(double)plot.pivot)/(spectrum.ftSize>0?spectrum.ftSize:spectrum.real.length));ph1-=delta;}
+        plot.repaint();
+    }
+    private int maxAmplitude(int start,int end) {int best=start;for(int i=start;i<=end;i++)if(Math.abs(spectrum.real[i])>Math.abs(spectrum.real[best]))best=i;return best;}
+    private void regionDialog() {
+        JTextField left=new JTextField(),right=new JTextField();JPanel panel=new JPanel(new GridLayout(2,2,8,8));panel.add(new JLabel("Low field [ppm]"));panel.add(left);panel.add(new JLabel("High field [ppm]"));panel.add(right);
+        if(JOptionPane.showConfirmDialog(this,panel,"Define integration region",JOptionPane.OK_CANCEL_OPTION)==JOptionPane.OK_OPTION)perform(()->{spectrum.integrals.add(Double.parseDouble(left.getText()),Double.parseDouble(right.getText()));plot.repaint();});
+    }
+    private void calibrate() {
+        if(selectedIntegral<0)return;String value=JOptionPane.showInputDialog(this,"Integral value","Calibrate integral",JOptionPane.PLAIN_MESSAGE);
+        if(value!=null)perform(()->{spectrum.integrals.calibrate(selectedIntegral,Double.parseDouble(value),spectrum.real,spectrum.left,spectrum.right);plot.repaint();});
+    }
+    private void save() {perform(()->{requireSpectrum();Path saved=BrukerWriter.saveNext(spectrum);status.setText("Saved processing "+saved.getFileName());});}
+    private void execute(String input) {String text=input.trim();command.setText("");switch(text){case ".ph"->setMode(Mode.PHASE);case ".int"->setMode(Mode.INTEGRATE);case ".ret"->setMode(Mode.VIEW);case ".all"->plot.full();case ".zi"->plot.zoom(.5);case ".zo"->plot.zoom(2);case ".zl"->plot.previous();case "*2"->{plot.gain*=2;plot.repaint();}case "/2"->{plot.gain/=2;plot.repaint();}case "open"->chooseOpen();default->status.setText("Unknown command: "+text);}}
+    @FunctionalInterface private interface Operation {void run() throws Exception;}
+    private void perform(Operation op) {try{op.run();plot.repaint();}catch(Exception e){status.setText(e.getMessage());JOptionPane.showMessageDialog(this,e.getMessage(),"Error",JOptionPane.ERROR_MESSAGE);}}
+
+    private final class Plot extends JPanel {
+        double viewLeft,viewRight,gain=1,baseline=.16;int pivot;
+        boolean showFid;String dragAction="zoom";
+        int pressX,pressY,lastY,lastX,dragX=-1;
+        Plot() {
+            setBackground(new Color(245,245,245));
+            MouseAdapter mouse=new MouseAdapter(){
+                @Override public void mousePressed(MouseEvent e){pressX=lastX=e.getX();pressY=lastY=e.getY();dragX=pressX;if(spectrum!=null && SwingUtilities.isRightMouseButton(e)){if(mode==Mode.PHASE){pivot=spectrum.index(ppm(e.getX()));repaint();}else if(mode==Mode.INTEGRATE){selectRegion(ppm(e.getX()));JPopupMenu menu=new JPopupMenu();JMenuItem cal=new JMenuItem("Calibrate...");cal.addActionListener(x->calibrate());menu.add(cal);menu.show(Plot.this,e.getX(),e.getY());}}}
+                @Override public void mouseDragged(MouseEvent e){if(spectrum==null)return;dragX=e.getX();int dy=lastY-e.getY();if(mode==Mode.PHASE)adjustPhase(phaseOrder,dy);else if(mode==Mode.VIEW){switch(dragAction){case "scale"->gain*=Math.pow(2,dy/100.0);case "baseline"->baseline+=dy/(double)height();case "pan"->{double shift=(viewRight-viewLeft)*(lastX-e.getX())/width();viewLeft+=shift;viewRight+=shift;}}}lastY=e.getY();lastX=e.getX();repaint();}
+                @Override public void mouseReleased(MouseEvent e){if(spectrum!=null && SwingUtilities.isLeftMouseButton(e)){if(Math.abs(e.getX()-pressX)>3 && mode==Mode.INTEGRATE && defineRegion){spectrum.integrals.add(ppm(pressX),ppm(e.getX()));}else if(Math.abs(e.getX()-pressX)>3 && mode==Mode.VIEW && dragAction.equals("zoom")){setRange(Math.max(ppm(pressX),ppm(e.getX())),Math.min(ppm(pressX),ppm(e.getX())));}else if(mode==Mode.INTEGRATE)selectRegion(ppm(e.getX()));}dragX=-1;repaint();}
+                @Override public void mouseWheelMoved(MouseWheelEvent e){if(spectrum==null)return;if(e.isControlDown())zoom(Math.pow(1.2,e.getPreciseWheelRotation()));else{gain*=Math.pow(1.2,-e.getPreciseWheelRotation());repaint();}}
+            };addMouseListener(mouse);addMouseMotionListener(mouse);addMouseWheelListener(mouse);
+        }
+        int width(){return Math.max(1,getWidth()-40);}int height(){return Math.max(1,getHeight()-54);}int top(){return mode==Mode.PHASE?18:10;}
+        double ppm(int x){return viewLeft+(viewRight-viewLeft)*(x-2)/(double)width();}
+        double pixel(double value){return 2+width()*(value-viewLeft)/(viewRight-viewLeft);}
+        int start(){return spectrum.index(viewLeft);}int end(){return spectrum.index(viewRight);}
+        void full(){if(spectrum!=null){viewLeft=spectrum.left;viewRight=spectrum.right;}gain=1;baseline=.16;zoomHistory.clear();repaint();}
+        void setRange(double a,double b){zoomHistory.push(new double[]{viewLeft,viewRight});viewLeft=a;viewRight=b;repaint();}
+        void zoom(double factor){if(spectrum==null)return;double center=(viewLeft+viewRight)/2,half=(viewLeft-viewRight)*factor/2;setRange(Math.min(spectrum.left,center+half),Math.max(spectrum.right,center-half));}
+        void previous(){if(!zoomHistory.isEmpty()){double[] range=zoomHistory.pop();viewLeft=range[0];viewRight=range[1];repaint();}}
+        void selectRegion(double ppm){selectedIntegral=-1;var regions=spectrum.integrals.regions();for(int i=0;i<regions.size();i++)if(ppm<=regions.get(i).left() && ppm>=regions.get(i).right()){selectedIntegral=i;break;}repaint();}
+        @Override protected void paintComponent(Graphics graphics) {
+            super.paintComponent(graphics);Graphics2D g=(Graphics2D)graphics.create();g.setFont(Assets.regular);
+            int x=2,y=top(),w=width(),h=height();g.setColor(Color.WHITE);g.fillRect(x,y,w,h);g.setColor(new Color(135,135,135));g.drawRect(x,y,w,h);
+            if(spectrum==null){g.dispose();return;}
+            if(mode==Mode.PHASE){g.setFont(new Font(Font.MONOSPACED,Font.PLAIN,11));g.setColor(new Color(255,70,70));g.drawString(String.format(Locale.ROOT,"pivot = %.2f ppm  Phase increment = %.6g  ph0 = %.2f  ph1 = %.2f",spectrum.ppm(pivot),sensitivity,ph0,ph1),8,11);}
+            g.setFont(Assets.bold.deriveFont(14f));g.setColor(new Color(135,135,135));g.drawString(spectrum.label(),6,y+16);
+            int from=start(),to=end();double[] data=spectrum.real;
+            if(mode==Mode.PHASE){data=Numerics.phasePreview(spectrum.real,spectrum.imaginary,ph0,ph1,spectrum.ftSize,spectrum.stripStart,from,to-from+1);}
+            double max=0;for(double value:spectrum.real)max=Math.max(max,Math.abs(value));if(max==0)max=1;
+            double scale=h*.72/max*gain,zero=y+h*(1-baseline);
+            g.setClip(x,y,w,h);g.setColor(Color.BLUE);
+            int previousX=0,previousY=0;boolean first=true;
+            for(int i=from;i<=to;i++) {
+                int px=(int)Math.round(pixel(spectrum.ppm(i)));double sample=data[mode==Mode.PHASE?i-from:i];
+                int py=(int)Math.round(zero-sample*scale);
+                if(!first)g.drawLine(previousX,previousY,px,py);previousX=px;previousY=py;first=false;
+            }
+            if(mode==Mode.PHASE){g.setColor(new Color(255,70,70));int px=(int)Math.round(pixel(spectrum.ppm(pivot)));g.drawLine(px,y,px,y+h);}
+            if(mode==Mode.INTEGRATE || !spectrum.integrals.regions().isEmpty()) {
+                var regions=spectrum.integrals.regions();double integralMax=0;for(var r:regions)integralMax=Math.max(integralMax,Math.abs(spectrum.integrals.calculate(r,spectrum.real,spectrum.left,spectrum.right).value()));
+                if(integralMax==0)integralMax=1;
+                for(int index=0;index<regions.size();index++) {
+                    var r=regions.get(index);var integral=spectrum.integrals.calculate(r,spectrum.real,spectrum.left,spectrum.right);double[] curve=integral.curve();int begin=spectrum.index(r.left());
+                    g.setColor(index==selectedIntegral?new Color(220,40,40):new Color(0,140,0));first=true;
+                    for(int i=0;i<curve.length;i++){int px=(int)Math.round(pixel(spectrum.ppm(begin+i))),py=(int)Math.round(zero-h*.08-curve[i]/integralMax*h*.25);if(!first)g.drawLine(previousX,previousY,px,py);first=false;previousX=px;previousY=py;}
+                    g.setFont(Assets.regular);g.drawString(String.format(Locale.ROOT,"%.2f",integral.normalized(spectrum.integrals.normalizingFactor)),(int)pixel((r.left()+r.right())/2), (int)zero+20);
+                }
+            }
+            if(dragX>=0 && mode!=Mode.PHASE){g.setColor(new Color(100,150,190,35));g.fillRect(Math.min(pressX,dragX),y,Math.abs(pressX-dragX),h);}
+            g.setClip(null);g.setColor(new Color(135,135,135));g.setFont(Assets.bold);
+            double span=viewLeft-viewRight,major=Math.pow(10,Math.floor(Math.log10(span/4)));if(span/major>10)major*=5;else if(span/major>5)major*=2;
+            for(double tick=Math.ceil(viewRight/major)*major;tick<=viewLeft;tick+=major){int px=(int)Math.round(pixel(tick));g.drawLine(px,y+h,px,y+h+6);String label=String.format(Locale.ROOT,major>=1?"%.0f":"%.2f",tick);g.drawString(label,px-g.getFontMetrics().stringWidth(label)/2,y+h+21);}
+            g.drawString("[ppm]",x+w-40,y+h+21);
+            g.dispose();
+        }
+    }
+    public static void main(String[] args) throws Exception {
+        Assets.load();FlatLightLaf.setup();UIManager.put("defaultFont",Assets.regular);
+        JFrame.setDefaultLookAndFeelDecorated(true);
+        UIManager.put("Button.arc",0);UIManager.put("Component.arc",0);UIManager.put("TextComponent.arc",0);
+        SwingUtilities.invokeLater(()->{Viewer viewer=new Viewer();viewer.setVisible(true);if(args.length>0)viewer.open(Path.of(args[0]));});
+    }
+}

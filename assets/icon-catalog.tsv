@@ -1,0 +1,142 @@
+phase.MLN1P121  10  1  Z:\home\maxlang\Projects\topspin-viewer\artifacts\reference-datasets\datasets	507385004a5d06b2.png
+phase.text.MLN1P121  10  1  Z:\home\maxlang\Projects\topspin-viewer\artifacts\reference-datasets\datasets	507385004a5d06b2.png
+phase.<html><b>Compute spectrum from raw data <i>(proc1d y).</i></b><br>1-click operation! To change the processing<br>options, click on the down arrow at right and<br>choose <i>Configure Standard Processing</i>.	80b5a4a4743c8327.png
+phase.text.Proc. Spectrum	80b5a4a4743c8327.png
+phase.<html><b>Adjust spectrum phase manually <i>(.ph)</i></b><br>Enter manual phasing mode. Allows you to<br>adjust the zero and first order correction<br>terms <b><i>PHC0</b></i> and <b><i>PHC1</b></i>.	039e954349864a72.png
+phase.text.Adjust Phase	039e954349864a72.png
+phase.<html><b>Adjust spectra baseline manually </b> (.basl) <br>	8487e2dcb1a5f592.png
+phase.text.Baseline	8487e2dcb1a5f592.png
+phase.<html><b>Calibrate frequency axis manually <i>(.cal)</i></b><br>Before executing this command, expand<br>the reference peak on the display.<br>In calibration mode, left-click on the<br>desired position.	c8e25fef3c1106cd.png
+phase.text.Calib. Axis	c8e25fef3c1106cd.png
+phase.<html><b>Print active window</b><br>Spectrum, integrals, peaks etc. are printed<br>as shown on the display. You may adjust printing colors<br>and fonts using the drop-down menu of this button.<br>In the View Tab, you may define which spectra components<br>(integrals, ...) are displayed. For formatted plots,<br>use plot layouts: Command <i>plot</i>.</html>	d2655431d0a624e6.png
+phase.<html><b>Export active data or plot window as PDF.</b><br>Choose a file name and save the window.<br>Using the drop-down menu of this button<br>you may select other grahics formats.</html>	d446ef5bfee42362.png
+phase.<html><b>Copy to clipboard (copy).</b><br>Copies the selected spectrum, fid, or plot to the system's<br>clipboard. You can "paste" the copied graphics<br>into a word processor or a presenter program.<br></html>	ba51b50cb1a3ae3d.png
+phase.<html><b>Show more Publish Options... </b><br> </html>	ea1aed00d934d1dc.png
+phase.<html><b>Toggle Perspective  [Ctrl D]</b><br>show maximized data window</html>	0652fa702010f232.png
+phase.<html><b>Show 'Layout' Options</b></html>	c2dda69d112d92db.png
+phase.<html><b>Spectrum display properties.</b><br>Toggle the visibility of integrals, peaks, and other<br>spectra components.<br><i>Note:</i> Any of these components can only be displayed when<br>available, e.g. when peaks were picked before, when<br>integrals were calculated, when a structure mol file<br>is available, etc.</html>	c9be5211370d1b84.png
+phase.<html><b>Click here to access commands such as</b><br><i>new, open, save, delete, run,</i> and<br>to terminate TopSpin.<br>Key shortcut to access this menu: <i>ALT F</i>	b7e8744d2883ee83.png
+phase.<html><b>Window Switcher</b><br>get an overview about open windows and quickly change it</html>	3e6eeaa5b8dc8ee8.png
+phase.<html><b>Setup preferences</b><br>Allows you to change colors, fonts and many other<br>properties influencing the behaviour of TopSpin.<html>	37e706e6bcd59268.png
+phase.<html><b>Click here to access TopSpin documentation:</b><br>Manuals, release letters, functions keys, etc.<br>Key shortcut to access this menu: <i>ALT H</i><br><i>Hint:</i>Type "ft?" or "help ft" into the<br>command line to get help for the "ft", etc.	a4c6ee0955933aaf.png
+phase.Larger by factor 2 [ALT PgUp], [*2]	7a682da9be2ab754.png
+phase.Smaller by factor 2 [ALT PgDwn], [/2]	2984f691487816fe.png
+phase.Smaller/larger	f297e13743be2abf.png
+phase.Smooth zoom (drag mouse)	72f81d2d266f2a29.png
+phase.Shift baseline up/down while pressing left mouse button [.sud]	82319bc80817dc38.png
+phase.Shift spectrum left and right while pressing left mouse button [shift_lr]	df74449286f2fef8.png
+phase.Shift baseline to bottom [ALT DwnArr] [.sd]	d8b5a20232fed579.png
+phase.Zoom in [.zi]	a11a73bee2e742dd.png
+phase.Zoom out [.zo]	6fa07606bf510be7.png
+phase.Show the last zoom [.zl]	d6d623d37ec92722.png
+phase.Show full spectrum, reset intensity scale [.all]	da5974157c4e9729.png
+phase.Synchronize visible regions [.sync]	d32596090ad1c25a.png
+phase.Retain expansion and scale when changing dataset [.keep]	4c6d91b4193e73e5.png
+phase.Start distance measurement	631f85a368667253.png
+phase.Multiple display [.md]	2dba9eebb099c8fb.png
+phase.More icons [.onerow 1d]	43559ff79fda4f31.png
+phase.Structure	748f49a78d18d04f.png
+phase.Command Line History	9efe924beae2e07c.png
+phase.Command Help	95998af089d85012.png
+phase.Status Line History	b3aa7344d81b6aad.png
+phase.Clear all filters	264cf4e7aa3e3ccb.png
+phase.text.<html><a href="#">Show Filters</a></html>	93c4690e00563256.png
+phase.text.2-pyridinecarboxylicacid  10  1  "C:\users\maxlang\Documents\IGB Lab\NMRs\2-pyridinecarboxylicacid_10" - zg45,  	d6ec82432a2400bd.png
+phase.Previous window	e86065a14944f2ae.png
+phase.Next window	eddcb8c7f165a2c1.png
+phase.Select all windows	c56faa4f49e4b20d.png
+phase.Close all windows	6102d9fcec451c26.png
+phase.Close active or all selected windows	22fe41656a0dc70f.png
+phase.Open selected datasets in multiple display	2dba9eebb099c8fb.png
+phase.text.MLN1P121  10  1  Z:\home\maxlang\Projects\topspin-viewer\artifacts\reference-datasets\datasets	507385004a5d06b2.png
+phase.text.Interactive phase correction	1998fc8d239a6846.png
+phase.0 order correction	bf2287f052df45ea.png
+phase.1st order correction	28a3fb8755b07c45.png
+phase.Reset phase angles [.phr]	89bdcc2b47c9179e.png
+phase.Add 90 degrees to 0 order [.ph90]	32bd7a8d0bf82c3e.png
+phase.Subtract 90 degrees from 0 order [.phm90]	8480b2c22b375a8b.png
+phase.Add 180 degrees to 0 order [.ph180]	9d2cabe50093df66.png
+phase.Increase mouse sensitivity [.inc]	c998d77fc3b857cb.png
+phase.Decrease mouse sensitivity [.dec]	8d215ea20f560f50.png
+phase.Reset mouse sensitivity	08d31d3beb695a4d.png
+phase.Save for nD spectrum [.s2d]	7a719695db328c0e.png
+phase.Return & save phased spectrum. [.sret]	2f7ef38bd22e54ac.png
+phase.Return, do NOT save phased spectrum [.ret]	449c96d0777a3f35.png
+integration.MLN1P121  10  1  Z:\home\maxlang\Projects\topspin-viewer\artifacts\reference-datasets\datasets	507385004a5d06b2.png
+integration.text.MLN1P121  10  1  Z:\home\maxlang\Projects\topspin-viewer\artifacts\reference-datasets\datasets	507385004a5d06b2.png
+integration.<html><b>Compute spectrum from raw data <i>(proc1d y).</i></b><br>1-click operation! To change the processing<br>options, click on the down arrow at right and<br>choose <i>Configure Standard Processing</i>.	80b5a4a4743c8327.png
+integration.text.Proc. Spectrum	80b5a4a4743c8327.png
+integration.<html><b>Adjust spectrum phase manually <i>(.ph)</i></b><br>Enter manual phasing mode. Allows you to<br>adjust the zero and first order correction<br>terms <b><i>PHC0</b></i> and <b><i>PHC1</b></i>.	039e954349864a72.png
+integration.text.Adjust Phase	039e954349864a72.png
+integration.<html><b>Adjust spectra baseline manually </b> (.basl) <br>	8487e2dcb1a5f592.png
+integration.text.Baseline	8487e2dcb1a5f592.png
+integration.<html><b>Calibrate frequency axis manually <i>(.cal)</i></b><br>Before executing this command, expand<br>the reference peak on the display.<br>In calibration mode, left-click on the<br>desired position.	c8e25fef3c1106cd.png
+integration.text.Calib. Axis	c8e25fef3c1106cd.png
+integration.<html><b>Print active window</b><br>Spectrum, integrals, peaks etc. are printed<br>as shown on the display. You may adjust printing colors<br>and fonts using the drop-down menu of this button.<br>In the View Tab, you may define which spectra components<br>(integrals, ...) are displayed. For formatted plots,<br>use plot layouts: Command <i>plot</i>.</html>	d2655431d0a624e6.png
+integration.<html><b>Export active data or plot window as PDF.</b><br>Choose a file name and save the window.<br>Using the drop-down menu of this button<br>you may select other grahics formats.</html>	d446ef5bfee42362.png
+integration.<html><b>Copy to clipboard (copy).</b><br>Copies the selected spectrum, fid, or plot to the system's<br>clipboard. You can "paste" the copied graphics<br>into a word processor or a presenter program.<br></html>	ba51b50cb1a3ae3d.png
+integration.<html><b>Show more Publish Options... </b><br> </html>	ea1aed00d934d1dc.png
+integration.<html><b>Toggle Perspective  [Ctrl D]</b><br>show maximized data window</html>	0652fa702010f232.png
+integration.<html><b>Show 'Layout' Options</b></html>	c2dda69d112d92db.png
+integration.<html><b>Spectrum display properties.</b><br>Toggle the visibility of integrals, peaks, and other<br>spectra components.<br><i>Note:</i> Any of these components can only be displayed when<br>available, e.g. when peaks were picked before, when<br>integrals were calculated, when a structure mol file<br>is available, etc.</html>	c9be5211370d1b84.png
+integration.<html><b>Click here to access commands such as</b><br><i>new, open, save, delete, run,</i> and<br>to terminate TopSpin.<br>Key shortcut to access this menu: <i>ALT F</i>	b7e8744d2883ee83.png
+integration.<html><b>Window Switcher</b><br>get an overview about open windows and quickly change it</html>	3e6eeaa5b8dc8ee8.png
+integration.<html><b>Setup preferences</b><br>Allows you to change colors, fonts and many other<br>properties influencing the behaviour of TopSpin.<html>	37e706e6bcd59268.png
+integration.<html><b>Click here to access TopSpin documentation:</b><br>Manuals, release letters, functions keys, etc.<br>Key shortcut to access this menu: <i>ALT H</i><br><i>Hint:</i>Type "ft?" or "help ft" into the<br>command line to get help for the "ft", etc.	a4c6ee0955933aaf.png
+integration.Larger by factor 2 [ALT PgUp], [*2]	7a682da9be2ab754.png
+integration.Smaller by factor 2 [ALT PgDwn], [/2]	2984f691487816fe.png
+integration.Smaller/larger	f297e13743be2abf.png
+integration.Smooth zoom (drag mouse)	72f81d2d266f2a29.png
+integration.Shift baseline up/down while pressing left mouse button [.sud]	82319bc80817dc38.png
+integration.Shift spectrum left and right while pressing left mouse button [shift_lr]	df74449286f2fef8.png
+integration.Shift baseline to bottom [ALT DwnArr] [.sd]	d8b5a20232fed579.png
+integration.Zoom in [.zi]	a11a73bee2e742dd.png
+integration.Zoom out [.zo]	6fa07606bf510be7.png
+integration.Show the last zoom [.zl]	d6d623d37ec92722.png
+integration.Show full spectrum, reset intensity scale [.all]	da5974157c4e9729.png
+integration.Synchronize visible regions [.sync]	d32596090ad1c25a.png
+integration.Retain expansion and scale when changing dataset [.keep]	4c6d91b4193e73e5.png
+integration.Start distance measurement	631f85a368667253.png
+integration.Multiple display [.md]	2dba9eebb099c8fb.png
+integration.More icons [.onerow 1d]	43559ff79fda4f31.png
+integration.Structure	748f49a78d18d04f.png
+integration.Command Line History	9efe924beae2e07c.png
+integration.Command Help	95998af089d85012.png
+integration.Status Line History	b3aa7344d81b6aad.png
+integration.Clear all filters	264cf4e7aa3e3ccb.png
+integration.text.<html><a href="#">Show Filters</a></html>	93c4690e00563256.png
+integration.text.2-pyridinecarboxylicacid  10  1  "C:\users\maxlang\Documents\IGB Lab\NMRs\2-pyridinecarboxylicacid_10" - zg45,  	d6ec82432a2400bd.png
+integration.Previous window	e86065a14944f2ae.png
+integration.Next window	eddcb8c7f165a2c1.png
+integration.Select all windows	c56faa4f49e4b20d.png
+integration.Close all windows	6102d9fcec451c26.png
+integration.Close active or all selected windows	22fe41656a0dc70f.png
+integration.Open selected datasets in multiple display	2dba9eebb099c8fb.png
+integration.text.MLN1P121  10  1  Z:\home\maxlang\Projects\topspin-viewer\artifacts\reference-datasets\datasets	507385004a5d06b2.png
+integration.text.Integration	64ead4a0cb1c59c5.png
+integration.Define new region using cursor (toggle)	37c8801e6fa141da.png
+integration.Define new region using cursor, use automated baseline correction (toggle)	6c3208952fa7cfc4.png
+integration.Define new region via dialog	83a082edca78b7d1.png
+integration.Cut integral in two parts (toggle)	78a0ac1b7de8bf14.png
+integration.Select/Deselect all regions (toggle)	983981d0b432ba13.png
+integration.Delete selected regions	10e55662493a6099.png
+integration.Undo last region operation	d6d623d37ec92722.png
+integration.Interactive bias correction	bdee57437ed9ba9e.png
+integration.Interactive slope correction	f170941e97b03814.png
+integration.Set slope and bias to zero	ab9e80336ae4d144.png
+integration.Width [ppm] for bias determination	ed2bcc94dcf5d26f.png
+integration.Increase mouse sensitivity [.inc]	c998d77fc3b857cb.png
+integration.Decrease mouse sensitivity [.dec]	8d215ea20f560f50.png
+integration.Reset mouse sensitivity	08d31d3beb695a4d.png
+integration.Integrals larger by factor 2	7a682da9be2ab754.png
+integration.Integrals smaller by factor 2	2984f691487816fe.png
+integration.Integrals smaller/larger	f297e13743be2abf.png
+integration.Define scaling factor via dialog	9fb250be6d97aab9.png
+integration.Autoscale all integrals to same height (toggle)	3b62d30f307efb55.png
+integration.Show bottom limit	d8b5a20232fed579.png
+integration.Show top limit	b4cbf24c49787cd2.png
+integration.Shift integrals up/down	82319bc80817dc38.png
+integration.Read / Import integration regions	d16174ac6c9c5d8f.png
+integration.Save / Export integration regions	67a860ec61bc8914.png
+integration.Return, save regions [.sret]	2f7ef38bd22e54ac.png
+integration.Return, do NOT save regions! [.ret]	449c96d0777a3f35.png

@@ -1,0 +1,36 @@
+{
+  "target": "TopSpin 5.0.0 Linux installation",
+  "artifacts": [
+    {
+      "path": "/home/maxlang/.local/share/topspin/opt/topspin5.0.0/classes/lib/top_base.jar",
+      "size": 28608195,
+      "sha256": "6c24fb17cf46c25c6260301a2f94d1d35658abe12b735971b86cac5ef4588b3b"
+    },
+    {
+      "path": "/home/maxlang/.local/share/topspin/opt/topspin5.0.0/classes/lib/top_an.jar",
+      "size": 1882743,
+      "sha256": "16fab8a7fa88dae3fb8e41f052026ac51f0918958d88f9ef4a68de03b118ace7"
+    },
+    {
+      "path": "/home/maxlang/.local/share/topspin/opt/topspin5.0.0/classes/lib/commonLib.jar",
+      "size": 532123,
+      "sha256": "e95a59a2311ab0993b316ea1c4abd89eeb1dd30f9e5a574f2e74c5a151b56f34"
+    },
+    {
+      "path": "/home/maxlang/.local/share/topspin/opt/topspin5.0.0/prog/mod/proc1d",
+      "size": 227488,
+      "sha256": "39979c403e2c2b23ab5a0d2379b6a4f9786b582f00c1db11df8cfc3fd75b7f2c"
+    },
+    {
+      "path": "/home/maxlang/.local/share/topspin/opt/topspin5.0.0/prog/mod/linteg",
+      "size": 493384,
+      "sha256": "c90b43820145bd02ea3e40ae8fd7a0ff45720ceec1fa98b33569380ee1ebd440"
+    },
+    {
+      "path": "/home/maxlang/.wine-topspin-5/drive_c/Bruker/TopSpinProcessing5.0.0/prog/mod/proc1d.exe",
+      "size": 904728,
+      "sha256": "b49e2a64acdb8f179de2956081449da2e56295a58540d9f902b633e5c728f9fb"
+    }
+  ],
+  "runtime_reference": "TopSpin 5.0.0 Windows Processing under Wine"
+}
