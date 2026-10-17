@@ -1,6 +1,7 @@
 import java.awt.*;
 import java.awt.event.*;
 import java.awt.geom.*;
+import java.awt.image.BufferedImage;
 import java.nio.file.*;
 import java.util.*;
 import javax.swing.*;
@@ -262,6 +263,7 @@ public final class Viewer extends JFrame {
     private void perform(Operation op) {try{op.run();plot.repaint();}catch(Exception e){status.setText(e.getMessage());JOptionPane.showMessageDialog(this,e.getMessage(),"Error",JOptionPane.ERROR_MESSAGE);}}
 
     private final class Plot extends JPanel {
+        private BufferedImage logicalCanvas;
         double viewLeft,viewRight,gain=1,baseline=.05;int pivot;
         ViewRanges.Range verticalRange;
         boolean showFid;String dragAction="zoom";
@@ -305,7 +307,7 @@ public final class Viewer extends JFrame {
             JMenuItem calculate=new JMenuItem("Calculate ph0");calculate.addActionListener(e->{if(pivot>=0 && pivot<spectrum.real.length){ph0=Numerics.wrapPhaseZero(Numerics.phaseAtPivot(spectrum.real[pivot],spectrum.imaginary[pivot]));repaint();}});menu.add(calculate);
             menu.show(this,event.getX()-1,event.getY()-2);
         }
-        int width(){return Math.max(1,getWidth()-40);}int height(){return Math.max(1,getHeight()-54);}int top(){return mode==Mode.PHASE?18:10;}
+        int width(){return Math.max(1,getWidth()-33);}int height(){return Math.max(1,getHeight()-top()-29);}int top(){return mode==Mode.PHASE?18:2;}
         double ppm(int x){return VisualNumerics.horizontal(viewLeft,viewRight,2,2+width()-1).physical(x);}
         double pixel(double value){return VisualNumerics.horizontal(viewLeft,viewRight,2,2+width()-1).screen(value,1);}
         int start(){return spectrum.index(viewLeft);}int end(){return spectrum.index(viewRight);}
@@ -345,10 +347,28 @@ public final class Viewer extends JFrame {
             g.drawString("[sec]",x+w-35,y+h+21);
         }
         @Override protected void paintComponent(Graphics graphics) {
-            super.paintComponent(graphics);Graphics2D g=(Graphics2D)graphics.create();g.setFont(Assets.regular);
+            super.paintComponent(graphics);
+            if(getWidth()<1 || getHeight()<1)return;
+            if(logicalCanvas==null || logicalCanvas.getWidth()!=getWidth() || logicalCanvas.getHeight()!=getHeight())
+                logicalCanvas=new BufferedImage(getWidth(),getHeight(),BufferedImage.TYPE_INT_ARGB);
+            Graphics2D canvas=logicalCanvas.createGraphics();canvas.setColor(getBackground());canvas.fillRect(0,0,getWidth(),getHeight());
+            paintCanvas(canvas);canvas.dispose();
+            // The source data panel paints its bitmap in logical pixels, then scales it on screen.
+            Graphics2D display=(Graphics2D)graphics.create();
+            display.setRenderingHint(RenderingHints.KEY_INTERPOLATION,RenderingHints.VALUE_INTERPOLATION_NEAREST_NEIGHBOR);
+            display.drawImage(logicalCanvas,0,0,null);
+            if(spectrum!=null && mode==Mode.PHASE)paintPhaseCaption(display);
+            display.dispose();
+        }
+        private void paintPhaseCaption(Graphics2D g) {
+            g.setFont(Assets.mono);g.setColor(new Color(255,70,70));
+            java.text.DecimalFormat increment=new java.text.DecimalFormat("0.00####",java.text.DecimalFormatSymbols.getInstance(Locale.ROOT));
+            g.drawString(String.format(Locale.ROOT,"pivot = %.2f ppm  Phase increment = %s  ph0 = %.2f  ph1 = %.2f",spectrum.ppm(pivot),increment.format(sensitivity),ph0,ph1),8,11);
+        }
+        private void paintCanvas(Graphics2D graphics) {
+            Graphics2D g=(Graphics2D)graphics.create();g.setFont(Assets.regular);
             int x=2,y=top(),w=width(),h=height();g.setColor(Color.WHITE);g.fillRect(x,y,w,h);g.setColor(new Color(135,135,135));g.drawRect(x,y,w,h);
             if(spectrum==null){g.dispose();return;}
-            if(mode==Mode.PHASE){g.setFont(Assets.mono);g.setColor(new Color(255,70,70));java.text.DecimalFormat increment=new java.text.DecimalFormat("0.00####",java.text.DecimalFormatSymbols.getInstance(Locale.ROOT));g.drawString(String.format(Locale.ROOT,"pivot = %.2f ppm  Phase increment = %s  ph0 = %.2f  ph1 = %.2f",spectrum.ppm(pivot),increment.format(sensitivity),ph0,ph1),8,11);}
             g.setFont(Assets.bold.deriveFont(14f));g.setColor(new Color(135,135,135));g.drawString(spectrum.label(),6,y+16);
             if(mode==Mode.INTEGRATE) {
                 g.setFont(Assets.mono);g.setColor(new Color(128,128,128));g.drawString("Mouse Sensitivity: "+integrationSensitivity,6,y+36);
@@ -363,13 +383,13 @@ public final class Viewer extends JFrame {
             for(double value:spectrum.real){minimum=Math.min(minimum,value);maximum=Math.max(maximum,value);}
             double extent=maximum-minimum;if(extent==0)extent=1;
             double valueLeft=verticalRange.start(),valueRight=verticalRange.end();
-            var mapper=VisualNumerics.vertical(valueLeft,valueRight,y,y+h-1);
+            var mapper=VisualNumerics.vertical(valueLeft,valueRight,y,y+h);
             double zero=mapper.screen(0,gain);
             g.setClip(x,y,w,h);g.setColor(Color.BLUE);
             int previousX=0,previousY=0;boolean first=true;
             double[] visible=mode==Mode.PHASE?data:Arrays.copyOfRange(data,from,to+1);
             var xMapper=VisualNumerics.horizontal(viewLeft,viewRight,x,x+w-1);
-            SpectrumPainter.paint(g,visible,from,x,y,w,h,xMapper,mapper,spectrum.left,spectrum.right,spectrum.real.length,gain);
+            SpectrumPainter.paintPanel(g,visible,from,x,y,w,h,xMapper,mapper,spectrum.left,spectrum.right,spectrum.real.length,gain);
             if(mode==Mode.PHASE){g.setColor(new Color(255,70,70));int px=(int)Math.round(pixel(spectrum.ppm(pivot)));g.drawLine(px,y,px,y+h);}
             if(mode==Mode.INTEGRATE || !spectrum.integrals.regions().isEmpty()) {
                 var regions=spectrum.integrals.regions();double integralExtent=0;
@@ -412,20 +432,14 @@ public final class Viewer extends JFrame {
             }
             if(dragX>=0){g.setColor(new Color(100,150,190,35));g.fillRect(Math.min(pressX,dragX),y,Math.abs(pressX-dragX),h);}
             g.setClip(null);g.setColor(new Color(128,128,128));g.setFont(Assets.bold.deriveFont(14f));
-            double span=viewLeft-viewRight,major=Math.pow(10,Math.floor(Math.log10(span/4)));if(span/major>10)major*=5;else if(span/major>5)major*=2;
-            for(double tick=Math.ceil(viewRight/major)*major;tick<=viewLeft;tick+=major){int px=(int)Math.round(pixel(tick));g.drawLine(px,y+h,px,y+h+6);String label=String.format(Locale.ROOT,major>=1?"%.0f":"%.2f",tick==0?0.0:tick);g.drawString(label,px-g.getFontMetrics().stringWidth(label)/2,y+h+21);}
-            for(double tick=Math.ceil(viewRight/(major/5))*(major/5);tick<=viewLeft;tick+=major/5){int px=(int)pixel(tick);g.drawLine(px,y+h,px,y+h+4);}
-            g.drawString("[ppm]",x+w-40,y+h+21);
-            double reference=maximum==0?1:15.0/maximum;
-            double relLeft=valueLeft*reference/gain,relRight=valueRight*reference/gain;
-            double yStep=Math.pow(10,Math.floor(Math.log10((relRight-relLeft)/4)));
-            if((relRight-relLeft)/yStep>10)yStep*=5;else if((relRight-relLeft)/yStep>5)yStep*=2;
-            for(double tick=Math.ceil(relLeft/yStep)*yStep;tick<=relRight;tick+=yStep) {
-                int py=mapper.screen(tick/reference,gain);g.drawLine(x+w,py,x+w+6,py);
-                Graphics2D text=(Graphics2D)g.create();text.translate(x+w+20,py+4);text.rotate(-Math.PI/2);
-                text.drawString(String.format(Locale.ROOT,yStep>=1?"%.0f":"%.2f",tick==0?0.0:tick),0,0);text.dispose();
-            }
-            Graphics2D units=(Graphics2D)g.create();units.translate(x+w+20,y+33);units.rotate(-Math.PI/2);units.drawString("[rel]",0,0);units.dispose();
+            AxisPainter.paint(g,new Rectangle(x,y+h,w,27),VisualNumerics.horizontal(viewLeft,viewRight,x,x+w),
+                AxisTicks.calculate(viewLeft,viewRight,"ppm",null,true,true),Assets.bold.deriveFont(14f),new Color(128,128,128),1,0);
+            double cy;
+            try{cy=Double.parseDouble(spectrum.parameters.getOrDefault("CY","20"));}catch(NumberFormatException error){cy=20;}
+            if(cy<=0)cy=20;
+            double reference=maximum>0?cy/Math.abs(maximum):minimum!=0?cy/Math.abs(minimum):1;
+            AxisPainter.paintVertical(g,new Rectangle(x+w,y,27,h),valueLeft,valueRight,reference,gain,
+                Assets.bold.deriveFont(14f),new Color(128,128,128),1,0);
             g.dispose();
         }
     }

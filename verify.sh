@@ -9,7 +9,7 @@ javac -proc:none -cp lib/flatlaf-3.4.1.jar -d build/app src/*.java \
   tests/RawReference.java tests/SavedPhaseReference.java tests/ReaderReference.java \
   tests/WriterReference.java tests/LiveNumericsReference.java tests/LiveIntegrationReference.java \
   tests/DatasetOpeningReference.java tests/ViewerWorkflowReference.java tests/IntegrationEditReference.java tests/IntegrationReopenReference.java tests/PlotRasterReference.java tests/IntegralTableReference.java tests/IntegralTableRasterProbe.java tests/SaveTransactionReference.java \
-  tests/WindowsTextReference.java tests/NativeTextRasterReference.java tests/RibbonRasterReference.java tests/WindowsPhaseControllerReference.java
+  tests/CapturedAxisReference.java tests/CapturedSpectrumReference.java tests/WindowsTextReference.java tests/NativeTextRasterReference.java tests/RibbonRasterReference.java tests/WindowsPhaseControllerReference.java
 gcc -std=c11 -O2 -fPIC -shared -ffp-contract=off \
   -I"$JAVA_HOME/include" -I"$JAVA_HOME/include/linux" \
   -o build/native/libtopspin_reconstructed.so native/kernel.c native/jni.c -lm
@@ -21,6 +21,8 @@ for task_root in artifacts/reference-datasets artifacts/held-out-references arti
   java -Djava.library.path=build/native -cp build/app SavedPhaseReference "$task_root/captures"
   java -Djava.library.path=build/native -cp build/app WriterReference "$task_root/captures"
 done
+java -Djava.awt.headless=true -cp build/app CapturedAxisReference
+java -Djava.awt.headless=true -cp build/app CapturedSpectrumReference
 java -cp build/app ReaderReference artifacts/reference-datasets/captures
 java -cp build/app LiveNumericsReference artifacts/live-jvm-reference
 java -cp build/app WindowsPhaseControllerReference artifacts/windows-phase-controller.tsv
@@ -41,7 +43,10 @@ java -Djava.awt.headless=true -Djava.library.path=build/native -cp build/app:lib
 task_vendor_root="${TOPSPIN_REFERENCE_ROOT:-/home/maxlang/.wine-topspin-5/drive_c/Bruker/TopSpinProcessing5.0.0}"
 javac -proc:none -cp "$task_vendor_root/classes/lib/*" -d build/test \
   src/Numerics.java src/IntegrationRegions.java src/IntegralScale.java src/VisualNumerics.java src/SpectrumPainter.java src/PointerGesture.java src/PlotSelection.java src/ViewRanges.java tests/VendorDifferential.java \
-  tests/IntegrationFileReference.java tests/IntegralScaleReference.java tests/IntegrationUndoReference.java tests/DisplayCompressionReference.java tests/DisplayMappingReference.java tests/PivotProbe.java tests/PhaseControlReference.java tests/PlotSelectionReference.java tests/SpectrumRasterDifferential.java tests/PointerGestureReference.java tests/ViewRangesReference.java
+  src/Assets.java src/AxisTicks.java src/AxisPainter.java tests/AxisTicksReference.java tests/AxisRasterReference.java tests/VerticalAxisRasterReference.java tests/IntegrationFileReference.java tests/IntegralScaleReference.java tests/IntegrationUndoReference.java tests/DisplayCompressionReference.java tests/DisplayMappingReference.java tests/PivotProbe.java tests/PhaseControlReference.java tests/PlotSelectionReference.java tests/SpectrumRasterDifferential.java tests/PointerGestureReference.java tests/ViewRangesReference.java
+java -Djava.awt.headless=true -cp "build/test:$task_vendor_root/classes/lib/*" AxisTicksReference
+java -Djava.awt.headless=true -cp "build/test:$task_vendor_root/classes/lib/*" AxisRasterReference
+java -Djava.awt.headless=true -cp "build/test:$task_vendor_root/classes/lib/*" VerticalAxisRasterReference
 java -Djava.awt.headless=true -cp "build/test:$task_vendor_root/classes/lib/*" VendorDifferential
 java -Djava.awt.headless=true -cp "build/test:$task_vendor_root/classes/lib/*" IntegrationFileReference
 java -Djava.awt.headless=true -cp "build/test:$task_vendor_root/classes/lib/*" IntegralScaleReference
