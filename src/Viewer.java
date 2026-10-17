@@ -30,9 +30,12 @@ public final class Viewer extends JFrame {
     private double integrationSensitivity=1,integralGain=1,integralBaseline=.2;
     private String integrationAction="select";
     private final ArrayDeque<double[]> zoomHistory=new ArrayDeque<>();
+    private final boolean warpPointer;
 
-    Viewer() {
+    Viewer(){this(true);}
+    Viewer(boolean warpPointer) {
         super("TopSpin Viewer");setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
+        this.warpPointer=warpPointer;
         setSize(1438,927);setMinimumSize(new Dimension(960,640));
         JPanel content=new JPanel(new BorderLayout());setContentPane(content);
         content.add(header(),BorderLayout.NORTH);
@@ -205,11 +208,7 @@ public final class Viewer extends JFrame {
     private void tool(String mode,String tooltip,Runnable action) {modeBar.add(Assets.button(mode,tooltip,action,30,32));}
     private void phaseControl(String tooltip,int order) {
         JButton button=Assets.button("phase",tooltip,()->phaseOrder=order,30,32);
-        MouseAdapter drag=new MouseAdapter(){private int lastY;
-            @Override public void mousePressed(MouseEvent e){lastY=e.getYOnScreen();}
-            @Override public void mouseDragged(MouseEvent e){int y=e.getYOnScreen();adjustPhase(order,lastY-y);lastY=y;}
-        };
-        button.addMouseListener(drag);button.addMouseMotionListener(drag);
+        new RelativeDragControl(button,()->phaseOrder=order,amount->adjustPhase(order,amount),warpPointer);
         modeBar.add(button);
     }
     private void adjustPhase(int order,double amount) {
@@ -219,11 +218,7 @@ public final class Viewer extends JFrame {
     }
     private void integrationDragControl(String tooltip,String action) {
         JButton button=Assets.button("integration",tooltip,()->{integrationAction=action;defineRegion=false;},30,32);
-        MouseAdapter drag=new MouseAdapter(){int lastY;
-            @Override public void mousePressed(MouseEvent event){lastY=event.getYOnScreen();}
-            @Override public void mouseDragged(MouseEvent event){int y=event.getYOnScreen();adjustIntegral(action,lastY-y);lastY=y;}
-        };
-        button.addMouseListener(drag);button.addMouseMotionListener(drag);modeBar.add(button);
+        new RelativeDragControl(button,()->{integrationAction=action;defineRegion=false;},amount->adjustIntegral(action,amount),warpPointer);modeBar.add(button);
     }
     private void adjustIntegral(String action,double amount) {
         if(action.equals("baseline")){integralBaseline-=amount*.001;plot.repaint();return;}

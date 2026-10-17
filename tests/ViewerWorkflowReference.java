@@ -48,7 +48,7 @@ public class ViewerWorkflowReference {
         byte[] original=Files.readAllBytes(experiment.resolve("pdata/1/1r"));
         Assets.load();FlatLightLaf.setup();UIManager.put("defaultFont",Assets.regular);JFrame.setDefaultLookAndFeelDecorated(true);
         Viewer[] reference=new Viewer[1];
-        SwingUtilities.invokeAndWait(()->{reference[0]=new Viewer();reference[0].setVisible(true);reference[0].open(experiment);});
+        SwingUtilities.invokeAndWait(()->{reference[0]=new Viewer(false);reference[0].setVisible(true);reference[0].open(experiment);});
         try {
             SwingUtilities.invokeAndWait(()->{
                 try {
@@ -59,6 +59,18 @@ public class ViewerWorkflowReference {
                     if(!table.isShowing() || field(viewer,"mode")!=Viewer.Mode.VIEW || table.table.getRowCount()!=regions)throw new AssertionError("Integral tab did not display the table");
                     textButton(viewer.getContentPane(),"SPECTRUM").doClick();
                     if(!((Component)field(viewer,"plot")).isShowing())throw new AssertionError("Spectrum tab did not restore plot");
+                    command(viewer,".ph");JButton phase=button(viewer.getContentPane(),"0 order correction");long time=System.currentTimeMillis();
+                    phase.dispatchEvent(new MouseEvent(phase,MouseEvent.MOUSE_PRESSED,time,InputEvent.BUTTON1_DOWN_MASK,10,5,1,false,MouseEvent.BUTTON1));
+                    for(int y:new int[]{5,15,25})phase.dispatchEvent(new MouseEvent(phase,MouseEvent.MOUSE_DRAGGED,time,InputEvent.BUTTON1_DOWN_MASK,10,y,0,false,MouseEvent.NOBUTTON));
+                    double sensitivity=(double)field(viewer,"sensitivity"),expectedPhase=10*sensitivity;
+                    if(Double.doubleToRawLongBits((double)field(viewer,"ph0"))!=Double.doubleToRawLongBits(expectedPhase))throw new AssertionError("Toolbar phase drag differs from original pointer events");
+                    phase.dispatchEvent(new MouseWheelEvent(phase,MouseEvent.MOUSE_WHEEL,time,0,10,15,0,false,MouseWheelEvent.WHEEL_UNIT_SCROLL,1,1));expectedPhase+=4*sensitivity;
+                    if(Double.doubleToRawLongBits((double)field(viewer,"ph0"))!=Double.doubleToRawLongBits(expectedPhase))throw new AssertionError("Toolbar phase wheel differs");
+                    phase.dispatchEvent(new MouseEvent(phase,MouseEvent.MOUSE_RELEASED,time,0,10,15,1,false,MouseEvent.BUTTON1));
+                    phase.dispatchEvent(new MouseEvent(phase,MouseEvent.MOUSE_EXITED,time,0,40,40,0,false,MouseEvent.NOBUTTON));
+                    phase.dispatchEvent(new MouseWheelEvent(phase,MouseEvent.MOUSE_WHEEL,time,0,10,15,0,false,MouseWheelEvent.WHEEL_UNIT_SCROLL,1,1));
+                    if((double)field(viewer,"ph0")!=expectedPhase)throw new AssertionError("Inactive phase control kept consuming wheel events");
+                    command(viewer,".ret");
                     command(viewer,".ph");click(viewer,"Add 90 degrees");
                     if((double)field(viewer,"ph0")!=90)throw new AssertionError("Phase preset did not update preview");
                     command(viewer,".ret");if(!Arrays.equals(before,spectrum.real))throw new AssertionError("Phase cancel changed data");

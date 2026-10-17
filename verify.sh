@@ -34,8 +34,8 @@ java -Djava.library.path=build/native -cp build/app DatasetOpeningReference arti
 java -Djava.library.path=build/native -cp build/app SaveTransactionReference artifacts/reference-datasets/datasets/MLN1P121/10
 task_vendor_root="${TOPSPIN_REFERENCE_ROOT:-/home/maxlang/.wine-topspin-5/drive_c/Bruker/TopSpinProcessing5.0.0}"
 javac -proc:none -cp "$task_vendor_root/classes/lib/*" -d build/test \
-  src/Numerics.java src/IntegrationRegions.java src/VisualNumerics.java src/SpectrumPainter.java tests/VendorDifferential.java \
-  tests/IntegrationFileReference.java tests/DisplayCompressionReference.java tests/DisplayMappingReference.java tests/PivotProbe.java tests/PhaseControlReference.java tests/SpectrumRasterDifferential.java
+  src/Numerics.java src/IntegrationRegions.java src/VisualNumerics.java src/SpectrumPainter.java src/PointerGesture.java tests/VendorDifferential.java \
+  tests/IntegrationFileReference.java tests/DisplayCompressionReference.java tests/DisplayMappingReference.java tests/PivotProbe.java tests/PhaseControlReference.java tests/SpectrumRasterDifferential.java tests/PointerGestureReference.java
 java -Djava.awt.headless=true -cp "build/test:$task_vendor_root/classes/lib/*" VendorDifferential
 java -Djava.awt.headless=true -cp "build/test:$task_vendor_root/classes/lib/*" IntegrationFileReference
 java -Djava.awt.headless=true -cp "build/test:$task_vendor_root/classes/lib/*" DisplayCompressionReference
@@ -43,6 +43,7 @@ java -Djava.awt.headless=true -cp "build/test:$task_vendor_root/classes/lib/*" D
 java -Djava.awt.headless=true -cp "build/test:$task_vendor_root/classes/lib/*" SpectrumRasterDifferential
 java -Djava.awt.headless=true -cp "build/test:$task_vendor_root/classes/lib/*" PivotProbe
 java -Djava.awt.headless=true -cp "build/test:$task_vendor_root/classes/lib/*" PhaseControlReference
+java -Djava.awt.headless=true -cp "build/test:$task_vendor_root/classes/lib/*" PointerGestureReference
 if [ -n "${DISPLAY:-}" ]; then
   _JAVA_AWT_WM_NONREPARENTING=1 java -Dsun.java2d.uiScale=2 \
     -cp build/app:lib/flatlaf-3.4.1.jar IntegralTableRasterProbe artifacts/viewer-workflow-16708493597640484641/sample/10/pdata/2
