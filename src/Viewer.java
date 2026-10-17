@@ -14,6 +14,9 @@ public final class Viewer extends JFrame {
     private Mode mode=Mode.VIEW;
     private final JPanel modeBar=new JPanel(new FlowLayout(FlowLayout.LEFT,0,0));
     private final Plot plot=new Plot();
+    private final CardLayout surfaceLayout=new CardLayout();
+    private final JPanel surface=new JPanel(surfaceLayout);
+    private final IntegralTable integralTable=new IntegralTable();
     private final JLabel datasetLabel=new JLabel(" "),status=new JLabel(" ");
     private final JTextField command=new JTextField();
     private final DefaultMutableTreeNode root=new DefaultMutableTreeNode("Data");
@@ -127,7 +130,8 @@ public final class Viewer extends JFrame {
     private JPanel workbench() {
         JPanel panel=new JPanel(new BorderLayout());panel.setBackground(new Color(207,207,207));
         panel.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(new Color(142,142,142)),BorderFactory.createEmptyBorder(8,8,2,8)));
-        modeBar.setOpaque(false);modeBar.setPreferredSize(new Dimension(1,42));panel.add(modeBar,BorderLayout.NORTH);panel.add(plot);return panel;
+        modeBar.setOpaque(false);modeBar.setPreferredSize(new Dimension(1,42));panel.add(modeBar,BorderLayout.NORTH);
+        surface.add(plot,"plot");surface.add(integralTable,"integrals");panel.add(surface);return panel;
     }
     private JPanel footer() {
         JPanel panel=new JPanel(new BorderLayout(65,0));panel.setBorder(BorderFactory.createEmptyBorder(8,9,8,9));
@@ -145,7 +149,7 @@ public final class Viewer extends JFrame {
             Object choice=JOptionPane.showInputDialog(this,"Dataset","Open Bruker data",JOptionPane.PLAIN_MESSAGE,null,candidates.toArray(),selected);
             if(choice==null)return;selected=(Path)choice;
         }
-        spectrum=new Spectrum(selected);selectedIntegral=-1;ph0=ph1=0;mode=Mode.VIEW;datasetLabel.setText(spectrum.label()+"  "+spectrum.path);plot.full();rebuildModeBar();status.setText("Dataset opened");
+        spectrum=new Spectrum(selected);selectedIntegral=-1;ph0=ph1=0;mode=Mode.VIEW;surfaceLayout.show(surface,"plot");datasetLabel.setText(spectrum.label()+"  "+spectrum.path);plot.full();rebuildModeBar();status.setText("Dataset opened");
     });}
     private void requireSpectrum() {if(spectrum==null)throw new IllegalStateException("Open a dataset first");}
     private void setMode(Mode next) {
@@ -153,6 +157,7 @@ public final class Viewer extends JFrame {
         if(next==Mode.PHASE && spectrum.imaginary==null){status.setText("Imaginary spectrum is required for phase correction");return;}
         if(mode==Mode.INTEGRATE && next!=Mode.INTEGRATE)plot.baseline=savedBaseline;
         mode=next;ph0=ph1=0;phaseOrder=0;
+        surfaceLayout.show(surface,"plot");
         plot.showFid=false;
         if(next==Mode.INTEGRATE){sessionIntegrals=spectrum.integrals.copy();savedBaseline=plot.baseline;plot.baseline=.15;defineRegion=!spectrum.integrals.regions().isEmpty();integrationAction=defineRegion?"define":"select";}
         if(next==Mode.PHASE)plot.pivot=maxAmplitude(plot.start(),plot.end());
@@ -163,7 +168,7 @@ public final class Viewer extends JFrame {
         if(mode==Mode.VIEW) {
             for(String name:new String[]{"SPECTRUM","INTEGRALS","FID"}) {
                 JButton tab=new JButton(name);tab.setMargin(new Insets(0,8,0,8));tab.setPreferredSize(new Dimension(name.equals("SPECTRUM")?90:80,32));
-                tab.addActionListener(e->{if(name.equals("INTEGRALS"))setMode(Mode.INTEGRATE);else if(name.equals("FID"))perform(()->{requireSpectrum();if(spectrum.raw==null)spectrum.raw=new RawDataset(spectrum.experiment,spectrum.path.resolve("proc"));plot.showFid=true;plot.repaint();});else{plot.showFid=false;plot.repaint();}});modeBar.add(tab);
+                tab.addActionListener(e->{if(name.equals("INTEGRALS"))perform(()->{requireSpectrum();integralTable.load(spectrum);surfaceLayout.show(surface,"integrals");});else if(name.equals("FID"))perform(()->{requireSpectrum();if(spectrum.raw==null)spectrum.raw=new RawDataset(spectrum.experiment,spectrum.path.resolve("proc"));plot.showFid=true;surfaceLayout.show(surface,"plot");plot.repaint();});else{plot.showFid=false;surfaceLayout.show(surface,"plot");plot.repaint();}});modeBar.add(tab);
             }
         } else {
             JLabel label=new JLabel(mode==Mode.PHASE?"Interactive phase correction":"Integration",Assets.icon(mode==Mode.PHASE?"phase":"integration","text."+(mode==Mode.PHASE?"Interactive phase correction":"Integration")),SwingConstants.LEFT);

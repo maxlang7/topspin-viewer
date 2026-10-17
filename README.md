@@ -16,6 +16,7 @@ The application does not load Bruker classes, executables, processing libraries,
 - Display compression, forward and inverse coordinate mapping and complex-magnitude phase pivots against original Java routines.
 - Spectrum rasterization against the original renderer in a controlled JVM: 303 cases and 135,167,445 exact pixel comparisons, covering sparse and compressed spectra, zoomed ranges, gain, baseline, flat data and 1x/2x scaling. This does not establish whole-window visual equivalence.
 - A spectrum captured through the original renderer inside actual Windows TopSpin Java 11 matches the standalone renderer on all 2,654,720 pixels.
+- The initial INTEGRALS table matches the captured Windows table on all 2,844,088 pixels at the laptop's 2x scale. Its 15 captured cell values, numeric formatting and column widths also match exactly. Sorting and selection interactions remain under reconstruction.
 - Phase-drag arithmetic matches 540 original-controller transitions. Manual bias, slope and region splitting match 15,171 values captured from the actual interactive integration controller, including the second segment's shifted bias.
 - Saving and reopening preserves every stored real and imaginary spectrum byte in the tested captures.
 - A standalone saved phase result has been reopened in actual TopSpin: all 131,072 complex-component amplitudes and the integral table match exactly. TopSpin's integration module also reconstructs all three saved regions with 3,773 identical curve values, parameters and normalization.

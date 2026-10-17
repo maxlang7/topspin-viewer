@@ -23,6 +23,12 @@ public class ViewerWorkflowReference {
     private static void click(Viewer viewer,String tooltip) {
         JButton button=button(viewer.getContentPane(),tooltip);if(button==null)throw new AssertionError("Missing control "+tooltip);button.doClick();
     }
+    private static JButton textButton(Container parent,String text) {
+        for(Component child:parent.getComponents()) {
+            if(child instanceof JButton b && text.equals(b.getText()))return b;
+            if(child instanceof Container c){JButton b=textButton(c,text);if(b!=null)return b;}
+        }return null;
+    }
     private static void command(Viewer viewer,String value) throws Exception {
         JTextField command=(JTextField)field(viewer,"command");command.setText(value);command.postActionEvent();
     }
@@ -48,6 +54,11 @@ public class ViewerWorkflowReference {
                 try {
                     Viewer viewer=reference[0];Spectrum spectrum=(Spectrum)field(viewer,"spectrum");
                     double[] before=spectrum.real.clone();int regions=spectrum.integrals.regions().size();
+                    textButton(viewer.getContentPane(),"INTEGRALS").doClick();
+                    IntegralTable table=(IntegralTable)field(viewer,"integralTable");
+                    if(!table.isShowing() || field(viewer,"mode")!=Viewer.Mode.VIEW || table.table.getRowCount()!=regions)throw new AssertionError("Integral tab did not display the table");
+                    textButton(viewer.getContentPane(),"SPECTRUM").doClick();
+                    if(!((Component)field(viewer,"plot")).isShowing())throw new AssertionError("Spectrum tab did not restore plot");
                     command(viewer,".ph");click(viewer,"Add 90 degrees");
                     if((double)field(viewer,"ph0")!=90)throw new AssertionError("Phase preset did not update preview");
                     command(viewer,".ret");if(!Arrays.equals(before,spectrum.real))throw new AssertionError("Phase cancel changed data");
@@ -71,6 +82,6 @@ public class ViewerWorkflowReference {
                 }catch(Exception error){throw new RuntimeException(error);}
             });
         } finally {SwingUtilities.invokeAndWait(()->reference[0].dispose());}
-        System.out.println("PASS viewer open, phase preset/cancel/save/reopen, manual region drag/undo/cancel; "+root);
+        System.out.println("PASS viewer open, integral table tabs, phase preset/cancel/save/reopen, manual region drag/undo/cancel; "+root);
     }
 }

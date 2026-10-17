@@ -47,10 +47,11 @@ class Capture(Runnable):
                 except:pass
             if hasattr(c,'getComponents'):d['children']=[walk(x,path+'/'+str(i)) for i,x in enumerate(c.getComponents())]
             return d
-        windows=[]
+        windows=[];errors=[]
         for w in Window.getWindows():
             if hasattr(w,'getTitle') and 'Bruker TopSpin' in str(w.getTitle()): windows.append(walk(w,'topspin'))
-        info={'laf':str(UIManager.getLookAndFeel().__class__),'javaVersion':System.getProperty('java.version'),'windows':windows}
+            if hasattr(w,'getTitle') and w.isVisible() and str(w.getTitle())=='Error':errors.append(walk(w,'error'))
+        info={'laf':str(UIManager.getLookAndFeel().__class__),'javaVersion':System.getProperty('java.version'),'windows':windows,'errors':errors}
         with open('Z:/home/maxlang/Projects/topspin-viewer/evidence/ui/component-tree.json','w') as f:json.dump(info,f,indent=2)
 
 try:
