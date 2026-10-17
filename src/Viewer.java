@@ -307,7 +307,7 @@ public final class Viewer extends JFrame {
             JMenuItem calculate=new JMenuItem("Calculate ph0");calculate.addActionListener(e->{if(pivot>=0 && pivot<spectrum.real.length){ph0=Numerics.wrapPhaseZero(Numerics.phaseAtPivot(spectrum.real[pivot],spectrum.imaginary[pivot]));repaint();}});menu.add(calculate);
             menu.show(this,event.getX()-1,event.getY()-2);
         }
-        int width(){return Math.max(1,getWidth()-33);}int height(){return Math.max(1,getHeight()-top()-29);}int top(){return mode==Mode.PHASE?18:2;}
+        int width(){return Math.max(1,getWidth()-33);}int height(){return Math.max(1,getHeight()-top()-29);}int top(){return mode==Mode.PHASE?2+PhaseCaption.height():2;}
         double ppm(int x){return VisualNumerics.horizontal(viewLeft,viewRight,2,2+width()-1).physical(x);}
         double pixel(double value){return VisualNumerics.horizontal(viewLeft,viewRight,2,2+width()-1).screen(value,1);}
         int start(){return spectrum.index(viewLeft);}int end(){return spectrum.index(viewRight);}
@@ -357,25 +357,19 @@ public final class Viewer extends JFrame {
             Graphics2D display=(Graphics2D)graphics.create();
             display.setRenderingHint(RenderingHints.KEY_INTERPOLATION,RenderingHints.VALUE_INTERPOLATION_NEAREST_NEIGHBOR);
             display.drawImage(logicalCanvas,0,0,null);
-            if(spectrum!=null && mode==Mode.PHASE)paintPhaseCaption(display);
+            if(spectrum!=null && mode==Mode.INTEGRATE) {
+                double sum=0;for(var region:spectrum.integrals.regions())sum+=spectrum.integrals.calculate(region,spectrum.real,spectrum.left,spectrum.right).normalized(spectrum.integrals.normalizingFactor);
+                var format=java.text.NumberFormat.getNumberInstance(Locale.ROOT);format.setMinimumFractionDigits(4);format.setMaximumFractionDigits(4);
+                CursorMessagePainter.paint(display,new String[]{"Mouse Sensitivity: "+integrationSensitivity,null,"Sum = "+format.format(sum),null,null,null},drawingBounds(),22,new Color(51,51,51));
+            }
             display.dispose();
-        }
-        private void paintPhaseCaption(Graphics2D g) {
-            g.setFont(Assets.mono);g.setColor(new Color(255,70,70));
-            java.text.DecimalFormat increment=new java.text.DecimalFormat("0.00####",java.text.DecimalFormatSymbols.getInstance(Locale.ROOT));
-            g.drawString(String.format(Locale.ROOT,"pivot = %.2f ppm  Phase increment = %s  ph0 = %.2f  ph1 = %.2f",spectrum.ppm(pivot),increment.format(sensitivity),ph0,ph1),8,11);
         }
         private void paintCanvas(Graphics2D graphics) {
             Graphics2D g=(Graphics2D)graphics.create();g.setFont(Assets.regular);
             int x=2,y=top(),w=width(),h=height();g.setColor(Color.WHITE);g.fillRect(x,y,w,h);g.setColor(new Color(135,135,135));g.drawRect(x,y,w,h);
             if(spectrum==null){g.dispose();return;}
+            if(mode==Mode.PHASE)PhaseCaption.paint(g,PhaseCaption.text(spectrum.ppm(pivot),sensitivity,ph0,ph1));
             g.setFont(Assets.bold.deriveFont(14f));g.setColor(new Color(135,135,135));g.drawString(spectrum.label(),6,y+16);
-            if(mode==Mode.INTEGRATE) {
-                g.setFont(Assets.mono);g.setColor(new Color(128,128,128));g.drawString("Mouse Sensitivity: "+integrationSensitivity,6,y+36);
-                double sum=0;for(var region:spectrum.integrals.regions())sum+=spectrum.integrals.calculate(region,spectrum.real,spectrum.left,spectrum.right).normalized(spectrum.integrals.normalizingFactor);
-                java.text.NumberFormat format=java.text.NumberFormat.getNumberInstance(Locale.ROOT);format.setMinimumFractionDigits(4);format.setMaximumFractionDigits(4);
-                g.drawString("Sum = "+format.format(sum),6,y+64);
-            }
             if(showFid && spectrum.raw!=null){paintFid(g,x,y,w,h);g.dispose();return;}
             int from=start(),to=end();double[] data=spectrum.real;
             if(mode==Mode.PHASE){data=Numerics.phasePreview(spectrum.real,spectrum.imaginary,ph0,ph1,spectrum.ftSize,spectrum.stripStart,from,to-from+1);}
@@ -386,47 +380,30 @@ public final class Viewer extends JFrame {
             var mapper=VisualNumerics.vertical(valueLeft,valueRight,y,y+h);
             double zero=mapper.screen(0,gain);
             g.setClip(x,y,w,h);g.setColor(Color.BLUE);
-            int previousX=0,previousY=0;boolean first=true;
             double[] visible=mode==Mode.PHASE?data:Arrays.copyOfRange(data,from,to+1);
             var xMapper=VisualNumerics.horizontal(viewLeft,viewRight,x,x+w-1);
             SpectrumPainter.paintPanel(g,visible,from,x,y,w,h,xMapper,mapper,spectrum.left,spectrum.right,spectrum.real.length,gain);
-            if(mode==Mode.PHASE){g.setColor(new Color(255,70,70));int px=(int)Math.round(pixel(spectrum.ppm(pivot)));g.drawLine(px,y,px,y+h);}
+            if(mode==Mode.PHASE){g.setColor(new Color(237,28,36));int px=(int)pixel(spectrum.ppm(pivot));if(px>x && px<x+w)g.drawLine(px,y,px,y+h);}
             if(mode==Mode.INTEGRATE || !spectrum.integrals.regions().isEmpty()) {
-                var regions=spectrum.integrals.regions();double integralExtent=0;
+                var regions=spectrum.integrals.regions();
                 java.util.List<Numerics.Integral> integrals=new ArrayList<>();
-                for(var r:regions) {
-                    var area=spectrum.integrals.calculate(r,spectrum.real,spectrum.left,spectrum.right);integrals.add(area);
-                    double low=Double.POSITIVE_INFINITY,high=Double.NEGATIVE_INFINITY;
-                    for(double value:area.curve()){low=Math.min(low,value);high=Math.max(high,value);}
-                    integralExtent=Math.max(integralExtent,high-low);
-                }
-                if(integralExtent==0)integralExtent=1;
-                double intLeft=-integralExtent*integralBaseline,intRight=intLeft+integralExtent;
-                double factor=.8*integralGain;
-                double scaledExtent=intRight/factor-intLeft/factor;
-                intLeft=-scaledExtent*integralBaseline;intRight=intLeft+scaledExtent;
-                var intMapper=VisualNumerics.vertical(intLeft,intRight,y,y+h-1);
-                java.text.DecimalFormat labelFormat=new java.text.DecimalFormat("0.0000",java.text.DecimalFormatSymbols.getInstance(Locale.ROOT));
+                for(var r:regions)integrals.add(spectrum.integrals.calculate(r,spectrum.real,spectrum.left,spectrum.right));
+                var common=IntegralCurvePainter.commonRange(integrals.stream().map(Numerics.Integral::curve).toList(),integralBaseline);
                 for(int index=0;index<regions.size();index++) {
                     var r=regions.get(index);var integral=integrals.get(index);double[] curve=integral.curve();
-                    int begin=(int)pixel(r.left()),finish=(int)pixel(r.right()),regionWidth=Math.max(1,finish-begin);
-                    g.setColor(new Color(237,28,36));first=true;
-                    var comp=VisualNumerics.compress(curve,0,regionWidth);
-                    double[] vertices=comp==null || curve.length<2*regionWidth?curve:comp.values();
-                    boolean reduced=vertices!=curve;
-                    for(int i=0;i<vertices.length;i++) {
-                        double physical=r.left()+(r.right()-r.left())/curve.length*i;
-                        int px=reduced?begin+i/2:(int)pixel(physical),py=intMapper.screen(vertices[i],1);
-                        if(!first)g.drawLine(previousX,previousY,px,py);first=false;previousX=px;previousY=py;
+                    double regionLeft=Math.min(r.left(),viewLeft),regionRight=Math.max(r.right(),viewRight);
+                    if(regionLeft<regionRight)continue;
+                    var regionMapper=VisualNumerics.horizontal(viewLeft,viewRight,x,x+w);
+                    int begin=regionMapper.screen(regionLeft,1),finish=regionMapper.screen(regionRight,1),regionWidth=Math.max(1,finish-begin);
+                    Rectangle regionViewport=new Rectangle(begin,y,regionWidth,h);
+                    int lastPoint=IntegralCurvePainter.paint(g,curve,r.left(),r.right(),regionLeft,regionRight,regionViewport,regionMapper,
+                        common,IntegralCurvePainter.reference(curve),Math.max(1e-7,.8*integralGain));
+                    IntegralLabelPainter.paint(g,new Rectangle(begin,y,regionWidth,h),integral.normalized(spectrum.integrals.normalizingFactor),4,selectedIntegral==index);
+                    if(mode==Mode.INTEGRATE && (r.bias()!=0 || r.slope()!=0)) {
+                        g.setClip(null);g.setColor(new Color(237,28,36));g.setFont(Assets.bold.deriveFont(14f));
+                        g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING,RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+                        g.drawString("#",begin+regionWidth,Math.max(lastPoint+20,20));
                     }
-                    g.setClip(null);g.setFont(Assets.bold.deriveFont(14f));
-                    String label=labelFormat.format(integral.normalized(spectrum.integrals.normalizingFactor));
-                    int middle=(begin+finish)/2,bottom=y+h-1,labelHeight=g.getFontMetrics().stringWidth(label);
-                    int half=g.getFontMetrics().getHeight()/2;
-                    int[] bx={begin,begin,middle-half,middle-half,middle+half,middle+half,finish,finish};
-                    int[] by={bottom,bottom-8,bottom-12,bottom-12-labelHeight,bottom-12-labelHeight,bottom-12,bottom-8,bottom};
-                    g.drawPolyline(bx,by,bx.length);
-                    Graphics2D text=(Graphics2D)g.create();text.translate(middle+5,bottom-14);text.rotate(-Math.PI/2);text.drawString(label,0,0);text.dispose();
                     g.setClip(x,y,w,h);
                 }
             }

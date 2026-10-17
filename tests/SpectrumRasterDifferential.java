@@ -44,7 +44,7 @@ public class SpectrumRasterDifferential {
     }
     public static void main(String[] args) throws Exception {
         Random random=new Random(752614L);
-        for(int n:new int[]{4,17,256,4096,65536}) {
+        for(int n:new int[]{4,17,71,256,4096,65536}) {
             double[] data=new double[n];for(int i=0;i<n;i++)data[i]=random.nextGaussian()*1e7;
             for(int width:new int[]{31,257,1033})for(int scale:new int[]{1,2})
             for(double gain:new double[]{.5,1,4})for(double baseline:new double[]{.05,.15,.4})

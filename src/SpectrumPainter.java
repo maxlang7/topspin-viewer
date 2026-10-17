@@ -14,7 +14,6 @@ public final class SpectrumPainter {
     private static void paintClipped(Graphics2D g,double[] values,int start,int x,int y,int width,int height,
             VisualNumerics.Mapper horizontal,VisualNumerics.Mapper vertical,double left,double right,int size,double gain,int clipHeight) {
         var compressed=VisualNumerics.compress(values,start,width);
-        if(values.length<2*width)compressed=null;
         double[] data=compressed==null?values:compressed.values();int[] xs=new int[data.length],ys=new int[data.length];
         for(int i=0;i<data.length;i++) {
             xs[i]=compressed==null?horizontal.screen(left+((right-left)/size)*(start+i),1):x+i/2;
