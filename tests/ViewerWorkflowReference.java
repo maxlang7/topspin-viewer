@@ -92,7 +92,13 @@ public class ViewerWorkflowReference {
                     drag(plot,Math.max(8,plot.getWidth()/5),Math.max(18,plot.getWidth()/4));
                     if(spectrum.integrals.regions().size()!=regions+1)throw new AssertionError("Mouse drag did not create a manual region");
                     click(viewer,"Undo last region operation");
-                    if(spectrum.integrals.regions().size()!=regions)throw new AssertionError("Region undo failed");
+                    if(spectrum.integrals.regions().size()!=(regions==0?1:regions))throw new AssertionError("Region undo differs from the original first-region guard");
+                    if(regions==0){
+                        drag(plot,Math.max(8,plot.getWidth()/3),Math.max(18,plot.getWidth()/2));
+                        if(spectrum.integrals.regions().size()!=2)throw new AssertionError("Second manual region failed");
+                        click(viewer,"Undo last region operation");
+                        if(spectrum.integrals.regions().size()!=1)throw new AssertionError("Second-region undo failed");
+                    }
                     drag(plot,Math.max(8,plot.getWidth()/5),Math.max(18,plot.getWidth()/4));
                     click(viewer,"Return, do NOT save regions");
                     if(spectrum.integrals.regions().size()!=regions)throw new AssertionError("Integration cancel failed");

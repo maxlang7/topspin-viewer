@@ -194,8 +194,8 @@ public final class Viewer extends JFrame {
                 tool("integration","Define new region using cursor (toggle)",()->{defineRegion=!defineRegion;integrationAction=defineRegion?"define":"select";});
                 tool("integration","Define new region via dialog",this::regionDialog);
                 tool("integration","Cut integral in two parts (toggle)",()->{integrationAction=integrationAction.equals("cut")?"select":"cut";defineRegion=false;});
-                tool("integration","Delete selected regions",()->{if(selectedIntegral>=0){spectrum.integrals.remove(selectedIntegral);selectedIntegral=-1;plot.repaint();}});
-                tool("integration","Undo last region operation",()->{spectrum.integrals.undo();selectedIntegral=-1;plot.repaint();});
+                tool("integration","Delete selected regions",()->{if(selectedIntegral>=0){spectrum.integrals.remove(selectedIntegral);spectrum.integrals.normalize(spectrum.real,spectrum.left,spectrum.right);selectedIntegral=-1;plot.repaint();}});
+                tool("integration","Undo last region operation",()->{if(spectrum.integrals.undo()){spectrum.integrals.normalize(spectrum.real,spectrum.left,spectrum.right);selectedIntegral=-1;plot.repaint();}});
                 integrationDragControl("Interactive bias correction","bias");
                 integrationDragControl("Interactive slope correction","slope");
                 tool("integration","Set slope and bias to zero",()->{if(selectedIntegral>=0){var r=spectrum.integrals.regions().get(selectedIntegral);spectrum.integrals.replace(selectedIntegral,new IntegrationRegions.Region(r.left(),r.right(),0,0));plot.repaint();}});
@@ -247,7 +247,8 @@ public final class Viewer extends JFrame {
     private void addRegion(double a,double b) {
         a=Math.min(spectrum.left,Math.max(spectrum.right,a));b=Math.min(spectrum.left,Math.max(spectrum.right,b));
         boolean first=spectrum.integrals.regions().isEmpty();spectrum.integrals.add(a,b);
-        if(first){double value=spectrum.integrals.calculate(spectrum.integrals.regions().get(0),spectrum.real,spectrum.left,spectrum.right).value();spectrum.integrals.normalizingFactor=1.0/(value==0?1.0:value);}
+        spectrum.integrals.normalize(spectrum.real,spectrum.left,spectrum.right);
+        if(first)spectrum.integrals.preserveScale();
     }
     private void cancelIntegration() {if(sessionIntegrals!=null)spectrum.integrals=sessionIntegrals;setMode(Mode.VIEW);}
     private void returnWithoutSave() {if(mode==Mode.INTEGRATE)cancelIntegration();else setMode(Mode.VIEW);}
@@ -290,7 +291,7 @@ public final class Viewer extends JFrame {
         void zoomFactor(double factor){if(spectrum==null)return;var range=ViewRanges.zoom(new ViewRanges.Range(viewLeft,viewRight),factor,new ViewRanges.Range(spectrum.left,spectrum.right));if(range!=null)setRange(range.start(),range.end());}
         void pan(double amount){if(spectrum==null)return;var range=ViewRanges.pan(new ViewRanges.Range(viewLeft,viewRight),amount,width(),new ViewRanges.Range(spectrum.left,spectrum.right));setRange(range.start(),range.end());}
         void previous(){if(!zoomHistory.isEmpty()){double[] range=zoomHistory.pop();viewLeft=range[0];viewRight=range[1];repaint();}}
-        void selectRegion(double ppm){selectedIntegral=-1;var regions=spectrum.integrals.regions();for(int i=0;i<regions.size();i++)if(ppm<=regions.get(i).left() && ppm>=regions.get(i).right()){selectedIntegral=i;break;}repaint();}
+        void selectRegion(double ppm){selectedIntegral=-1;var regions=spectrum.integrals.regions();for(int i=0;i<regions.size();i++)if(ppm<=regions.get(i).left() && ppm>=regions.get(i).right()){selectedIntegral=i;break;}spectrum.integrals.select(selectedIntegral);repaint();}
         int pickPivot(int px) {
             int from=start(),to=end();var compressed=VisualNumerics.compress(Arrays.copyOfRange(spectrum.real,from,to+1),from,width());
             if(compressed==null)return spectrum.index(ppm(px));

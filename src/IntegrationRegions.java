@@ -11,17 +11,27 @@ public final class IntegrationRegions {
         }
     }
     private final List<Region> regions=new ArrayList<>();
-    private final Deque<List<Region>> history=new ArrayDeque<>();
+    private List<Region> previous=List.of();
+    private Region selectedObject;
+    private int calibrationReference=0;
+    private double calibrationValue=1;
     public double normalizingFactor=1;
     public List<Region> regions() {return List.copyOf(regions);}
     public IntegrationRegions copy() {
         IntegrationRegions result=new IntegrationRegions();result.regions.addAll(regions);
-        result.normalizingFactor=normalizingFactor;return result;
+        result.normalizingFactor=normalizingFactor;result.calibrationReference=calibrationReference;
+        result.calibrationValue=calibrationValue;return result;
     }
-    private void checkpoint() {history.push(List.copyOf(regions));}
+    private void checkpoint() {previous=List.copyOf(regions);}
+    public void select(int index) {selectedObject=index<0?null:regions.get(index);}
     public void add(double a,double b) {checkpoint();regions.add(new Region(Math.max(a,b),Math.min(a,b),0,0));}
-    public void remove(int index) {checkpoint();regions.remove(index);}
-    public void replace(int index,Region region) {checkpoint();regions.set(index,region);}
+    public void remove(int index) {
+        checkpoint();if(regions.size()==1){calibrationReference=0;calibrationValue=1;}
+        regions.remove(index);
+    }
+    public void replace(int index,Region region) {
+        Region old=regions.set(index,region);if(selectedObject==old)selectedObject=region;
+    }
     public void adjustBias(int index,double amount,double sensitivity) {
         Region r=regions.get(index);double correction=amount*sensitivity*1000.0;
         replace(index,new Region(r.left(),r.right(),r.bias()-correction,r.slope()));
@@ -40,7 +50,21 @@ public final class IntegrationRegions {
         regions.add(new Region(r.left(),position,r.bias(),r.slope()));
         regions.add(new Region(Math.min(fullLeft,position+1e-16),r.right(),r.bias()+(cut-start)*r.slope(),r.slope()));
     }
-    public void undo() {if(!history.isEmpty()){regions.clear();regions.addAll(history.pop());}}
+    public boolean undo() {
+        if(previous.isEmpty())return false;
+        List<Region> current=List.copyOf(regions);
+        double bias=selectedObject==null?0:selectedObject.bias(),slope=selectedObject==null?0:selectedObject.slope();
+        regions.clear();for(Region r:previous)regions.add(new Region(r.left(),r.right(),bias,slope));
+        previous=current;
+        return true;
+    }
+    public void normalize(double[] spectrum,double left,double right) {
+        if(regions.isEmpty())return;
+        double[] values=new double[regions.size()];
+        for(int i=0;i<values.length;i++)values[i]=calculate(regions.get(i),spectrum,left,right).value();
+        normalizingFactor=IntegralScale.factor(values,calibrationReference,calibrationValue,normalizingFactor,0);
+    }
+    public void preserveScale(){calibrationReference=-2;}
     private List<Region> sorted() {List<Region> sorted=new ArrayList<>(regions);sorted.sort(Comparator.comparingDouble(Region::left).reversed());return sorted;}
     public Numerics.Integral calculate(Region region,double[] spectrum,double fullLeft,double fullRight) {
         double a=Math.min(fullLeft,region.left()),b=Math.max(fullRight,region.right());
@@ -51,8 +75,9 @@ public final class IntegrationRegions {
     }
     public void calibrate(int index,double value,double[] spectrum,double left,double right) {
         double integral=calculate(regions.get(index),spectrum,left,right).value();
-        if(!Double.isFinite(value) || integral==0)throw new IllegalArgumentException("Cannot calibrate a zero integral");
-        normalizingFactor=value/integral;
+        if(!Double.isFinite(value))throw new IllegalArgumentException("Integral calibration must be finite");
+        normalizingFactor=IntegralScale.factor(new double[]{integral},0,value,0,0);
+        calibrationReference=-2;calibrationValue=value;
     }
     public static IntegrationRegions read(Path file,int nc,double intScale) throws IOException {
         IntegrationRegions result=new IntegrationRegions();
@@ -70,6 +95,7 @@ public final class IntegrationRegions {
                 result.regions.add(new Region(a,b,bias,slope));
             } catch(NumberFormatException e) {throw new IOException("Invalid integration-region number",e);}
         }
+        if(!result.regions.isEmpty())result.preserveScale();
         return result;
     }
     public String serialize(int nc) {
