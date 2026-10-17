@@ -18,6 +18,16 @@ public final class VisualNumerics {
         return new Mapper((int)(.5+((screenMin+2)*start-(screenMax-2)*end)/extent),
             (screenMax-screenMin-4)/extent,true);
     }
+    public static int[] cursorBoundaries(double[] visible,int start,int width,int screenStart,Mapper mapper,
+            double fullLeft,double fullRight,int size) {
+        var compressed=compress(visible,start,width);if(compressed!=null)return compressed.boundaries();
+        int[] boundaries=new int[width+1];
+        for(int i=0;i<=width;i++) {
+            double index=(mapper.physical(screenStart+i)-fullLeft)/(fullRight-fullLeft)*size;
+            boundaries[i]=(int)(Math.min(index,size-1.0)+.4999);
+        }
+        return boundaries;
+    }
     public record Compressed(double[] values,int[] boundaries) {}
     public static Compressed compress(double[] data,int start,int width) {
         if(width<1 || data.length<2 || width>=data.length)return null;

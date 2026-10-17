@@ -13,7 +13,7 @@ public final class CapturedAxisReference {
             BufferedImage logical=new BufferedImage(width,height,BufferedImage.TYPE_INT_ARGB);
             Graphics2D g=logical.createGraphics();g.setColor(new Color(245,245,245));g.fillRect(0,0,width,height);
             double left=14.9974006758278,right=-4.9974006758207725;
-            AxisPainter.paint(g,new Rectangle(2,plotHeight+2,plotWidth,27),VisualNumerics.horizontal(left,right,2,plotWidth+2),AxisTicks.calculate(left,right,"ppm",null,true,true),Assets.bold.deriveFont(14f),new Color(128,128,128),1,0);
+            AxisPainter.paint(g,new Rectangle(2,plotHeight+2,plotWidth,27),VisualNumerics.horizontal(left,right,2,plotWidth+2),AxisTicks.calculate(left,right,"ppm",null,true,true),Assets.bold.deriveFont(14f),new Color(128,128,128),1,0,capture.equals("2610918686881465039")?8.73:null);
             String metadata=Files.readString(Path.of("artifacts/live-display-integration-"+capture,"views.txt"));
             var values=java.util.regex.Pattern.compile("yPhysical=\\[([^,]+),([^\\]]+)\\]  ref = ([^\\r\\n]+)").matcher(metadata);
             if(!values.find())throw new AssertionError("Missing captured vertical mapping");
@@ -24,11 +24,11 @@ public final class CapturedAxisReference {
             for(Rectangle area:new Rectangle[]{new Rectangle(4,(plotHeight+2)*2,plotWidth*2,54),new Rectangle((plotWidth+2)*2,4,54,plotHeight*2)})
             for(int y=area.y;y<area.y+area.height;y++)for(int x=area.x;x<area.x+area.width;x++) {
                 int pixel=expected.getRGB(x,y),r=(pixel>>>16)&255,b=pixel&255,green=(pixel>>>8)&255;
-                if(r!=green || r!=b){overlays++;continue;}
+                if(r>green && r>b){overlays++;continue;}
                 compared++;if(pixel!=actual.getRGB(x,y))differences++;
             }
             if(differences!=0)throw new AssertionError(capture+": "+differences+" static axis pixels differ");
         }
-        System.out.println("PASS 3 captured Windows panel axes, "+compared+" exact static pixels, "+overlays+" colored cursor pixels excluded");
+        System.out.println("PASS 3 captured Windows panel axes, "+compared+" exact axis pixels including cursor, "+overlays+" integral-bracket endpoint pixels excluded");
     }
 }

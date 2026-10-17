@@ -84,6 +84,14 @@ public class ViewerWorkflowReference {
                     phase.dispatchEvent(new MouseWheelEvent(phase,MouseEvent.MOUSE_WHEEL,time,0,10,15,0,false,MouseWheelEvent.WHEEL_UNIT_SCROLL,1,1));
                     if((double)field(viewer,"ph0")!=expectedPhase)throw new AssertionError("Inactive phase control kept consuming wheel events");
                     Component phasePlot=(Component)field(viewer,"plot");double oldLeft=(double)field(phasePlot,"viewLeft");
+                    phasePlot.dispatchEvent(new MouseEvent(phasePlot,MouseEvent.MOUSE_MOVED,time,0,phasePlot.getWidth()/3,120,0,false,MouseEvent.NOBUTTON));
+                    BufferedImage hoverImage=new BufferedImage(phasePlot.getWidth()*2,phasePlot.getHeight()*2,BufferedImage.TYPE_INT_ARGB);
+                    Graphics2D hoverGraphics=hoverImage.createGraphics();hoverGraphics.scale(2,2);phasePlot.paint(hoverGraphics);hoverGraphics.dispose();
+                    Method hoverReadout=phasePlot.getClass().getDeclaredMethod("cursorReadout");hoverReadout.setAccessible(true);
+                    String[] hoverLabels=(String[])hoverReadout.invoke(phasePlot);
+                    if(hoverLabels==null || hoverLabels.length!=4 || !hoverLabels[0].contains(" ppm / ") || !hoverLabels[3].startsWith("Phase = "))throw new AssertionError("Phase hover did not expose coordinate, index, amplitude and phase readouts");
+                    phasePlot.dispatchEvent(new MouseEvent(phasePlot,MouseEvent.MOUSE_EXITED,time,0,0,0,0,false,MouseEvent.NOBUTTON));
+                    if(field(phasePlot,"cursorPoint")!=null || field(phasePlot,"cursorValue")!=null)throw new AssertionError("Phase cursor did not hide on exit");
                     drag(phasePlot,phasePlot.getWidth()/4,phasePlot.getWidth()/2);
                     if((double)field(viewer,"ph0")!=expectedPhase)throw new AssertionError("Plot drag changed phase instead of zooming");
                     if((double)field(phasePlot,"viewLeft")==oldLeft)throw new AssertionError("Plot drag did not zoom while phasing");

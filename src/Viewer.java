@@ -268,10 +268,13 @@ public final class Viewer extends JFrame {
         ViewRanges.Range verticalRange;
         boolean showFid;String dragAction="zoom";
         int pressX,pressY,lastY,lastX,dragX=-1;
+        Point cursorPoint;Double cursorValue;
+        int[] cursorSamples;double relativeReference=1;
         Plot() {
             setBackground(new Color(245,245,245));
             MouseAdapter mouse=new MouseAdapter(){
                 @Override public void mousePressed(MouseEvent e){
+                    updateCursor(e);
                     pressX=lastX=e.getX();pressY=lastY=e.getY();
                     dragX=SwingUtilities.isLeftMouseButton(e) && (mode==Mode.INTEGRATE || drawingBounds().contains(e.getPoint()))?pressX:-1;
                     if(spectrum!=null && SwingUtilities.isRightMouseButton(e)) {
@@ -279,7 +282,9 @@ public final class Viewer extends JFrame {
                         else if(mode==Mode.INTEGRATE){selectRegion(ppm(e.getX()));JPopupMenu menu=new JPopupMenu();JMenuItem cal=new JMenuItem("Calibrate...");cal.addActionListener(x->calibrate());menu.add(cal);menu.show(Plot.this,e.getX(),e.getY());}
                     }
                 }
+                @Override public void mouseMoved(MouseEvent e){updateCursor(e);}
                 @Override public void mouseDragged(MouseEvent e){
+                    updateCursor(e);
                     if(spectrum==null || dragX<0 || (e.getModifiersEx()&InputEvent.BUTTON1_DOWN_MASK)==0)return;
                     if(mode!=Mode.INTEGRATE && !drawingBounds().contains(e.getPoint())){dragX=-1;repaint();return;}
                     dragX=e.getX();lastY=e.getY();lastX=e.getX();repaint();
@@ -295,10 +300,15 @@ public final class Viewer extends JFrame {
                     }
                     dragX=-1;repaint();
                 }
-                @Override public void mouseExited(MouseEvent e){if(mode!=Mode.INTEGRATE)dragX=-1;repaint();}
+                @Override public void mouseExited(MouseEvent e){if(mode!=Mode.INTEGRATE){dragX=-1;cursorPoint=null;cursorValue=null;}repaint();}
                 @Override public void mouseClicked(MouseEvent e){if(spectrum!=null && mode!=Mode.INTEGRATE && e.getClickCount()==2 && drawingBounds().contains(e.getPoint()))full();}
                 @Override public void mouseWheelMoved(MouseWheelEvent e){if(spectrum==null || e.getWheelRotation()==0)return;int rotation=-e.getWheelRotation();if(e.isShiftDown())pan(5*rotation);else scale(Math.pow(1.189207115,rotation));}
             };addMouseListener(mouse);addMouseMotionListener(mouse);addMouseWheelListener(mouse);
+        }
+        private void updateCursor(MouseEvent event) {
+            if(spectrum!=null && !showFid && drawingBounds().contains(event.getPoint())){cursorPoint=event.getPoint();cursorValue=ppm(event.getX());}
+            else if(mode!=Mode.INTEGRATE){cursorPoint=null;cursorValue=null;}
+            repaint();
         }
         private Rectangle drawingBounds(){return new Rectangle(2,top(),width(),height());}
         private void phasePopup(MouseEvent event) {
@@ -308,10 +318,10 @@ public final class Viewer extends JFrame {
             menu.show(this,event.getX()-1,event.getY()-2);
         }
         int width(){return Math.max(1,getWidth()-33);}int height(){return Math.max(1,getHeight()-top()-29);}int top(){return mode==Mode.PHASE?2+PhaseCaption.height():2;}
-        double ppm(int x){return VisualNumerics.horizontal(viewLeft,viewRight,2,2+width()-1).physical(x);}
-        double pixel(double value){return VisualNumerics.horizontal(viewLeft,viewRight,2,2+width()-1).screen(value,1);}
+        double ppm(int x){return VisualNumerics.horizontal(viewLeft,viewRight,2,2+width()).physical(x);}
+        double pixel(double value){return VisualNumerics.horizontal(viewLeft,viewRight,2,2+width()).screen(value,1);}
         int start(){return spectrum.index(viewLeft);}int end(){return spectrum.index(viewRight);}
-        void full(){if(spectrum!=null){viewLeft=spectrum.left;viewRight=spectrum.right;double minimum=Arrays.stream(spectrum.real).min().orElse(0),maximum=Arrays.stream(spectrum.real).max().orElse(1);if(maximum==minimum)minimum-=1;verticalRange=new ViewRanges.Range(minimum,maximum);}gain=1;setBaseline(.05);zoomHistory.clear();repaint();}
+        void full(){if(spectrum!=null){viewLeft=spectrum.left;viewRight=spectrum.right;cursorPoint=null;cursorValue=null;double minimum=Arrays.stream(spectrum.real).min().orElse(0),maximum=Arrays.stream(spectrum.real).max().orElse(1);if(maximum==minimum)minimum-=1;verticalRange=new ViewRanges.Range(minimum,maximum);}gain=1;setBaseline(.05);zoomHistory.clear();repaint();}
         void setBaseline(double value){baseline=value;if(verticalRange!=null)verticalRange=ViewRanges.baseline(verticalRange,value,0);repaint();}
         void scale(double factor){if(spectrum==null)return;if(showFid)gain*=factor;else if(verticalRange!=null)verticalRange=ViewRanges.scale(verticalRange,factor,0);repaint();}
         void setRange(double a,double b){zoomHistory.push(new double[]{viewLeft,viewRight});viewLeft=a;viewRight=b;repaint();}
@@ -357,16 +367,41 @@ public final class Viewer extends JFrame {
             Graphics2D display=(Graphics2D)graphics.create();
             display.setRenderingHint(RenderingHints.KEY_INTERPOLATION,RenderingHints.VALUE_INTERPOLATION_NEAREST_NEIGHBOR);
             display.drawImage(logicalCanvas,0,0,null);
-            if(spectrum!=null && mode==Mode.INTEGRATE) {
-                double sum=0;for(var region:spectrum.integrals.regions())sum+=spectrum.integrals.calculate(region,spectrum.real,spectrum.left,spectrum.right).normalized(spectrum.integrals.normalizingFactor);
-                var format=java.text.NumberFormat.getNumberInstance(Locale.ROOT);format.setMinimumFractionDigits(4);format.setMaximumFractionDigits(4);
-                CursorMessagePainter.paint(display,new String[]{"Mouse Sensitivity: "+integrationSensitivity,null,"Sum = "+format.format(sum),null,null,null},drawingBounds(),22,new Color(51,51,51));
+            if(spectrum!=null && !showFid && (mode==Mode.INTEGRATE || cursorPoint!=null)) {
+                String[] readout=cursorReadout();
+                if(mode==Mode.INTEGRATE) {
+                    double sum=0;for(var region:spectrum.integrals.regions())sum+=spectrum.integrals.calculate(region,spectrum.real,spectrum.left,spectrum.right).normalized(spectrum.integrals.normalizingFactor);
+                    var format=java.text.NumberFormat.getNumberInstance(Locale.ROOT);format.setMinimumFractionDigits(4);format.setMaximumFractionDigits(4);
+                    readout=new String[]{"Mouse Sensitivity: "+integrationSensitivity,readout==null?null:readout[0],"Sum = "+format.format(sum),null,null,null};
+                }
+                CursorMessagePainter.paint(display,readout,drawingBounds(),22,new Color(51,51,51));
+            }
+            if(spectrum!=null && cursorPoint!=null && drawingBounds().contains(cursorPoint) && !showFid) {
+                display.setColor(mode==Mode.INTEGRATE && defineRegion?new Color(237,28,36):new Color(51,51,51));
+                display.setRenderingHint(RenderingHints.KEY_ANTIALIASING,RenderingHints.VALUE_ANTIALIAS_OFF);
+                display.setStroke(new BasicStroke(1,BasicStroke.CAP_BUTT,BasicStroke.JOIN_MITER));
+                display.draw(new java.awt.geom.Line2D.Float(cursorPoint.x,top(),cursorPoint.x,top()+height()));
             }
             display.dispose();
         }
+        private String[] cursorReadout() {
+            if(cursorPoint==null || cursorValue==null || cursorSamples==null || cursorSamples.length<2)return null;
+            int column=Math.max(0,Math.min(width()-1,cursorPoint.x-2));
+            int index=cursorSamples[column],count=cursorSamples[column+1]-index;
+            if(index<0 || index>=spectrum.real.length)return null;
+            double value=mode==Mode.PHASE?Numerics.phasePreview(spectrum.real,spectrum.imaginary,ph0,ph1,spectrum.ftSize,spectrum.stripStart,0,index+1)[index]:spectrum.real[index];
+            double frequency=Double.parseDouble(spectrum.parameters.get("SF"));
+            String[] labels=CursorReadout.labels(VisualNumerics.horizontal(viewLeft,viewRight,2,2+width()),drawingBounds(),cursorValue,frequency,index,count,value,relativeReference);
+            if(mode==Mode.PHASE) {
+                labels=Arrays.copyOf(labels,4);
+                var format=new java.text.DecimalFormat("0.00",java.text.DecimalFormatSymbols.getInstance(Locale.ROOT));
+                labels[3]="Phase = "+format.format(Numerics.phaseAtPivot(spectrum.real[index],spectrum.imaginary[index]));
+            }
+            return labels;
+        }
         private void paintCanvas(Graphics2D graphics) {
             Graphics2D g=(Graphics2D)graphics.create();g.setFont(Assets.regular);
-            int x=2,y=top(),w=width(),h=height();g.setColor(Color.WHITE);g.fillRect(x,y,w,h);g.setColor(new Color(135,135,135));g.drawRect(x,y,w,h);
+            int x=2,y=top(),w=width(),h=height();g.setColor(Color.WHITE);g.fillRect(x,y,w,h);g.setColor(new Color(128,128,128));g.drawRect(x,y,w,h);
             if(spectrum==null){g.dispose();return;}
             if(mode==Mode.PHASE)PhaseCaption.paint(g,PhaseCaption.text(spectrum.ppm(pivot),sensitivity,ph0,ph1));
             g.setFont(Assets.bold.deriveFont(14f));g.setColor(new Color(135,135,135));g.drawString(spectrum.label(),6,y+16);
@@ -381,8 +416,19 @@ public final class Viewer extends JFrame {
             double zero=mapper.screen(0,gain);
             g.setClip(x,y,w,h);g.setColor(Color.BLUE);
             double[] visible=mode==Mode.PHASE?data:Arrays.copyOfRange(data,from,to+1);
-            var xMapper=VisualNumerics.horizontal(viewLeft,viewRight,x,x+w-1);
+            var xMapper=VisualNumerics.horizontal(viewLeft,viewRight,x,x+w);
             SpectrumPainter.paintPanel(g,visible,from,x,y,w,h,xMapper,mapper,spectrum.left,spectrum.right,spectrum.real.length,gain);
+            cursorSamples=VisualNumerics.cursorBoundaries(visible,from,w,x,xMapper,spectrum.left,spectrum.right,spectrum.real.length);
+            g.setClip(null);g.setColor(new Color(128,128,128));g.setFont(Assets.bold.deriveFont(14f));
+            AxisPainter.paint(g,new Rectangle(x,y+h,w,27),VisualNumerics.horizontal(viewLeft,viewRight,x,x+w),
+                AxisTicks.calculate(viewLeft,viewRight,"ppm",null,true,true),Assets.bold.deriveFont(14f),new Color(128,128,128),1,0,cursorValue);
+            double cy;
+            try{cy=Double.parseDouble(spectrum.parameters.getOrDefault("CY","20"));}catch(NumberFormatException error){cy=20;}
+            if(cy<=0)cy=20;
+            double reference=maximum>0?cy/Math.abs(maximum):minimum!=0?cy/Math.abs(minimum):1;relativeReference=reference;
+            AxisPainter.paintVertical(g,new Rectangle(x+w,y,27,h),valueLeft,valueRight,reference,gain,
+                Assets.bold.deriveFont(14f),new Color(128,128,128),1,0);
+            g.setClip(x,y,w,h);
             if(mode==Mode.PHASE){g.setColor(new Color(237,28,36));int px=(int)pixel(spectrum.ppm(pivot));if(px>x && px<x+w)g.drawLine(px,y,px,y+h);}
             if(mode==Mode.INTEGRATE || !spectrum.integrals.regions().isEmpty()) {
                 var regions=spectrum.integrals.regions();
@@ -408,15 +454,6 @@ public final class Viewer extends JFrame {
                 }
             }
             if(dragX>=0){g.setColor(new Color(100,150,190,35));g.fillRect(Math.min(pressX,dragX),y,Math.abs(pressX-dragX),h);}
-            g.setClip(null);g.setColor(new Color(128,128,128));g.setFont(Assets.bold.deriveFont(14f));
-            AxisPainter.paint(g,new Rectangle(x,y+h,w,27),VisualNumerics.horizontal(viewLeft,viewRight,x,x+w),
-                AxisTicks.calculate(viewLeft,viewRight,"ppm",null,true,true),Assets.bold.deriveFont(14f),new Color(128,128,128),1,0);
-            double cy;
-            try{cy=Double.parseDouble(spectrum.parameters.getOrDefault("CY","20"));}catch(NumberFormatException error){cy=20;}
-            if(cy<=0)cy=20;
-            double reference=maximum>0?cy/Math.abs(maximum):minimum!=0?cy/Math.abs(minimum):1;
-            AxisPainter.paintVertical(g,new Rectangle(x+w,y,27,h),valueLeft,valueRight,reference,gain,
-                Assets.bold.deriveFont(14f),new Color(128,128,128),1,0);
             g.dispose();
         }
     }

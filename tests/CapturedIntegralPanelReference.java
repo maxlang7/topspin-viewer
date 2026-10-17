@@ -26,6 +26,8 @@ public final class CapturedIntegralPanelReference {
             double[] vertical=mapping(metadata,"y");
             var horizontal=VisualNumerics.horizontal(data.left,data.right,2,w+2);
             SpectrumPainter.paintPanel(g,data.real,0,2,2,w,h,horizontal,VisualNumerics.vertical(vertical[0],vertical[1],2,h+2),data.left,data.right,data.real.length,1);
+            g.setColor(new Color(245,245,245));g.fillRect(2,h+2,w,27);g.fillRect(w+2,2,27,h);
+            AxisPainter.paint(g,new Rectangle(2,h+2,w,27),horizontal,AxisTicks.calculate(data.left,data.right,"ppm",null,true,true),Assets.bold.deriveFont(14f),new Color(128,128,128),1,0,capture.equals("2610918686881465039")?8.73:null);
             var regions=data.integrals.regions();ArrayList<Numerics.Integral> integrals=new ArrayList<>();
             for(var region:regions)integrals.add(data.integrals.calculate(region,data.real,data.left,data.right));
             var common=IntegralCurvePainter.commonRange(integrals.stream().map(Numerics.Integral::curve).toList(),.2);
@@ -41,7 +43,7 @@ public final class CapturedIntegralPanelReference {
             double sum=0;for(var integral:integrals)sum+=integral.normalized(data.integrals.normalizingFactor);
             var format=java.text.NumberFormat.getNumberInstance(java.util.Locale.ROOT);format.setMinimumFractionDigits(4);format.setMaximumFractionDigits(4);
             CursorMessagePainter.paint(g,new String[]{"Mouse Sensitivity: 1.0",null,"Sum = "+format.format(sum),null,null,null},new Rectangle(2,2,w,h),22,capture.equals("2610918686881465039")?Color.BLACK:new Color(51,51,51),Assets.mono);g.dispose();long different=0;
-            for(int y=52;y<(h+2)*2;y++)for(int x=4;x<(w+2)*2;x++) {
+            for(int y=52;y<(h+3)*2;y++)for(int x=4;x<(w+2)*2;x++) {
                 int original=expected.getRGB(x,y),pixel=actual.getRGB(x,y),r=(original>>>16)&255,green=(original>>>8)&255,b=original&255;
                 // Source foreground cursor and gray module text have separate rendering contracts.
                 if(saved && (x==1065 || x==1066) || r==green && r==b && r!=255){masked++;continue;}
