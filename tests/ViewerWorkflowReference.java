@@ -54,6 +54,19 @@ public class ViewerWorkflowReference {
                 try {
                     Viewer viewer=reference[0];Spectrum spectrum=(Spectrum)field(viewer,"spectrum");
                     double[] before=spectrum.real.clone();int regions=spectrum.integrals.regions().size();
+                    textButton(viewer.getContentPane(),"Analyze").doClick();
+                    if(field(viewer,"mode")!=Viewer.Mode.VIEW)throw new AssertionError("Analyze ribbon changed the active data tool");
+                    textButton(viewer.getContentPane(),"Integrate").doClick();
+                    if(field(viewer,"mode")!=Viewer.Mode.INTEGRATE)throw new AssertionError("Analyze ribbon did not open manual integration");
+                    command(viewer,".ret");textButton(viewer.getContentPane(),"Process").doClick();
+                    Object displayedPlot=field(viewer,"plot");ViewRanges.Range originalRange=(ViewRanges.Range)field(displayedPlot,"verticalRange");
+                    click(viewer,"Larger by factor 2");
+                    if(!field(displayedPlot,"verticalRange").equals(ViewRanges.scale(originalRange,2,0)))throw new AssertionError("Viewer scaling did not update the physical display range");
+                    command(viewer,".all");command(viewer,".zi");
+                    ViewRanges.Range zoomed=new ViewRanges.Range((double)field(displayedPlot,"viewLeft"),(double)field(displayedPlot,"viewRight"));
+                    ViewRanges.Range expectedZoom=ViewRanges.zoom(new ViewRanges.Range(spectrum.left,spectrum.right),2,new ViewRanges.Range(spectrum.left,spectrum.right));
+                    if(!zoomed.equals(expectedZoom))throw new AssertionError("Viewer zoom differs");
+                    command(viewer,".all");
                     textButton(viewer.getContentPane(),"INTEGRALS").doClick();
                     IntegralTable table=(IntegralTable)field(viewer,"integralTable");
                     if(!table.isShowing() || field(viewer,"mode")!=Viewer.Mode.VIEW || table.table.getRowCount()!=regions)throw new AssertionError("Integral tab did not display the table");

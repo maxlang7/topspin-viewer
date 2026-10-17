@@ -5,6 +5,10 @@ import java.util.*;
 import javax.swing.*;
 import de.bruker.nmr.jview.listener.ButtonListener;
 import de.bruker.nmr.jview.listener.VShiftButton;
+import de.bruker.nmr.jview.listener.HShiftButton;
+import de.bruker.nmr.jview.listener.VScaleButton;
+import de.bruker.nmr.jview.listener.HScaleButton;
+import java.util.function.Supplier;
 
 /** Runs the original complete mouse listener. Its pointer output is stubbed. */
 public class PointerGestureReference {
@@ -28,15 +32,16 @@ public class PointerGestureReference {
         Field singleton=sun.misc.Unsafe.class.getDeclaredField("theUnsafe");singleton.setAccessible(true);
         TestRobot robot=(TestRobot)((sun.misc.Unsafe)singleton.get(null)).allocateInstance(TestRobot.class);
         JPanel panel=new JPanel();panel.setLocation(37,29);Random random=new Random(302165);int comparisons=0;
-        for(boolean warp:new boolean[]{false,true})for(int trial=0;trial<32;trial++) {
+        java.util.List<Supplier<VShiftButton>> factories=java.util.List.of(VShiftButton::new,HShiftButton::new,VScaleButton::new,HScaleButton::new);
+        for(var kind:PointerGesture.Kind.values())for(boolean warp:new boolean[]{false,true})for(int trial=0;trial<32;trial++) {
             robot.calls=0;robotField.set(null,warp?robot:null);
-            VShiftButton original=new VShiftButton();Vector<Object> pending=queue(original);PointerGesture rebuilt=new PointerGesture();
+            VShiftButton original=factories.get(kind.ordinal()).get();Vector<Object> pending=queue(original);PointerGesture rebuilt=new PointerGesture(kind);
             for(int event=0;event<200;event++) {
                 pending.clear();int before=robot.calls;
                 if(event%13==7) {
                     int rotation=random.nextInt(9)-4;
                     original.mouseWheelMoved(new MouseWheelEvent(panel,MouseEvent.MOUSE_WHEEL,1,0,12,8,0,false,MouseWheelEvent.WHEEL_UNIT_SCROLL,1,rotation));
-                    equal(rebuilt.wheel(rotation),pending);
+                    equal(rebuilt.wheel(rotation,12,8),pending);
                 }else {
                     Point anchor=rebuilt.anchor();int x=random.nextInt(80)-20,y=random.nextInt(100)-30;
                     if(event<3){x=12+event;y=12;}
