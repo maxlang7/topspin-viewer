@@ -182,7 +182,7 @@ public final class Viewer extends JFrame {
             if(mode==Mode.PHASE) {
                 phaseControl("0 order correction",0);phaseControl("1st order correction",1);
                 tool("phase","Reset phase angles",()->{ph0=ph1=0;plot.repaint();});
-                tool("phase","Add 90 degrees",()->{ph0+=90;plot.repaint();});tool("phase","Subtract 90 degrees",()->{ph0-=90;plot.repaint();});tool("phase","Add 180 degrees",()->{ph0+=180;plot.repaint();});
+                tool("phase","Add 90 degrees",()->{ph0=Numerics.wrapPhaseZero(ph0+90);plot.repaint();});tool("phase","Subtract 90 degrees",()->{ph0=Numerics.wrapPhaseZero(ph0-90);plot.repaint();});tool("phase","Add 180 degrees",()->{ph0=Numerics.wrapPhaseZero(ph0+180);plot.repaint();});
                 tool("phase","Increase mouse sensitivity",()->sensitivity*=2);tool("phase","Decrease mouse sensitivity",()->sensitivity/=2);tool("phase","Reset mouse sensitivity",()->sensitivity=.2);
                 tool("phase","Return & save phased spectrum",()->perform(()->{savePhaseResult();setMode(Mode.VIEW);}));
                 tool("phase","Return, do NOT save",()->setMode(Mode.VIEW));
@@ -215,7 +215,7 @@ public final class Viewer extends JFrame {
     }
     private void adjustPhase(int order,double amount) {
         var angles=Numerics.dragPhase(ph0,ph1,order,amount,1.0,sensitivity,plot.pivot,spectrum.stripStart,spectrum.ftSize,spectrum.real.length);
-        ph0=angles.zero();ph1=angles.first();
+        ph0=Numerics.wrapPhaseZero(angles.zero());ph1=angles.first();
         plot.repaint();
     }
     private void integrationDragControl(String tooltip,String action) {
@@ -269,11 +269,41 @@ public final class Viewer extends JFrame {
         Plot() {
             setBackground(new Color(245,245,245));
             MouseAdapter mouse=new MouseAdapter(){
-                @Override public void mousePressed(MouseEvent e){pressX=lastX=e.getX();pressY=lastY=e.getY();dragX=pressX;if(spectrum!=null && SwingUtilities.isRightMouseButton(e)){if(mode==Mode.PHASE){pivot=pickPivot(e.getX());repaint();}else if(mode==Mode.INTEGRATE){selectRegion(ppm(e.getX()));JPopupMenu menu=new JPopupMenu();JMenuItem cal=new JMenuItem("Calibrate...");cal.addActionListener(x->calibrate());menu.add(cal);menu.show(Plot.this,e.getX(),e.getY());}}}
-                @Override public void mouseDragged(MouseEvent e){if(spectrum==null)return;dragX=e.getX();int dy=lastY-e.getY();if(mode==Mode.PHASE)adjustPhase(phaseOrder,dy);else if(mode==Mode.INTEGRATE && !defineRegion)adjustIntegral(integrationAction,dy);lastY=e.getY();lastX=e.getX();repaint();}
-                @Override public void mouseReleased(MouseEvent e){if(spectrum!=null && SwingUtilities.isLeftMouseButton(e)){if(Math.abs(e.getX()-pressX)>3 && mode==Mode.INTEGRATE && defineRegion){addRegion(ppm(pressX),ppm(e.getX()));}else if(mode==Mode.INTEGRATE && integrationAction.equals("cut")){selectRegion(ppm(e.getX()));if(selectedIntegral>=0)spectrum.integrals.split(selectedIntegral,ppm(e.getX()),spectrum.left,spectrum.right,spectrum.real.length);}else if(Math.abs(e.getX()-pressX)>3 && mode==Mode.VIEW && dragAction.equals("zoom")){setRange(Math.max(ppm(pressX),ppm(e.getX())),Math.min(ppm(pressX),ppm(e.getX())));}else if(mode==Mode.INTEGRATE)selectRegion(ppm(e.getX()));}dragX=-1;repaint();}
+                @Override public void mousePressed(MouseEvent e){
+                    pressX=lastX=e.getX();pressY=lastY=e.getY();
+                    dragX=SwingUtilities.isLeftMouseButton(e) && (mode==Mode.INTEGRATE || drawingBounds().contains(e.getPoint()))?pressX:-1;
+                    if(spectrum!=null && SwingUtilities.isRightMouseButton(e)) {
+                        if(mode==Mode.PHASE && drawingBounds().contains(e.getPoint()))phasePopup(e);
+                        else if(mode==Mode.INTEGRATE){selectRegion(ppm(e.getX()));JPopupMenu menu=new JPopupMenu();JMenuItem cal=new JMenuItem("Calibrate...");cal.addActionListener(x->calibrate());menu.add(cal);menu.show(Plot.this,e.getX(),e.getY());}
+                    }
+                }
+                @Override public void mouseDragged(MouseEvent e){
+                    if(spectrum==null || dragX<0 || (e.getModifiersEx()&InputEvent.BUTTON1_DOWN_MASK)==0)return;
+                    if(mode!=Mode.INTEGRATE && !drawingBounds().contains(e.getPoint())){dragX=-1;repaint();return;}
+                    dragX=e.getX();lastY=e.getY();lastX=e.getX();repaint();
+                }
+                @Override public void mouseReleased(MouseEvent e){
+                    if(spectrum!=null && dragX>=0 && (mode==Mode.INTEGRATE || drawingBounds().contains(e.getPoint())) && SwingUtilities.isLeftMouseButton(e)) {
+                        if(Math.abs(e.getX()-pressX)>3 && mode==Mode.INTEGRATE && defineRegion)addRegion(ppm(pressX),ppm(e.getX()));
+                        else if(mode==Mode.INTEGRATE && integrationAction.equals("cut")){selectRegion(ppm(e.getX()));if(selectedIntegral>=0)spectrum.integrals.split(selectedIntegral,ppm(e.getX()),spectrum.left,spectrum.right,spectrum.real.length);}
+                        else if(mode!=Mode.INTEGRATE && dragAction.equals("zoom")){
+                            Rectangle selection=PlotSelection.horizontal(new Point(pressX,pressY),e.getPoint(),drawingBounds());
+                            if(selection.width>0)setRange(ppm(selection.x),ppm(selection.x+selection.width));
+                        }else if(mode==Mode.INTEGRATE)selectRegion(ppm(e.getX()));
+                    }
+                    dragX=-1;repaint();
+                }
+                @Override public void mouseExited(MouseEvent e){if(mode!=Mode.INTEGRATE)dragX=-1;repaint();}
+                @Override public void mouseClicked(MouseEvent e){if(spectrum!=null && mode!=Mode.INTEGRATE && e.getClickCount()==2 && drawingBounds().contains(e.getPoint()))full();}
                 @Override public void mouseWheelMoved(MouseWheelEvent e){if(spectrum==null || e.getWheelRotation()==0)return;int rotation=-e.getWheelRotation();if(e.isShiftDown())pan(5*rotation);else scale(Math.pow(1.189207115,rotation));}
             };addMouseListener(mouse);addMouseMotionListener(mouse);addMouseWheelListener(mouse);
+        }
+        private Rectangle drawingBounds(){return new Rectangle(2,top(),width(),height());}
+        private void phasePopup(MouseEvent event) {
+            int candidate=pickPivot(event.getX());JPopupMenu menu=new JPopupMenu();
+            JMenuItem set=new JMenuItem("Set Pivot Point");set.addActionListener(e->{pivot=candidate;ph0=Numerics.wrapPhaseZero(Numerics.wrapPhaseZero(ph0));repaint();});menu.add(set);
+            JMenuItem calculate=new JMenuItem("Calculate ph0");calculate.addActionListener(e->{if(pivot>=0 && pivot<spectrum.real.length){ph0=Numerics.wrapPhaseZero(Numerics.phaseAtPivot(spectrum.real[pivot],spectrum.imaginary[pivot]));repaint();}});menu.add(calculate);
+            menu.show(this,event.getX()-1,event.getY()-2);
         }
         int width(){return Math.max(1,getWidth()-40);}int height(){return Math.max(1,getHeight()-54);}int top(){return mode==Mode.PHASE?18:10;}
         double ppm(int x){return VisualNumerics.horizontal(viewLeft,viewRight,2,2+width()-1).physical(x);}
@@ -380,7 +410,7 @@ public final class Viewer extends JFrame {
                     g.setClip(x,y,w,h);
                 }
             }
-            if(dragX>=0 && mode!=Mode.PHASE){g.setColor(new Color(100,150,190,35));g.fillRect(Math.min(pressX,dragX),y,Math.abs(pressX-dragX),h);}
+            if(dragX>=0){g.setColor(new Color(100,150,190,35));g.fillRect(Math.min(pressX,dragX),y,Math.abs(pressX-dragX),h);}
             g.setClip(null);g.setColor(new Color(128,128,128));g.setFont(Assets.bold.deriveFont(14f));
             double span=viewLeft-viewRight,major=Math.pow(10,Math.floor(Math.log10(span/4)));if(span/major>10)major*=5;else if(span/major>5)major*=2;
             for(double tick=Math.ceil(viewRight/major)*major;tick<=viewLeft;tick+=major){int px=(int)Math.round(pixel(tick));g.drawLine(px,y+h,px,y+h+6);String label=String.format(Locale.ROOT,major>=1?"%.0f":"%.2f",tick==0?0.0:tick);g.drawString(label,px-g.getFontMetrics().stringWidth(label)/2,y+h+21);}

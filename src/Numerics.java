@@ -4,6 +4,15 @@ import java.util.Arrays;
 public final class Numerics {
     private static final double DEGREES = 0.017453292519943295;
     public record PhaseAngles(double zero,double first) {}
+    public static double wrapPhaseZero(double zero) {
+        if(zero>=180)zero-=360;
+        else if(zero< -180)zero+=360;
+        return zero;
+    }
+    public static double phaseAtPivot(double real,double imaginary) {
+        if(real==0)return imaginary<0?-90:90;
+        return Math.atan2(-imaginary,real)*90.0/1.5707963267948966;
+    }
     public static PhaseAngles dragPhase(double zero,double first,int order,double amount,
             double increment,double sensitivity,int pivot,int stripStart,int ftSize,int size) {
         if(order==0)zero+=amount*increment*sensitivity;
