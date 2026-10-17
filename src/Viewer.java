@@ -179,7 +179,7 @@ public final class Viewer extends JFrame {
                 tool("phase","Reset phase angles",()->{ph0=ph1=0;plot.repaint();});
                 tool("phase","Add 90 degrees",()->{ph0+=90;plot.repaint();});tool("phase","Subtract 90 degrees",()->{ph0-=90;plot.repaint();});tool("phase","Add 180 degrees",()->{ph0+=180;plot.repaint();});
                 tool("phase","Increase mouse sensitivity",()->sensitivity*=2);tool("phase","Decrease mouse sensitivity",()->sensitivity/=2);tool("phase","Reset mouse sensitivity",()->sensitivity=.2);
-                tool("phase","Return & save phased spectrum",()->perform(()->{spectrum.phase(ph0,ph1);saveResult();setMode(Mode.VIEW);}));
+                tool("phase","Return & save phased spectrum",()->perform(()->{savePhaseResult();setMode(Mode.VIEW);}));
                 tool("phase","Return, do NOT save",()->setMode(Mode.VIEW));
             } else {
                 tool("integration","Define new region using cursor (toggle)",()->{defineRegion=!defineRegion;integrationAction=defineRegion?"define":"select";});
@@ -250,7 +250,14 @@ public final class Viewer extends JFrame {
     }
     private void cancelIntegration() {if(sessionIntegrals!=null)spectrum.integrals=sessionIntegrals;setMode(Mode.VIEW);}
     private void returnWithoutSave() {if(mode==Mode.INTEGRATE)cancelIntegration();else setMode(Mode.VIEW);}
-    private void saveResult() throws Exception {requireSpectrum();Path saved=BrukerWriter.saveNext(spectrum);status.setText("Saved processing "+saved.getFileName());}
+    private void savePhaseResult() throws Exception {
+        requireSpectrum();Spectrum candidate=spectrum.copy();candidate.phase(ph0,ph1);saveResult(candidate);
+    }
+    private void saveResult() throws Exception {requireSpectrum();saveResult(spectrum);}
+    private void saveResult(Spectrum candidate) throws Exception {
+        Path saved=BrukerWriter.saveCurrent(candidate);spectrum=new Spectrum(saved);
+        datasetLabel.setText(spectrum.label()+"  "+spectrum.path);status.setText("Saved processing "+saved.getFileName());
+    }
     private void save() {perform(this::saveResult);}
     private void execute(String input) {String text=input.trim();command.setText("");switch(text){case ".ph"->setMode(Mode.PHASE);case ".int"->setMode(Mode.INTEGRATE);case ".ret"->returnWithoutSave();case ".all"->plot.full();case ".zi"->plot.zoom(.5);case ".zo"->plot.zoom(2);case ".zl"->plot.previous();case "*2"->{plot.gain*=2;plot.repaint();}case "/2"->{plot.gain/=2;plot.repaint();}case "open"->chooseOpen();default->status.setText("Unknown command: "+text);}}
     @FunctionalInterface private interface Operation {void run() throws Exception;}

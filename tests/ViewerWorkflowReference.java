@@ -72,9 +72,13 @@ public class ViewerWorkflowReference {
                     click(viewer,"Return, do NOT save regions");
                     if(spectrum.integrals.regions().size()!=regions)throw new AssertionError("Integration cancel failed");
                     command(viewer,".ph");click(viewer,"Add 90 degrees");click(viewer,"Return & save phased spectrum");
-                    Path saved=experiment.resolve("pdata/2");
-                    if(!Files.isRegularFile(saved.resolve("1r")))throw new AssertionError("Phase save produced no new processing result");
-                    if(!Arrays.equals(original,Files.readAllBytes(experiment.resolve("pdata/1/1r"))))throw new AssertionError("Phase save overwrote input");
+                    Path saved=experiment.resolve("pdata/1");spectrum=(Spectrum)field(viewer,"spectrum");
+                    if(!spectrum.path.equals(saved.toRealPath()) || Files.exists(experiment.resolve("pdata/2")))throw new AssertionError("Phase save changed the processing number");
+                    Path history=experiment.resolve("pdata/.topspin-viewer-history/1");
+                    try(var snapshots=Files.list(history)) {
+                        Path backup=snapshots.findFirst().orElseThrow().resolve("before/1r");
+                        if(!Arrays.equals(original,Files.readAllBytes(backup)))throw new AssertionError("Phase save did not preserve original processed data");
+                    }
                     BrukerDataset reopened=new BrukerDataset(saved);
                     if(!Arrays.equals(reopened.real,spectrum.real) || !Arrays.equals(reopened.imaginary,spectrum.imaginary))throw new AssertionError("Saved phase differs from reopened view");
                     BufferedImage image=new BufferedImage(viewer.getContentPane().getWidth()*2,viewer.getContentPane().getHeight()*2,BufferedImage.TYPE_INT_ARGB);

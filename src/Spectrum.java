@@ -12,6 +12,14 @@ public final class Spectrum {
     public IntegrationRegions integrals;
     public RawDataset raw;
 
+    private Spectrum(Spectrum source) {
+        path=source.path;experiment=source.experiment;parameters=new LinkedHashMap<>(source.parameters);
+        real=source.real.clone();imaginary=source.imaginary==null?null:source.imaginary.clone();
+        left=source.left;right=source.right;phc0=source.phc0;phc1=source.phc1;nc=source.nc;ftSize=source.ftSize;stripStart=source.stripStart;
+        integrals=source.integrals.copy();raw=source.raw;
+    }
+    public Spectrum copy(){return new Spectrum(this);}
+
     public Spectrum(Path selected) throws IOException {
         Path input=selected.toRealPath();if(Files.isRegularFile(input))input=input.getParent();
         if(Files.isRegularFile(input.resolve("procs")))path=input;

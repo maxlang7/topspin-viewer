@@ -21,6 +21,7 @@ The application does not load Bruker classes, executables, processing libraries,
 - Saving and reopening preserves every stored real and imaginary spectrum byte in the tested captures.
 - A standalone saved phase result has been reopened in actual TopSpin: all 131,072 complex-component amplitudes and the integral table match exactly. TopSpin's integration module also reconstructs all three saved regions with 3,773 identical curve values, parameters and normalization.
 - Loose acquisitions, nested dataset folders, raw filenames and ZIP archives open without changing numerical data. The UI workflow test covers phase preset/cancel/save/reopen and manual-region drag/undo/cancel.
+- Returning and saving updates the current processing number, with complete before/after versions retained under `pdata/.topspin-viewer-history`. Failure tests cover invalid staged data and rollback after components have been replaced and a new table created. Preparing a phase save uses a separate model so a failed save cannot apply the phase twice.
 
 Run `bash verify.sh` for the saved-reference and vendor Java comparisons. Reference data is local under ignored `artifacts/`; reference-generation scripts require the licensed TopSpin installation and operate only on isolated dataset copies. Original source inventories are checked separately by SHA256.
 
@@ -28,4 +29,4 @@ Run `bash verify.sh` for the saved-reference and vendor Java comparisons. Refere
 
 The app is not yet an equivalent replacement. UI layout, spectrum drawing, interaction defaults and remaining integration controls are still being reconstructed and tested. Unsupported raw modes, fractional group delay, other transform sizes and second-level FFT cache splitting are rejected until validated. Every acquisition in the current lab inventory uses the validated raw formats and transform size.
 
-Saving creates a separate processing number and never overwrites existing dataset files.
+Saving updates processed files in the current processing number and retains recoverable versions. Raw acquisition files are unchanged. Development and reference tests operate only on isolated dataset copies.

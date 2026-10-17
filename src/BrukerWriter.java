@@ -5,8 +5,54 @@ import java.nio.file.*;
 import java.util.*;
 import java.util.regex.*;
 
-/** Saves a separate processing result; existing files are never overwritten. */
+/** Writes exact processed components and retains recoverable versions on replacement. */
 public final class BrukerWriter {
+    @FunctionalInterface interface Installer {void install(Path staged,Path target) throws IOException;}
+    public static Path saveCurrent(Spectrum spectrum) throws IOException {
+        return saveCurrent(spectrum,(staged,target)->Files.move(staged,target,StandardCopyOption.ATOMIC_MOVE,StandardCopyOption.REPLACE_EXISTING));
+    }
+    static Path saveCurrent(Spectrum spectrum,Installer installer) throws IOException {
+        if(spectrum.experiment==null || !spectrum.path.getFileName().toString().matches("[1-9][0-9]*"))
+            throw new IOException("Choose an acquisition processing number before saving");
+        Path target=spectrum.path;
+        Path history=spectrum.experiment.resolve("pdata/.topspin-viewer-history").resolve(target.getFileName());
+        Files.createDirectories(history);
+        Path snapshot=Files.createTempDirectory(history,"save-"),after=Files.createDirectory(snapshot.resolve("after"));
+        write(spectrum,after,target.getFileName().toString());
+        Path before=Files.createDirectory(snapshot.resolve("before"));
+        List<Path> replacements;
+        try(var files=Files.list(after)){replacements=files.sorted().map(Path::getFileName).toList();}
+        for(Path name:replacements) {
+            Path existing=target.resolve(name);
+            if(Files.exists(existing,LinkOption.NOFOLLOW_LINKS)) {
+                if(Files.isSymbolicLink(existing) || !Files.isRegularFile(existing))throw new IOException("Cannot replace non-regular processing file: "+existing);
+                Files.copy(existing,before.resolve(name),StandardCopyOption.COPY_ATTRIBUTES);
+            }
+        }
+        Path manifest=snapshot.resolve("state.txt");Files.writeString(manifest,"prepared\n"+target+"\n");
+        List<Path> attempted=new ArrayList<>();
+        try {
+            for(Path name:replacements) {
+                Path staging=snapshot.resolve("install-"+name);Files.copy(after.resolve(name),staging);
+                attempted.add(name);installer.install(staging,target.resolve(name));
+            }
+            Files.writeString(manifest,"complete\n"+target+"\n");
+        } catch(IOException | RuntimeException failure) {
+            IOException rollbackFailure=null;
+            for(Path name:attempted)try {
+                Path original=before.resolve(name),current=target.resolve(name);
+                if(Files.exists(original)) {
+                    Path restore=snapshot.resolve("restore-"+name);Files.copy(original,restore,StandardCopyOption.COPY_ATTRIBUTES);
+                    Files.move(restore,current,StandardCopyOption.ATOMIC_MOVE,StandardCopyOption.REPLACE_EXISTING);
+                } else if(Files.exists(current))Files.move(current,snapshot.resolve("rolled-back-"+name),StandardCopyOption.ATOMIC_MOVE);
+            } catch(IOException rollback){if(rollbackFailure==null)rollbackFailure=rollback;else rollbackFailure.addSuppressed(rollback);}
+            IOException error=new IOException("Processing save failed; recoverable versions are in "+snapshot,failure);
+            if(rollbackFailure!=null)error.addSuppressed(rollbackFailure);
+            try{Files.writeString(manifest,(rollbackFailure==null?"rolled-back":"rollback-incomplete")+"\n"+target+"\n");}catch(IOException report){error.addSuppressed(report);}
+            throw error;
+        }
+        return target;
+    }
     public static Path saveNext(Spectrum spectrum) throws IOException {
         if(spectrum.experiment==null)throw new IOException("Choose an acquisition before saving a processing result");
         Path parent=spectrum.experiment.resolve("pdata");
@@ -19,6 +65,9 @@ public final class BrukerWriter {
         throw new IOException("No available processing number");
     }
     static void write(Spectrum spectrum,Path target) throws IOException {
+        write(spectrum,target,target.getFileName().toString());
+    }
+    private static void write(Spectrum spectrum,Path target,String processingNumber) throws IOException {
         Map<String,String> params=new LinkedHashMap<>(spectrum.parameters);
         params.put("NC_proc",Integer.toString(spectrum.nc));params.put("BYTORDP","0");params.put("DTYPP","0");
         params.put("PHC0",scalar(spectrum.phc0));params.put("PHC1",scalar(spectrum.phc1));
@@ -35,7 +84,7 @@ public final class BrukerWriter {
         Files.writeString(target.resolve("intrng"),spectrum.integrals.serialize(spectrum.nc),StandardOpenOption.CREATE_NEW);
         if(spectrum.experiment!=null) {
             String table=spectrum.integrals.table(spectrum.experiment.getParent().getFileName().toString(),
-                spectrum.experiment.getFileName().toString(),target.getFileName().toString(),
+                spectrum.experiment.getFileName().toString(),processingNumber,
                 spectrum.experiment.getParent().getParent().toString(),spectrum.real,spectrum.left,spectrum.right);
             Files.writeString(target.resolve("integrals.txt"),table.replace("\n","\r\n"),StandardOpenOption.CREATE_NEW);
         }
