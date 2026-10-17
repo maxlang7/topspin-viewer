@@ -66,22 +66,18 @@ public final class Viewer extends JFrame {
         }
         first.add(nav,BorderLayout.WEST);
         JLabel title=new JLabel("TopSpin Processing",SwingConstants.CENTER);title.setForeground(Color.WHITE);title.setFont(Assets.regular.deriveFont(14f));first.add(title);
-        JPanel processing=new JPanel(new FlowLayout(FlowLayout.LEFT,0,0));processing.setBackground(lower);
-        processing.add(flowButton("Proc. Spectrum",()->perform(()->{requireSpectrum();spectrum.processRaw();plot.full();status.setText("efp: finished");}),125));
-        processing.add(flowButton("Adjust Phase",()->setMode(Mode.PHASE),111));
-        JPanel analysis=new JPanel(new FlowLayout(FlowLayout.LEFT,0,0));analysis.setBackground(lower);
-        analysis.add(flowButton("Integrate",()->setMode(Mode.INTEGRATE),105));
-        second.add(processing,"Process");second.add(analysis,"Analyze");
+        Ribbon processing=new Ribbon();
+        processing.addCommand("Proc. Spectrum",Assets.icon("phase","text.Proc. Spectrum"),125,()->perform(()->{requireSpectrum();spectrum.processRaw();plot.full();status.setText("efp: finished");}));
+        processing.addCommand("Adjust Phase",Assets.icon("phase","text.Adjust Phase"),111,()->setMode(Mode.PHASE));
+        Ribbon analysis=new Ribbon();
+        analysis.addCommand("Integrate",Assets.colored(Assets.icon("integration","text.Integration"),Ribbon.FOREGROUND),83,()->setMode(Mode.INTEGRATE));
+        second.add(ribbonSection(processing),"Process");second.add(ribbonSection(analysis),"Analyze");
         rows.add(first,BorderLayout.NORTH);rows.add(second);header.add(rows);
         JLabel logo=new JLabel(Assets.image("4d72af01e262c2de.png"),SwingConstants.CENTER);logo.setPreferredSize(new Dimension(132,104));header.add(logo,BorderLayout.EAST);return header;
     }
-    private JButton flowButton(String text,Runnable action,int width) {
-        JButton button=new JButton(text,Assets.icon("phase","text."+text));
-        button.setHorizontalAlignment(SwingConstants.LEFT);button.setFont(Assets.regular.deriveFont(14f));
-        button.setForeground(new Color(195,208,217));button.setBackground(new Color(4,48,77));
-        button.setMargin(new Insets(0,16,0,24));
-        button.setBorder(BorderFactory.createLineBorder(new Color(0,24,43)));button.setPreferredSize(new Dimension(width+44,51));
-        button.addActionListener(e->action.run());return button;
+    private JPanel ribbonSection(Ribbon ribbon) {
+        JPanel panel=new JPanel(new BorderLayout()){@Override protected void paintComponent(Graphics g){super.paintComponent(g);g.setColor(Color.BLACK);g.fillRect(0,0,getWidth(),1);}};
+        panel.setBackground(Ribbon.BACKGROUND);panel.setBorder(BorderFactory.createEmptyBorder(2,3,0,0));panel.add(ribbon);return panel;
     }
     private JPanel viewToolbar() {
         JPanel bar=new JPanel(new FlowLayout(FlowLayout.LEFT,0,0));bar.setPreferredSize(new Dimension(1,38));

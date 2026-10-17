@@ -39,5 +39,15 @@ public final class Assets {
         button.setBackground(new Color(245,245,245));button.addActionListener(e->action.run());
         return button;
     }
+    public static Icon colored(Icon icon,Color color) {
+        if(icon==null)return null;
+        java.awt.image.BufferedImage[] images=new java.awt.image.BufferedImage[2];
+        for(int scale=1;scale<=2;scale++) {
+            var image=new java.awt.image.BufferedImage(icon.getIconWidth()*scale,icon.getIconHeight()*scale,java.awt.image.BufferedImage.TYPE_INT_ARGB);
+            Graphics2D g=image.createGraphics();g.scale(scale,scale);icon.paintIcon(null,g,0,0);
+            g.setComposite(AlphaComposite.SrcIn);g.setColor(color);g.fillRect(0,0,icon.getIconWidth(),icon.getIconHeight());g.dispose();images[scale-1]=image;
+        }
+        return new ImageIcon(new BaseMultiResolutionImage(images));
+    }
     private Assets() {}
 }
