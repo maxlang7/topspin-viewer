@@ -79,24 +79,26 @@ public final class Viewer extends JFrame {
         panel.setBackground(Ribbon.BACKGROUND);panel.setBorder(BorderFactory.createEmptyBorder(2,3,0,0));panel.add(ribbon);return panel;
     }
     private JPanel viewToolbar() {
-        JPanel bar=new JPanel(new FlowLayout(FlowLayout.LEFT,0,0));bar.setPreferredSize(new Dimension(1,38));
+        ViewerTools bar=new ViewerTools();
         String[] tools={"Larger by factor 2","Smaller by factor 2","Smaller/larger","Smooth zoom","Shift baseline up/down","Shift spectrum left","Shift baseline to bottom","Zoom in","Zoom out","Show the last zoom","Show full spectrum"};
         for(int i=0;i<tools.length;i++) {
             final int index=i;
-            JButton b=Assets.button("phase",tools[i],()->{
+            if(i==2 || i==4 || i==7)bar.separator();
+            JButton b=bar.addTool(tools[i],()->{
                 switch(index) {
                     case 0 -> plot.scale(2);case 1 -> plot.scale(.5);
                     case 6 -> plot.setBaseline(.05);case 7 -> plot.zoom(.5);case 8 -> plot.zoom(2);
                     case 9 -> plot.previous();case 10 -> plot.full();
                 }plot.repaint();
-            },34,34);
+            });
             if(i==2)new RelativeDragControl(b,()->{},plot::scale,warpPointer,PointerGesture.Kind.VERTICAL_SCALE);
             if(i==3)new RelativeDragControl(b,()->{},factor->plot.zoomFactor(factor<1?1.025:.9756097560975611),warpPointer,PointerGesture.Kind.HORIZONTAL_SCALE);
             if(i==4)new RelativeDragControl(b,()->{},amount->plot.setBaseline(plot.baseline-amount/400.0),warpPointer);
             if(i==5)new RelativeDragControl(b,()->{},plot::pan,warpPointer,PointerGesture.Kind.HORIZONTAL_SHIFT);
-            bar.add(b);
-            if(i==1 || i==3 || i==6) {JSeparator s=new JSeparator(SwingConstants.VERTICAL);s.setPreferredSize(new Dimension(8,24));bar.add(s);}
-        }return bar;
+
+        }
+        JPanel row=new JPanel(new BorderLayout());row.setBackground(new Color(245,245,245));
+        row.setBorder(BorderFactory.createEmptyBorder(0,8,0,8));row.add(bar,BorderLayout.WEST);return row;
     }
     private JPanel browser() {
         JPanel panel=new JPanel(new BorderLayout());panel.setBackground(new Color(207,207,207));
