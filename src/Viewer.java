@@ -164,7 +164,7 @@ public final class Viewer extends JFrame {
         mode=next;ph0=ph1=0;phaseOrder=0;
         surfaceLayout.show(surface,"plot");
         plot.showFid=false;
-        if(next==Mode.INTEGRATE){sessionIntegrals=spectrum.integrals.copy();savedBaseline=plot.baseline;plot.setBaseline(.15);defineRegion=!spectrum.integrals.regions().isEmpty();integrationAction=defineRegion?"define":"select";}
+        if(next==Mode.INTEGRATE){sessionIntegrals=spectrum.integrals.copy();spectrum.integrals.resetLastCorrections();savedBaseline=plot.baseline;plot.setBaseline(.15);defineRegion=!spectrum.integrals.regions().isEmpty();integrationAction=defineRegion?"define":"select";}
         if(next==Mode.PHASE)plot.pivot=maxAmplitude(plot.start(),plot.end());
         rebuildModeBar();plot.repaint();
     }
@@ -235,8 +235,14 @@ public final class Viewer extends JFrame {
     }
     private int maxAmplitude(int start,int end) {return Numerics.pivot(spectrum.real,spectrum.imaginary,start,end-start+1);}
     private void regionDialog() {
-        JTextField left=new JTextField(),right=new JTextField();JPanel panel=new JPanel(new GridLayout(2,2,8,8));panel.add(new JLabel("Low field [ppm]"));panel.add(left);panel.add(new JLabel("High field [ppm]"));panel.add(right);
-        if(JOptionPane.showConfirmDialog(this,panel,"Define integration region",JOptionPane.OK_CANCEL_OPTION)==JOptionPane.OK_OPTION)perform(()->{addRegion(Double.parseDouble(left.getText()),Double.parseDouble(right.getText()));plot.repaint();});
+        var format=new java.text.DecimalFormat("0.0000",java.text.DecimalFormatSymbols.getInstance(Locale.ROOT));
+        JTextField left=new JTextField(format.format(plot.viewLeft),8),right=new JTextField(format.format(plot.viewRight),8);
+        JPanel fields=new JPanel(new GridLayout(3,2,8,8));fields.add(new JLabel("F1 [ppm]"));fields.add(new JLabel(""));
+        fields.add(new JLabel("From "));fields.add(left);fields.add(new JLabel("To   "));fields.add(right);
+        JPanel panel=new JPanel(new BorderLayout(0,8));panel.add(new JLabel("Exact coordinates of integrated area"),BorderLayout.NORTH);panel.add(fields);
+        if(JOptionPane.showConfirmDialog(this,panel,"add",JOptionPane.OK_CANCEL_OPTION)==JOptionPane.OK_OPTION)perform(()->{
+            spectrum.integrals.addFromDialog(Double.parseDouble(left.getText()),Double.parseDouble(right.getText()),spectrum.real,spectrum.left,spectrum.right);plot.repaint();
+        });
     }
     private void calibrate() {
         if(selectedIntegral<0)return;String value=JOptionPane.showInputDialog(this,"Integral value","Calibrate integral",JOptionPane.PLAIN_MESSAGE);

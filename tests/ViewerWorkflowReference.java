@@ -38,6 +38,30 @@ public class ViewerWorkflowReference {
         plot.dispatchEvent(new MouseEvent(plot,MouseEvent.MOUSE_DRAGGED,time+1,InputEvent.BUTTON1_DOWN_MASK,b,120,0,false,MouseEvent.NOBUTTON));
         plot.dispatchEvent(new MouseEvent(plot,MouseEvent.MOUSE_RELEASED,time+2,0,b,120,1,false,MouseEvent.BUTTON1));
     }
+    private static void collectFields(Container parent,java.util.List<JTextField> fields) {
+        for(Component child:parent.getComponents())if(child instanceof JTextField field)fields.add(field);else if(child instanceof Container container)collectFields(container,fields);
+    }
+    private static void regionDialogWorkflow(Viewer viewer,Spectrum spectrum,Object plot) throws Exception {
+        spectrum.integrals.adjustBias(0,.003,1);spectrum.integrals.adjustSlope(0,.002,1,spectrum.real,spectrum.left,spectrum.right);
+        var inherited=spectrum.integrals.regions().get(0);int count=spectrum.integrals.regions().size();Throwable[] failure={null};
+        javax.swing.Timer timer=new javax.swing.Timer(100,null);
+        timer.addActionListener(event->{
+            for(Window window:viewer.getOwnedWindows())if(window instanceof JDialog dialog && dialog.isShowing()) {
+                timer.stop();try {
+                    if(!dialog.getTitle().equals("add"))throw new AssertionError("Unexpected region dialog title");
+                    java.util.List<JTextField> fields=new ArrayList<>();collectFields(dialog,fields);
+                    var format=new java.text.DecimalFormat("0.0000",java.text.DecimalFormatSymbols.getInstance(Locale.ROOT));
+                    if(fields.size()!=2 || !fields.get(0).getText().equals(format.format((double)field(plot,"viewLeft"))) || !fields.get(1).getText().equals(format.format((double)field(plot,"viewRight"))))throw new AssertionError("Region dialog did not default to the displayed range at four decimals");
+                    fields.get(0).setText("8.5");fields.get(1).setText("7.5");textButton(dialog,"OK").doClick();
+                }catch(Throwable error){failure[0]=error;dialog.dispose();}
+            }
+        });
+        timer.start();try{click(viewer,"Define new region via dialog");}finally{timer.stop();}
+        if(failure[0]!=null)throw new AssertionError("Region dialog workflow",failure[0]);
+        if(spectrum.integrals.regions().size()!=count+1)throw new AssertionError("Dialog did not create a region");
+        var added=spectrum.integrals.regions().get(count);
+        if(added.left()!=8.5 || added.right()!=7.5 || added.bias()!=inherited.bias() || added.slope()!=inherited.slope())throw new AssertionError("Dialog did not inherit the last correction values");
+    }
     private static void selectionWorkflow(Viewer viewer,Spectrum spectrum,Component plot) throws Exception {
         IntegrationRegions saved=spectrum.integrals;
         try {
@@ -65,6 +89,7 @@ public class ViewerWorkflowReference {
             if(spectrum.integrals.selectedIndices().size()!=3)throw new AssertionError("Select all failed");
             click(viewer,"Select/Deselect all regions");
             if(!spectrum.integrals.selectedIndices().isEmpty())throw new AssertionError("Deselect all failed");
+            regionDialogWorkflow(viewer,spectrum,plot);
         } finally {spectrum.integrals=saved;}
     }
     public static void main(String[] args) throws Exception {

@@ -28,13 +28,16 @@ public final class IntegrationRegions {
     }
     private int calibrationReference=0;
     private double calibrationValue=1;
+    private double lastBias,lastSlope;
+    public void resetLastCorrections(){lastBias=lastSlope=0;}
     public double normalizingFactor=1;
     public List<Region> regions() {return List.copyOf(regions);}
     public IntegrationRegions copy() {
         IntegrationRegions result=new IntegrationRegions();result.regions.addAll(regions);
         result.normalizingFactor=normalizingFactor;result.calibrationReference=calibrationReference;
         result.calibrationValue=calibrationValue;result.selection.addAll(selection);
-        result.selectAllNext=selectAllNext;result.displayScales.putAll(displayScales);return result;
+        result.selectAllNext=selectAllNext;result.displayScales.putAll(displayScales);
+        result.lastBias=lastBias;result.lastSlope=lastSlope;return result;
     }
     private void checkpoint() {previous=List.copyOf(regions);}
     public void select(int index) {selectedObject=index<0?null:regions.get(index);}
@@ -76,6 +79,11 @@ public final class IntegrationRegions {
         for(Region region:regions)if(left>=region.left() && right<=region.right())selection.add(region);
     }
     public void add(double a,double b) {checkpoint();regions.add(new Region(Math.max(a,b),Math.min(a,b),0,0));}
+    public void addFromDialog(double a,double b,double[] spectrum,double fullLeft,double fullRight) {
+        a=Math.min(fullLeft,Math.max(fullRight,a));b=Math.min(fullLeft,Math.max(fullRight,b));
+        checkpoint();regions.add(new Region(Math.max(a,b),Math.min(a,b),lastBias,lastSlope));
+        calibrationValue=1;normalize(spectrum,fullLeft,fullRight);
+    }
     public void remove(int index) {
         checkpoint();if(regions.size()==1){calibrationReference=0;calibrationValue=1;}
         Region removed=regions.remove(index);selection.remove(removed);displayScales.remove(removed);
@@ -93,12 +101,12 @@ public final class IntegrationRegions {
     }
     public void adjustBias(int index,double amount,double sensitivity) {
         Region r=regions.get(index);double correction=amount*sensitivity*1000.0;
-        replace(index,new Region(r.left(),r.right(),r.bias()-correction,r.slope()));
+        replace(index,new Region(r.left(),r.right(),r.bias()-correction,r.slope()));lastBias=regions.get(index).bias();
     }
     public void adjustSlope(int index,double amount,double sensitivity,double[] spectrum,double left,double right) {
         Region r=regions.get(index);double correction=amount*sensitivity*1000.0;
         int points=calculate(r,spectrum,left,right).curve().length;
-        replace(index,new Region(r.left(),r.right(),r.bias(),r.slope()-correction/points));
+        replace(index,new Region(r.left(),r.right(),r.bias(),r.slope()-correction/points));lastSlope=regions.get(index).slope();
     }
     public void split(int index,double position,double fullLeft,double fullRight,int size) {
         Region r=regions.get(index);
