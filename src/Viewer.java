@@ -22,7 +22,7 @@ public final class Viewer extends JFrame {
     private final JLabel datasetLabel=new JLabel(" "),status=new JLabel(" ");
     private final JTextField command=new JTextField();
     private final DefaultMutableTreeNode root=new DefaultMutableTreeNode("Data");
-    private final JTree tree=new JTree(root);
+    private final JTree tree=new BrowserTree(root);
     private double ph0,ph1,sensitivity=.00625;
     private int phaseOrder;
     private int selectedIntegral=-1;
@@ -111,7 +111,7 @@ public final class Viewer extends JFrame {
         JTextField search=new JTextField();search.putClientProperty("JTextField.placeholderText","Search...");
         searchPanel.add(search);JButton open=new JButton("Open...");open.addActionListener(e->chooseOpen());searchPanel.add(open,BorderLayout.EAST);
         JPanel north=new JPanel(new BorderLayout(0,8));north.setOpaque(false);north.add(title,BorderLayout.NORTH);north.add(searchPanel);panel.add(north,BorderLayout.NORTH);
-        tree.setRootVisible(false);tree.setBackground(Color.WHITE);tree.setRowHeight(18);
+        tree.setRootVisible(false);tree.setBackground(Color.WHITE);
         tree.addMouseListener(new MouseAdapter(){@Override public void mouseClicked(MouseEvent e){
             if(e.getClickCount()==2 && tree.getLastSelectedPathComponent() instanceof DefaultMutableTreeNode node && node.getUserObject() instanceof Path p)open(p);
         }});
