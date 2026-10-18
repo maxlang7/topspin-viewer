@@ -14,6 +14,7 @@ public final class Viewer extends JFrame {
     private Spectrum spectrum;
     private Mode mode=Mode.VIEW;
     private final JPanel modeBar=new JPanel(new FlowLayout(FlowLayout.LEFT,0,0));
+    private EditingTools editingTools;
     private final Plot plot=new Plot();
     private final CardLayout surfaceLayout=new CardLayout();
     private final JPanel surface=new JPanel(surfaceLayout);
@@ -134,9 +135,9 @@ public final class Viewer extends JFrame {
         ((DefaultTreeModel)tree.getModel()).reload();if(!filter.isEmpty())tree.expandRow(0);
     }
     private JPanel workbench() {
-        JPanel panel=new JPanel(new BorderLayout());panel.setBackground(new Color(207,207,207));
+        JPanel panel=new JPanel(new BorderLayout());panel.setBackground(new Color(204,204,204));
         panel.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(new Color(142,142,142)),BorderFactory.createEmptyBorder(8,8,2,8)));
-        modeBar.setOpaque(false);modeBar.setPreferredSize(new Dimension(1,42));panel.add(modeBar,BorderLayout.NORTH);
+        modeBar.setOpaque(false);modeBar.setPreferredSize(new Dimension(1,41));panel.add(modeBar,BorderLayout.NORTH);
         surface.add(plot,"plot");surface.add(integralTable,"integrals");panel.add(surface);return panel;
     }
     private JPanel footer() {
@@ -170,49 +171,47 @@ public final class Viewer extends JFrame {
         rebuildModeBar();plot.repaint();
     }
     private void rebuildModeBar() {
-        modeBar.removeAll();
+        modeBar.removeAll();editingTools=null;
         if(mode==Mode.VIEW) {
             for(String name:new String[]{"SPECTRUM","INTEGRALS","FID"}) {
                 JButton tab=new JButton(name);tab.setMargin(new Insets(0,8,0,8));tab.setPreferredSize(new Dimension(name.equals("SPECTRUM")?90:80,32));
                 tab.addActionListener(e->{if(name.equals("INTEGRALS"))perform(()->{requireSpectrum();integralTable.load(spectrum);surfaceLayout.show(surface,"integrals");});else if(name.equals("FID"))perform(()->{requireSpectrum();if(spectrum.raw==null)spectrum.raw=new RawDataset(spectrum.experiment,spectrum.path.resolve("proc"));plot.showFid=true;surfaceLayout.show(surface,"plot");plot.repaint();});else{plot.showFid=false;surfaceLayout.show(surface,"plot");plot.repaint();}});modeBar.add(tab);
             }
         } else {
-            JLabel label=new JLabel(mode==Mode.PHASE?"Interactive phase correction":"Integration",Assets.icon(mode==Mode.PHASE?"phase":"integration","text."+(mode==Mode.PHASE?"Interactive phase correction":"Integration")),SwingConstants.LEFT);
-            label.setOpaque(true);label.setBackground(new Color(175,201,216));label.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(new Color(55,76,86)),BorderFactory.createEmptyBorder(4,12,4,12)));
-            label.setPreferredSize(new Dimension(mode==Mode.PHASE?198:130,32));modeBar.add(label);modeBar.add(Box.createHorizontalStrut(8));
+            ModeLabel label=new ModeLabel(mode==Mode.PHASE?"Interactive phase correction":"Integration",Assets.icon(mode==Mode.PHASE?"phase":"integration","text."+(mode==Mode.PHASE?"Interactive phase correction":"Integration")));
+            modeBar.add(label);modeBar.add(Box.createHorizontalStrut(8));
+            editingTools=new EditingTools();modeBar.add(editingTools);
             if(mode==Mode.PHASE) {
                 phaseControl("0 order correction",0);phaseControl("1st order correction",1);
-                tool("phase","Reset phase angles",()->{ph0=ph1=0;plot.repaint();});
-                tool("phase","Add 90 degrees",()->{ph0=Numerics.wrapPhaseZero(ph0+90);plot.repaint();});tool("phase","Subtract 90 degrees",()->{ph0=Numerics.wrapPhaseZero(ph0-90);plot.repaint();});tool("phase","Add 180 degrees",()->{ph0=Numerics.wrapPhaseZero(ph0+180);plot.repaint();});
-                tool("phase","Increase mouse sensitivity",()->sensitivity*=2);tool("phase","Decrease mouse sensitivity",()->sensitivity/=2);tool("phase","Reset mouse sensitivity",()->sensitivity=.2);
+                tool("phase","Reset phase angles",()->{ph0=ph1=0;plot.repaint();});editingTools.separator();
+                tool("phase","Add 90 degrees",()->{ph0=Numerics.wrapPhaseZero(ph0+90);plot.repaint();});tool("phase","Subtract 90 degrees",()->{ph0=Numerics.wrapPhaseZero(ph0-90);plot.repaint();});tool("phase","Add 180 degrees",()->{ph0=Numerics.wrapPhaseZero(ph0+180);plot.repaint();});editingTools.separator();
+                tool("phase","Increase mouse sensitivity",()->sensitivity*=2);tool("phase","Decrease mouse sensitivity",()->sensitivity/=2);tool("phase","Reset mouse sensitivity",()->sensitivity=.2);editingTools.separator();
                 tool("phase","Return & save phased spectrum",()->perform(()->{savePhaseResult();setMode(Mode.VIEW);}));
                 tool("phase","Return, do NOT save",()->setMode(Mode.VIEW));
             } else {
                 tool("integration","Define new region using cursor (toggle)",()->{defineRegion=!defineRegion;integrationAction=defineRegion?"define":"select";});
                 tool("integration","Define new region via dialog",this::regionDialog);
-                tool("integration","Cut integral in two parts (toggle)",()->{integrationAction=integrationAction.equals("cut")?"select":"cut";defineRegion=false;});
+                tool("integration","Cut integral in two parts (toggle)",()->{integrationAction=integrationAction.equals("cut")?"select":"cut";defineRegion=false;});editingTools.separator();
                 tool("integration","Delete selected regions",()->{if(selectedIntegral>=0){spectrum.integrals.remove(selectedIntegral);spectrum.integrals.normalize(spectrum.real,spectrum.left,spectrum.right);selectedIntegral=-1;plot.repaint();}});
-                tool("integration","Undo last region operation",()->{if(spectrum.integrals.undo()){spectrum.integrals.normalize(spectrum.real,spectrum.left,spectrum.right);selectedIntegral=-1;plot.repaint();}});
+                tool("integration","Undo last region operation",()->{if(spectrum.integrals.undo()){spectrum.integrals.normalize(spectrum.real,spectrum.left,spectrum.right);selectedIntegral=-1;plot.repaint();}});editingTools.separator();
                 integrationDragControl("Interactive bias correction","bias");
                 integrationDragControl("Interactive slope correction","slope");
-                tool("integration","Set slope and bias to zero",()->{if(selectedIntegral>=0){var r=spectrum.integrals.regions().get(selectedIntegral);spectrum.integrals.replace(selectedIntegral,new IntegrationRegions.Region(r.left(),r.right(),0,0));plot.repaint();}});
+                tool("integration","Set slope and bias to zero",()->{if(selectedIntegral>=0){var r=spectrum.integrals.regions().get(selectedIntegral);spectrum.integrals.replace(selectedIntegral,new IntegrationRegions.Region(r.left(),r.right(),0,0));plot.repaint();}});editingTools.separator();
                 tool("integration","Increase mouse sensitivity",()->integrationSensitivity*=2);
                 tool("integration","Decrease mouse sensitivity",()->integrationSensitivity/=2);
-                tool("integration","Reset mouse sensitivity",()->integrationSensitivity=1);
+                tool("integration","Reset mouse sensitivity",()->integrationSensitivity=1);editingTools.separator();
                 tool("integration","Integrals larger by factor 2",()->{integralGain*=2;plot.repaint();});
                 tool("integration","Integrals smaller by factor 2",()->{integralGain/=2;plot.repaint();});
-                integrationDragControl("Shift integrals up/down","baseline");
-                JButton calibrate=new JButton("Calibrate");calibrate.addActionListener(e->calibrate());modeBar.add(calibrate);
+                editingTools.separator();integrationDragControl("Shift integrals up/down","baseline");editingTools.separator();
                 tool("integration","Return, save regions",()->perform(()->{saveResult();setMode(Mode.VIEW);}));tool("integration","Return, do NOT save regions",this::cancelIntegration);
             }
         }
         modeBar.revalidate();modeBar.repaint();
     }
-    private void tool(String mode,String tooltip,Runnable action) {modeBar.add(Assets.button(mode,tooltip,action,30,32));}
+    private void tool(String mode,String tooltip,Runnable action) {editingTools.addTool(mode,tooltip,action);}
     private void phaseControl(String tooltip,int order) {
-        JButton button=Assets.button("phase",tooltip,()->phaseOrder=order,30,32);
+        JButton button=editingTools.addTool("phase",tooltip,()->phaseOrder=order);
         new RelativeDragControl(button,()->phaseOrder=order,amount->adjustPhase(order,amount),warpPointer);
-        modeBar.add(button);
     }
     private void adjustPhase(int order,double amount) {
         var angles=Numerics.dragPhase(ph0,ph1,order,amount,1.0,sensitivity,plot.pivot,spectrum.stripStart,spectrum.ftSize,spectrum.real.length);
@@ -220,8 +219,8 @@ public final class Viewer extends JFrame {
         plot.repaint();
     }
     private void integrationDragControl(String tooltip,String action) {
-        JButton button=Assets.button("integration",tooltip,()->{integrationAction=action;defineRegion=false;},30,32);
-        new RelativeDragControl(button,()->{integrationAction=action;defineRegion=false;},amount->adjustIntegral(action,amount),warpPointer);modeBar.add(button);
+        JButton button=editingTools.addTool("integration",tooltip,()->{integrationAction=action;defineRegion=false;});
+        new RelativeDragControl(button,()->{integrationAction=action;defineRegion=false;},amount->adjustIntegral(action,amount),warpPointer);
     }
     private void adjustIntegral(String action,double amount) {
         if(action.equals("baseline")){integralBaseline-=amount*.001;plot.repaint();return;}

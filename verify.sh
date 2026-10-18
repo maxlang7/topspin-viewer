@@ -9,7 +9,7 @@ javac -proc:none -cp lib/flatlaf-3.4.1.jar -d build/app src/*.java \
   tests/RawReference.java tests/SavedPhaseReference.java tests/ReaderReference.java \
   tests/WriterReference.java tests/LiveNumericsReference.java tests/LiveIntegrationReference.java \
   tests/DatasetOpeningReference.java tests/ViewerWorkflowReference.java tests/IntegrationEditReference.java tests/IntegrationReopenReference.java tests/PlotRasterReference.java tests/IntegralTableReference.java tests/IntegralTableRasterProbe.java tests/SaveTransactionReference.java \
-  tests/CapturedAxisReference.java tests/CapturedSpectrumReference.java tests/CapturedIntegralPanelReference.java tests/CursorMessageRasterReference.java tests/WindowsTextReference.java tests/NativeTextRasterReference.java tests/RibbonRasterReference.java tests/WindowsPhaseControllerReference.java
+  tests/CapturedAxisReference.java tests/CapturedSpectrumReference.java tests/CapturedIntegralPanelReference.java tests/CursorMessageRasterReference.java tests/EditingToolsRasterReference.java tests/WindowsTextReference.java tests/NativeTextRasterReference.java tests/RibbonRasterReference.java tests/WindowsPhaseControllerReference.java
 gcc -std=c11 -O2 -fPIC -shared -ffp-contract=off \
   -I"$JAVA_HOME/include" -I"$JAVA_HOME/include/linux" \
   -o build/native/libtopspin_reconstructed.so native/kernel.c native/jni.c -lm
@@ -68,6 +68,8 @@ java -Djava.awt.headless=true -cp "build/test:$task_vendor_root/classes/lib/*" P
 java -Djava.awt.headless=true -cp "build/test:$task_vendor_root/classes/lib/*" PointerGestureReference
 java -Djava.awt.headless=true -cp "build/test:$task_vendor_root/classes/lib/*" ViewRangesReference
 if [ -n "${DISPLAY:-}" ]; then
+  _JAVA_AWT_WM_NONREPARENTING=1 java -Dsun.java2d.uiScale=2 -Djava.library.path=build/native \
+    -cp build/app:lib/flatlaf-3.4.1.jar EditingToolsRasterReference
   _JAVA_AWT_WM_NONREPARENTING=1 java -Dsun.java2d.uiScale=2 -Djava.library.path=build/native \
     -cp build/app:lib/flatlaf-3.4.1.jar RibbonRasterReference
   _JAVA_AWT_WM_NONREPARENTING=1 java -Dsun.java2d.uiScale=2 \
