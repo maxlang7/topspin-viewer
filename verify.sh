@@ -6,7 +6,7 @@ if ! command -v javac >/dev/null || ! command -v gcc >/dev/null || ! pkg-config 
 fi
 mkdir -p build/app build/test build/native
 javac -proc:none -cp lib/flatlaf-3.4.1.jar -d build/app src/*.java \
-  tests/RawReference.java tests/SavedPhaseReference.java tests/ReaderReference.java \
+  tests/RawReference.java tests/RawTimeRangeReference.java tests/SavedPhaseReference.java tests/ReaderReference.java \
   tests/WriterReference.java tests/LiveNumericsReference.java tests/LiveIntegrationReference.java \
   tests/DatasetOpeningReference.java tests/ViewerWorkflowReference.java tests/IntegrationEditReference.java tests/IntegrationReopenReference.java tests/PlotRasterReference.java tests/IntegralTableReference.java tests/IntegralTableRasterProbe.java tests/SaveTransactionReference.java \
   tests/CapturedAxisReference.java tests/CapturedSpectrumReference.java tests/CapturedIntegralPanelReference.java tests/CursorMessageRasterReference.java tests/EditingToolsRasterReference.java tests/ViewerToolsRasterReference.java tests/BrowserTreeRasterReference.java tests/BrowserSearchRasterReference.java tests/RangeEntryRasterReference.java tests/DatasetTabsRasterReference.java tests/NavigationTabsRasterReference.java tests/WindowsTextReference.java tests/NativeTextRasterReference.java tests/RibbonRasterReference.java tests/WindowsPhaseControllerReference.java
@@ -16,6 +16,8 @@ gcc -std=c11 -O2 -fPIC -shared -ffp-contract=off \
 gcc -std=c11 -O2 -fPIC -shared $(pkg-config --cflags freetype2) \
   -I"$JAVA_HOME/include" -I"$JAVA_HOME/include/linux" \
   -o build/native/libtopspin_font.so native/font.c $(pkg-config --libs freetype2)
+gcc -std=c11 -O2 -Wall -Wextra -o build/test/native-raw-axis-oracle tests/native_raw_axis_oracle.c
+java -cp build/app RawTimeRangeReference "${TOPSPIN_NATIVE_REFERENCE_BINARY:-/home/maxlang/.local/share/topspin/opt/topspin5.0.0/prog/mod/dataserver}"
 for task_root in artifacts/reference-datasets artifacts/held-out-references artifacts/parameter-references artifacts/full-lab-references; do
   java -Djava.library.path=build/native -cp build/app RawReference "$task_root"
   java -Djava.library.path=build/native -cp build/app SavedPhaseReference "$task_root/captures"
