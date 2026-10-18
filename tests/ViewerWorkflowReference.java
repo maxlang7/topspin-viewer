@@ -38,6 +38,33 @@ public class ViewerWorkflowReference {
         plot.dispatchEvent(new MouseEvent(plot,MouseEvent.MOUSE_DRAGGED,time+1,InputEvent.BUTTON1_DOWN_MASK,b,120,0,false,MouseEvent.NOBUTTON));
         plot.dispatchEvent(new MouseEvent(plot,MouseEvent.MOUSE_RELEASED,time+2,0,b,120,1,false,MouseEvent.BUTTON1));
     }
+    private static void selectionWorkflow(Viewer viewer,Spectrum spectrum,Component plot) throws Exception {
+        IntegrationRegions saved=spectrum.integrals;
+        try {
+            spectrum.integrals=new IntegrationRegions();double span=spectrum.left-spectrum.right;
+            for(int i=0;i<3;i++)spectrum.integrals.add(spectrum.left-span*(.15+i*.2),spectrum.left-span*(.24+i*.2));
+            BufferedImage image=new BufferedImage(plot.getWidth(),plot.getHeight(),BufferedImage.TYPE_INT_ARGB);
+            Graphics2D graphics=image.createGraphics();plot.paint(graphics);graphics.dispose();
+            @SuppressWarnings("unchecked") Map<Integer,Rectangle> hits=(Map<Integer,Rectangle>)field(plot,"integralHitAreas");
+            if(hits.size()!=3)throw new AssertionError("Missing integral label hit areas");
+            long time=System.currentTimeMillis();
+            for(int i:new int[]{0,2}) {
+                Rectangle hit=hits.get(i);int x=hit.x+hit.width/2,y=hit.y+hit.height/2;
+                int modifiers=InputEvent.BUTTON1_DOWN_MASK|(i==2?InputEvent.CTRL_DOWN_MASK:0);
+                plot.dispatchEvent(new MouseEvent(plot,MouseEvent.MOUSE_PRESSED,time,modifiers,x,y,1,false,MouseEvent.BUTTON1));
+                plot.dispatchEvent(new MouseEvent(plot,MouseEvent.MOUSE_RELEASED,time+1,modifiers,x,y,1,false,MouseEvent.BUTTON1));
+            }
+            if(!spectrum.integrals.selectedIndices().equals(java.util.List.of(0,2)))throw new AssertionError("Ctrl-click did not select two labels");
+            click(viewer,"Delete selected regions");
+            if(spectrum.integrals.regions().size()!=1)throw new AssertionError("Delete did not remove both selected regions");
+            click(viewer,"Undo last region operation");
+            if(spectrum.integrals.regions().size()!=3 || !spectrum.integrals.selectedIndices().isEmpty())throw new AssertionError("Bulk delete did not undo in one step");
+            click(viewer,"Select/Deselect all regions");
+            if(spectrum.integrals.selectedIndices().size()!=3)throw new AssertionError("Select all failed");
+            click(viewer,"Select/Deselect all regions");
+            if(!spectrum.integrals.selectedIndices().isEmpty())throw new AssertionError("Deselect all failed");
+        } finally {spectrum.integrals=saved;}
+    }
     public static void main(String[] args) throws Exception {
         Path source=Path.of(args[0]).toRealPath(),root=Files.createTempDirectory(Path.of("artifacts"),"viewer-workflow-");
         Path experiment=root.resolve("sample/10");
@@ -109,6 +136,7 @@ public class ViewerWorkflowReference {
                     click(viewer,"Add 90 degrees");if((double)field(viewer,"ph0")!=-180)throw new AssertionError("Phase preset did not wrap like the original controller");
                     command(viewer,".ret");if(!Arrays.equals(before,spectrum.real))throw new AssertionError("Phase cancel changed data");
                     command(viewer,".int");Component plot=(Component)field(viewer,"plot");
+                    selectionWorkflow(viewer,spectrum,plot);
                     if(regions==0)click(viewer,"Define new region using cursor (toggle)");
                     drag(plot,Math.max(8,plot.getWidth()/5),Math.max(18,plot.getWidth()/4));
                     if(spectrum.integrals.regions().size()!=regions+1)throw new AssertionError("Mouse drag did not create a manual region");

@@ -53,6 +53,7 @@ public class IntegrationUndoReference {
         Panel panel=new Panel();
         PanelLayoutIfc panelLayout=(PanelLayoutIfc)Proxy.newProxyInstance(PanelLayoutIfc.class.getClassLoader(),new Class<?>[]{PanelLayoutIfc.class},(p,m,a)->{
             if(m.getName().equals("add"))layout((AbstractViewableDataIfc)a[0]);
+            if(m.getName().equals("getVisibleUnits"))return new String[]{"ppm"};
             return null;
         });
         panel.setPanelLayout(panelLayout);

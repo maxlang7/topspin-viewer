@@ -192,11 +192,12 @@ public final class Viewer extends JFrame {
                 tool("integration","Define new region using cursor (toggle)",()->{defineRegion=!defineRegion;integrationAction=defineRegion?"define":"select";});
                 tool("integration","Define new region via dialog",this::regionDialog);
                 tool("integration","Cut integral in two parts (toggle)",()->{integrationAction=integrationAction.equals("cut")?"select":"cut";defineRegion=false;});editingTools.separator();
-                tool("integration","Delete selected regions",()->{if(selectedIntegral>=0){spectrum.integrals.remove(selectedIntegral);spectrum.integrals.normalize(spectrum.real,spectrum.left,spectrum.right);selectedIntegral=-1;plot.repaint();}});
+                tool("integration","Select/Deselect all regions (toggle)",()->{spectrum.integrals.toggleSelectAll();plot.repaint();});
+                tool("integration","Delete selected regions",()->{if(spectrum.integrals.removeSelected()){spectrum.integrals.normalize(spectrum.real,spectrum.left,spectrum.right);selectedIntegral=-1;plot.repaint();}});
                 tool("integration","Undo last region operation",()->{if(spectrum.integrals.undo()){spectrum.integrals.normalize(spectrum.real,spectrum.left,spectrum.right);selectedIntegral=-1;plot.repaint();}});editingTools.separator();
                 integrationDragControl("Interactive bias correction","bias");
                 integrationDragControl("Interactive slope correction","slope");
-                tool("integration","Set slope and bias to zero",()->{if(selectedIntegral>=0){var r=spectrum.integrals.regions().get(selectedIntegral);spectrum.integrals.replace(selectedIntegral,new IntegrationRegions.Region(r.left(),r.right(),0,0));plot.repaint();}});editingTools.separator();
+                tool("integration","Set slope and bias to zero",()->{for(int index:spectrum.integrals.selectedIndices()){var r=spectrum.integrals.regions().get(index);spectrum.integrals.replace(index,new IntegrationRegions.Region(r.left(),r.right(),0,0));}plot.repaint();});editingTools.separator();
                 tool("integration","Increase mouse sensitivity",()->integrationSensitivity*=2);
                 tool("integration","Decrease mouse sensitivity",()->integrationSensitivity/=2);
                 tool("integration","Reset mouse sensitivity",()->integrationSensitivity=1);editingTools.separator();
@@ -224,11 +225,14 @@ public final class Viewer extends JFrame {
     }
     private void adjustIntegral(String action,double amount) {
         if(action.equals("baseline")){integralBaseline-=amount*.001;plot.repaint();return;}
-        if(selectedIntegral<0){status.setText("Select an integral first");return;}
-        var r=spectrum.integrals.regions().get(selectedIntegral);
-        if(!(plot.viewLeft>r.left() && plot.viewRight<r.right())){status.setText("Integral region is outside the displayed region");return;}
-        if(action.equals("bias"))spectrum.integrals.adjustBias(selectedIntegral,amount,integrationSensitivity);
-        if(action.equals("slope"))spectrum.integrals.adjustSlope(selectedIntegral,amount,integrationSensitivity,spectrum.real,spectrum.left,spectrum.right);
+        var selected=spectrum.integrals.selectedIndices();
+        if(selected.isEmpty()){status.setText("Select an integral first");return;}
+        for(int index:selected) {
+            var r=spectrum.integrals.regions().get(index);
+            if(selected.size()==1 && !(plot.viewLeft>r.left() && plot.viewRight<r.right())){status.setText("Integral region is outside the displayed region");return;}
+            if(action.equals("bias"))spectrum.integrals.adjustBias(index,amount,integrationSensitivity);
+            if(action.equals("slope"))spectrum.integrals.adjustSlope(index,amount,integrationSensitivity,spectrum.real,spectrum.left,spectrum.right);
+        }
         plot.repaint();
     }
     private int maxAmplitude(int start,int end) {return Numerics.pivot(spectrum.real,spectrum.imaginary,start,end-start+1);}
@@ -263,6 +267,7 @@ public final class Viewer extends JFrame {
 
     private final class Plot extends JPanel {
         private BufferedImage logicalCanvas;
+        private final Map<Integer,Rectangle> integralHitAreas=new LinkedHashMap<>();
         double viewLeft,viewRight,gain=1,baseline=.05;int pivot;
         ViewRanges.Range verticalRange;
         boolean showFid;String dragAction="zoom";
@@ -276,6 +281,10 @@ public final class Viewer extends JFrame {
                     updateCursor(e);
                     pressX=lastX=e.getX();pressY=lastY=e.getY();
                     dragX=SwingUtilities.isLeftMouseButton(e) && (mode==Mode.INTEGRATE || drawingBounds().contains(e.getPoint()))?pressX:-1;
+                    if(spectrum!=null && mode==Mode.INTEGRATE && SwingUtilities.isLeftMouseButton(e)) {
+                        int hit=integralHit(e.getPoint());
+                        if(hit>=0){selectedIntegral=spectrum.integrals.selectRegion(hit,ppm(e.getX()),spectrum.left-spectrum.right,e.isShiftDown(),e.isControlDown());dragX=-1;repaint();}
+                    }
                     if(spectrum!=null && SwingUtilities.isRightMouseButton(e)) {
                         if(mode==Mode.PHASE && drawingBounds().contains(e.getPoint()))phasePopup(e);
                         else if(mode==Mode.INTEGRATE){selectRegion(ppm(e.getX()));JPopupMenu menu=new JPopupMenu();JMenuItem cal=new JMenuItem("Calibrate...");cal.addActionListener(x->calibrate());menu.add(cal);menu.show(Plot.this,e.getX(),e.getY());}
@@ -295,7 +304,7 @@ public final class Viewer extends JFrame {
                         else if(mode!=Mode.INTEGRATE && dragAction.equals("zoom")){
                             Rectangle selection=PlotSelection.horizontal(new Point(pressX,pressY),e.getPoint(),drawingBounds());
                             if(selection.width>0)setRange(ppm(selection.x),ppm(selection.x+selection.width));
-                        }else if(mode==Mode.INTEGRATE)selectRegion(ppm(e.getX()));
+                        }
                     }
                     dragX=-1;repaint();
                 }
@@ -328,6 +337,10 @@ public final class Viewer extends JFrame {
         void zoomFactor(double factor){if(spectrum==null)return;var range=ViewRanges.zoom(new ViewRanges.Range(viewLeft,viewRight),factor,new ViewRanges.Range(spectrum.left,spectrum.right));if(range!=null)setRange(range.start(),range.end());}
         void pan(double amount){if(spectrum==null)return;var range=ViewRanges.pan(new ViewRanges.Range(viewLeft,viewRight),amount,width(),new ViewRanges.Range(spectrum.left,spectrum.right));setRange(range.start(),range.end());}
         void previous(){if(!zoomHistory.isEmpty()){double[] range=zoomHistory.pop();viewLeft=range[0];viewRight=range[1];repaint();}}
+        int integralHit(Point point) {
+            for(var entry:integralHitAreas.entrySet())if(entry.getValue().contains(point))return entry.getKey();
+            return -1;
+        }
         void selectRegion(double ppm){selectedIntegral=-1;var regions=spectrum.integrals.regions();for(int i=0;i<regions.size();i++)if(ppm<=regions.get(i).left() && ppm>=regions.get(i).right()){selectedIntegral=i;break;}spectrum.integrals.select(selectedIntegral);repaint();}
         int pickPivot(int px) {
             int from=start(),to=end();var compressed=VisualNumerics.compress(Arrays.copyOfRange(spectrum.real,from,to+1),from,width());
@@ -429,6 +442,7 @@ public final class Viewer extends JFrame {
                 Assets.bold.deriveFont(14f),new Color(128,128,128),1,0);
             g.setClip(x,y,w,h);
             if(mode==Mode.PHASE){g.setColor(new Color(237,28,36));int px=(int)pixel(spectrum.ppm(pivot));if(px>x && px<x+w)g.drawLine(px,y,px,y+h);}
+            integralHitAreas.clear();
             if(mode==Mode.INTEGRATE || !spectrum.integrals.regions().isEmpty()) {
                 var regions=spectrum.integrals.regions();
                 java.util.List<Numerics.Integral> integrals=new ArrayList<>();
@@ -443,7 +457,7 @@ public final class Viewer extends JFrame {
                     Rectangle regionViewport=new Rectangle(begin,y,regionWidth,h);
                     int lastPoint=IntegralCurvePainter.paint(g,curve,r.left(),r.right(),regionLeft,regionRight,regionViewport,regionMapper,
                         common,IntegralCurvePainter.reference(curve),Math.max(1e-7,.8*integralGain));
-                    IntegralLabelPainter.paint(g,new Rectangle(begin,y,regionWidth,h),integral.normalized(spectrum.integrals.normalizingFactor),4,selectedIntegral==index);
+                    integralHitAreas.put(index,IntegralLabelPainter.paint(g,new Rectangle(begin,y,regionWidth,h),integral.normalized(spectrum.integrals.normalizingFactor),4,spectrum.integrals.isSelected(index)));
                     if(mode==Mode.INTEGRATE && (r.bias()!=0 || r.slope()!=0)) {
                         g.setClip(null);g.setColor(new Color(237,28,36));g.setFont(Assets.bold.deriveFont(14f));
                         g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING,RenderingHints.VALUE_TEXT_ANTIALIAS_ON);

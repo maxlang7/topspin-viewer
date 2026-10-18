@@ -13,6 +13,8 @@ public final class IntegrationRegions {
     private final List<Region> regions=new ArrayList<>();
     private List<Region> previous=List.of();
     private Region selectedObject;
+    private final Set<Region> selection=Collections.newSetFromMap(new IdentityHashMap<>());
+    private boolean selectAllNext=true;
     private int calibrationReference=0;
     private double calibrationValue=1;
     public double normalizingFactor=1;
@@ -20,17 +22,61 @@ public final class IntegrationRegions {
     public IntegrationRegions copy() {
         IntegrationRegions result=new IntegrationRegions();result.regions.addAll(regions);
         result.normalizingFactor=normalizingFactor;result.calibrationReference=calibrationReference;
-        result.calibrationValue=calibrationValue;return result;
+        result.calibrationValue=calibrationValue;result.selection.addAll(selection);
+        result.selectAllNext=selectAllNext;return result;
     }
     private void checkpoint() {previous=List.copyOf(regions);}
     public void select(int index) {selectedObject=index<0?null:regions.get(index);}
+    public boolean isSelected(int index) {return selection.contains(regions.get(index));}
+    public List<Integer> selectedIndices() {
+        List<Integer> result=new ArrayList<>();
+        for(int i=0;i<regions.size();i++)if(isSelected(i))result.add(i);
+        return result;
+    }
+    public void toggleSelectAll() {
+        selection.clear();if(selectAllNext)selection.addAll(regions);selectAllNext=!selectAllNext;
+    }
+    /** Selection flags and the last clicked object are independent in the original controller. */
+    public int selectRegion(int hit,double position,double fullWidth,boolean shift,boolean control) {
+        Region clicked=hit<0?null:regions.get(hit);selectedObject=clicked;
+        if(!shift && !control)selection.removeIf(region->region!=clicked);
+        if(clicked==null)return -1;
+        Region chosen=clicked;double width=fullWidth;
+        for(Region region:regions)if(position<=region.left() && position>=region.right() && region.left()-region.right()<width) {
+            chosen=region;width=region.left()-region.right();
+        }
+        if(!selection.remove(chosen)) {
+            selection.add(chosen);
+            if(shift) {
+                List<Region> ordered=sorted();int current=-1;
+                for(int i=0;i<ordered.size();i++)if(ordered.get(i)==chosen){current=i;break;}
+                int before=-1,after=-1;
+                for(int i=0;i<current;i++)if(selection.contains(ordered.get(i)))before=i;
+                for(int i=current+1;i<ordered.size();i++)if(selection.contains(ordered.get(i))){after=i;break;}
+                if(before>=0)selection.addAll(ordered.subList(before,current));
+                else if(after>=0)selection.addAll(ordered.subList(current,after));
+            }
+        }
+        for(int i=0;i<regions.size();i++)if(regions.get(i)==chosen)return i;
+        return -1;
+    }
+    public void selectContained(double a,double b) {
+        double left=Math.max(a,b),right=Math.min(a,b);
+        for(Region region:regions)if(left>=region.left() && right<=region.right())selection.add(region);
+    }
     public void add(double a,double b) {checkpoint();regions.add(new Region(Math.max(a,b),Math.min(a,b),0,0));}
     public void remove(int index) {
         checkpoint();if(regions.size()==1){calibrationReference=0;calibrationValue=1;}
-        regions.remove(index);
+        selection.remove(regions.remove(index));
+    }
+    public boolean removeSelected() {
+        if(selection.isEmpty())return false;
+        checkpoint();if(selection.size()==regions.size()){calibrationReference=0;calibrationValue=1;}
+        regions.removeIf(selection::contains);selection.clear();return true;
     }
     public void replace(int index,Region region) {
         Region old=regions.set(index,region);if(selectedObject==old)selectedObject=region;
+        if(selection.remove(old))selection.add(region);
     }
     public void adjustBias(int index,double amount,double sensitivity) {
         Region r=regions.get(index);double correction=amount*sensitivity*1000.0;
@@ -46,7 +92,7 @@ public final class IntegrationRegions {
         if(!Double.isFinite(position) || position<r.right() || position>r.left())return;
         double start=Math.min((r.left()-fullLeft)/(fullRight-fullLeft)*size,size-1.0);
         double cut=Math.min((position-fullLeft)/(fullRight-fullLeft)*size,size-1.0);
-        checkpoint();regions.remove(index);
+        checkpoint();selection.remove(regions.remove(index));
         regions.add(new Region(r.left(),position,r.bias(),r.slope()));
         regions.add(new Region(Math.min(fullLeft,position+1e-16),r.right(),r.bias()+(cut-start)*r.slope(),r.slope()));
     }
@@ -54,7 +100,7 @@ public final class IntegrationRegions {
         if(previous.isEmpty())return false;
         List<Region> current=List.copyOf(regions);
         double bias=selectedObject==null?0:selectedObject.bias(),slope=selectedObject==null?0:selectedObject.slope();
-        regions.clear();for(Region r:previous)regions.add(new Region(r.left(),r.right(),bias,slope));
+        selection.clear();regions.clear();for(Region r:previous)regions.add(new Region(r.left(),r.right(),bias,slope));
         previous=current;
         return true;
     }
