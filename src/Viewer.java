@@ -235,14 +235,8 @@ public final class Viewer extends JFrame {
     }
     private int maxAmplitude(int start,int end) {return Numerics.pivot(spectrum.real,spectrum.imaginary,start,end-start+1);}
     private void regionDialog() {
-        var format=new java.text.DecimalFormat("0.0000",java.text.DecimalFormatSymbols.getInstance(Locale.ROOT));
-        JTextField left=new JTextField(format.format(plot.viewLeft),8),right=new JTextField(format.format(plot.viewRight),8);
-        JPanel fields=new JPanel(new GridLayout(3,2,8,8));fields.add(new JLabel("F1 [ppm]"));fields.add(new JLabel(""));
-        fields.add(new JLabel("From "));fields.add(left);fields.add(new JLabel("To   "));fields.add(right);
-        JPanel panel=new JPanel(new BorderLayout(0,8));panel.add(new JLabel("Exact coordinates of integrated area"),BorderLayout.NORTH);panel.add(fields);
-        if(JOptionPane.showConfirmDialog(this,panel,"add",JOptionPane.OK_CANCEL_OPTION)==JOptionPane.OK_OPTION)perform(()->{
-            spectrum.integrals.addFromDialog(Double.parseDouble(left.getText()),Double.parseDouble(right.getText()),spectrum.real,spectrum.left,spectrum.right);plot.repaint();
-        });
+        double[] bounds=RangeEntryDialog.show(this,plot.viewLeft,plot.viewRight);
+        if(bounds!=null)perform(()->{spectrum.integrals.addFromDialog(bounds[0],bounds[1],spectrum.real,spectrum.left,spectrum.right);plot.repaint();});
     }
     private void calibrate() {
         if(selectedIntegral<0)return;String value=JOptionPane.showInputDialog(this,"Integral value","Calibrate integral",JOptionPane.PLAIN_MESSAGE);

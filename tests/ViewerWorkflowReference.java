@@ -61,6 +61,26 @@ public class ViewerWorkflowReference {
         if(spectrum.integrals.regions().size()!=count+1)throw new AssertionError("Dialog did not create a region");
         var added=spectrum.integrals.regions().get(count);
         if(added.left()!=8.5 || added.right()!=7.5 || added.bias()!=inherited.bias() || added.slope()!=inherited.slope())throw new AssertionError("Dialog did not inherit the last correction values");
+        for(String action:new String[]{"Cancel","Escape","Close","Enter"}) {
+            int before=spectrum.integrals.regions().size();
+            javax.swing.Timer dismiss=new javax.swing.Timer(100,null);dismiss.addActionListener(event->{
+                for(Window window:viewer.getOwnedWindows())if(window instanceof RangeEntryDialog dialog && dialog.isShowing()) {
+                    dismiss.stop();try {
+                        java.util.List<JTextField> fields=new ArrayList<>();collectFields(dialog,fields);fields.get(0).setText("6.25");fields.get(1).setText("5.75");
+                        switch(action) {
+                            case "Cancel"->textButton(dialog,"Cancel").doClick();
+                            case "Escape"->{var root=dialog.getRootPane();Object key=root.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).get(KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE,0));root.getActionMap().get(key).actionPerformed(new ActionEvent(root,ActionEvent.ACTION_PERFORMED,""));}
+                            case "Close"->dialog.dispatchEvent(new WindowEvent(dialog,WindowEvent.WINDOW_CLOSING));
+                            case "Enter"->fields.get(0).postActionEvent();
+                        }
+                    }catch(Throwable error){failure[0]=error;dialog.dispose();}
+                }
+            });dismiss.start();try{click(viewer,"Define new region via dialog");}finally{dismiss.stop();}
+            if(failure[0]!=null)throw new AssertionError("Region dialog "+action,failure[0]);
+            int expected=before+(action.equals("Enter")?1:0);
+            if(spectrum.integrals.regions().size()!=expected)throw new AssertionError("Region dialog "+action+" changed the wrong number of regions");
+            if(action.equals("Enter")){var region=spectrum.integrals.regions().get(before);if(region.left()!=6.25 || region.right()!=5.75)throw new AssertionError("Enter did not submit edited coordinates");}
+        }
     }
     private static void selectionWorkflow(Viewer viewer,Spectrum spectrum,Component plot) throws Exception {
         IntegrationRegions saved=spectrum.integrals;
