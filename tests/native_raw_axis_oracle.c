@@ -1,5 +1,5 @@
 #define _GNU_SOURCE
-#include <elf.h>
+#include "native_reference_elf.h"
 #include <inttypes.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -11,26 +11,12 @@
  * refresh, string allocation and cleanup calls are stubbed against an already
  * populated fixture. This checks scalar axis arithmetic, not file loading. */
 typedef struct {char *unit;int64_t points;double lower,upper;unsigned char continuous;} Scale;
-static FILE *source;
-static Elf64_Ehdr header;
-static void read_address(uint64_t address,void *output,size_t size) {
-    for(int i=0;i<header.e_phnum;i++) {
-        Elf64_Phdr segment;
-        if(fseek(source,(long)header.e_phoff+i*header.e_phentsize,SEEK_SET) || fread(&segment,sizeof segment,1,source)!=1)abort();
-        if(segment.p_type==PT_LOAD && address>=segment.p_vaddr && address+size<=segment.p_vaddr+segment.p_filesz) {
-            if(fseek(source,(long)(segment.p_offset+address-segment.p_vaddr),SEEK_SET) || fread(output,size,1,source)!=1)abort();
-            return;
-        }
-    }
-    fprintf(stderr,"Unmapped original address: 0x%" PRIx64 "\n",address);exit(2);
-}
 static void relative(unsigned char *code,size_t displacement,size_t next,size_t target) {
     int32_t delta=(int32_t)((int64_t)target-(int64_t)next);memcpy(code+displacement,&delta,sizeof delta);
 }
 int main(int argc,char **argv) {
     if(argc!=2)return 2;
-    source=fopen(argv[1],"rb");if(!source || fread(&header,sizeof header,1,source)!=1)return 2;
-    if(memcmp(header.e_ident,ELFMAG,SELFMAG) || header.e_machine!=EM_X86_64 || header.e_ident[EI_DATA]!=ELFDATA2LSB)return 2;
+    if(!reference_open(argv[1]))return 2;
     unsigned char *code=mmap(NULL,4096,PROT_READ|PROT_WRITE,MAP_PRIVATE|MAP_ANONYMOUS,-1,0);
     if(code==MAP_FAILED)return 2;
     read_address(0x63c340,code,0xda);
