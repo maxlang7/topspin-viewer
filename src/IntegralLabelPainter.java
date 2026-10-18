@@ -26,5 +26,17 @@ public final class IntegralLabelPainter {
         }
         g.dispose();return new Rectangle(x,bottom-2*bounds.width,w,2*bounds.width);
     }
+    public static void paintFactor(Graphics2D graphics,Rectangle viewport,double relative) {
+        NumberFormat format=NumberFormat.getNumberInstance(Locale.ROOT);format.setMaximumFractionDigits(2);format.setMinimumFractionDigits(0);
+        String label="0.1";
+        if(relative>1.001)label+="* "+format.format(relative);
+        else if(relative<.999)label+="/ "+format.format(1.0/relative);
+        Graphics2D g=(Graphics2D)graphics.create();g.setClip(null);g.setFont(Assets.bold.deriveFont(14f));g.setColor(new Color(237,28,36));
+        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING,RenderingHints.VALUE_ANTIALIAS_OFF);
+        g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING,RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+        Rectangle bounds=g.getFontMetrics().getStringBounds(label,g).getBounds();
+        int x=viewport.x+viewport.width/2-bounds.width/2,y=viewport.y+bounds.height;
+        g.drawRect(x-2,y+15,bounds.width+4,bounds.height+4);g.drawString(label,x,y+12+bounds.height);g.dispose();
+    }
     private IntegralLabelPainter(){}
 }

@@ -55,6 +55,8 @@ public class ViewerWorkflowReference {
                 plot.dispatchEvent(new MouseEvent(plot,MouseEvent.MOUSE_RELEASED,time+1,modifiers,x,y,1,false,MouseEvent.BUTTON1));
             }
             if(!spectrum.integrals.selectedIndices().equals(java.util.List.of(0,2)))throw new AssertionError("Ctrl-click did not select two labels");
+            click(viewer,"Integrals larger by factor 2");
+            if(spectrum.integrals.displayScale(0).factor()!=1.6 || spectrum.integrals.displayScale(1).factor()!=.8 || spectrum.integrals.displayScale(2).factor()!=1.6 || spectrum.integrals.displayScale(0).hideFactor())throw new AssertionError("Only selected integral displays should scale");
             click(viewer,"Delete selected regions");
             if(spectrum.integrals.regions().size()!=1)throw new AssertionError("Delete did not remove both selected regions");
             click(viewer,"Undo last region operation");

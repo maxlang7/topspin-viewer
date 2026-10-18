@@ -29,7 +29,7 @@ public final class Viewer extends JFrame {
     private boolean defineRegion=true;
     private IntegrationRegions sessionIntegrals;
     private double savedBaseline;
-    private double integrationSensitivity=1,integralGain=1,integralBaseline=.2;
+    private double integrationSensitivity=1,integralBaseline=.2;
     private String integrationAction="select";
     private final ArrayDeque<double[]> zoomHistory=new ArrayDeque<>();
     private final boolean warpPointer;
@@ -201,8 +201,8 @@ public final class Viewer extends JFrame {
                 tool("integration","Increase mouse sensitivity",()->integrationSensitivity*=2);
                 tool("integration","Decrease mouse sensitivity",()->integrationSensitivity/=2);
                 tool("integration","Reset mouse sensitivity",()->integrationSensitivity=1);editingTools.separator();
-                tool("integration","Integrals larger by factor 2",()->{integralGain*=2;plot.repaint();});
-                tool("integration","Integrals smaller by factor 2",()->{integralGain/=2;plot.repaint();});
+                tool("integration","Integrals larger by factor 2",()->{spectrum.integrals.scaleSelected(2);plot.repaint();});
+                tool("integration","Integrals smaller by factor 2",()->{spectrum.integrals.scaleSelected(.5);plot.repaint();});
                 editingTools.separator();integrationDragControl("Shift integrals up/down","baseline");editingTools.separator();
                 tool("integration","Return, save regions",()->perform(()->{saveResult();setMode(Mode.VIEW);}));tool("integration","Return, do NOT save regions",this::cancelIntegration);
             }
@@ -456,13 +456,15 @@ public final class Viewer extends JFrame {
                     int begin=regionMapper.screen(regionLeft,1),finish=regionMapper.screen(regionRight,1),regionWidth=Math.max(1,finish-begin);
                     Rectangle regionViewport=new Rectangle(begin,y,regionWidth,h);
                     int lastPoint=IntegralCurvePainter.paint(g,curve,r.left(),r.right(),regionLeft,regionRight,regionViewport,regionMapper,
-                        common,IntegralCurvePainter.reference(curve),Math.max(1e-7,.8*integralGain));
+                        common,IntegralCurvePainter.reference(curve),spectrum.integrals.displayScale(index).factor());
                     integralHitAreas.put(index,IntegralLabelPainter.paint(g,new Rectangle(begin,y,regionWidth,h),integral.normalized(spectrum.integrals.normalizingFactor),4,spectrum.integrals.isSelected(index)));
+                    var displayScale=spectrum.integrals.displayScale(index);
                     if(mode==Mode.INTEGRATE && (r.bias()!=0 || r.slope()!=0)) {
                         g.setClip(null);g.setColor(new Color(237,28,36));g.setFont(Assets.bold.deriveFont(14f));
                         g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING,RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
                         g.drawString("#",begin+regionWidth,Math.max(lastPoint+20,20));
                     }
+                    if(!displayScale.hideFactor())IntegralLabelPainter.paintFactor(g,regionViewport,displayScale.relative());
                     g.setClip(x,y,w,h);
                 }
             }

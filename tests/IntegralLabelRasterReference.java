@@ -26,6 +26,17 @@ public final class IntegralLabelRasterReference {
             long different=0;for(int y=0;y<expected.getHeight();y++)for(int x=0;x<expected.getWidth();x++){pixels++;if(expected.getRGB(x,y)!=actual.getRGB(x,y))different++;}
             if(different!=0)throw new AssertionError(different+" integral label pixels differ: width="+width+" value="+value+" digits="+digits+" selected="+selected);cases++;
         }
+        for(int width:new int[]{17,151})for(int scale:new int[]{1,2})
+        for(double factor:new double[]{.000001,.5,.9989,.999,1,1.001,1.0011,2,12.34567,1000000}) {
+            Rectangle viewport=new Rectangle(2,2,width,260);Data data=new Data(1);
+            View view=new View();view.setViewedData(data);view.setViewport(viewport);view.setProperty("SHOW_INTEGRALS","no");view.setProperty("SHOW_INTEGRAL_LABEL","yes");
+            view.setProperty("AXIS_FONT","FN=Arial,FY=BOLD,FS=14");view.setProperty("DATA_COLOR_2","237 28 36");view.setFactorDisplay(false);view.setRelScalingFactor(factor);
+            var expected=AxisRasterReference.canvas(width,260,scale);var actual=AxisRasterReference.canvas(width,260,scale);
+            Graphics2D g=expected.createGraphics();g.scale(scale,scale);view.paint(new AxisRasterReference.OriginalRenderer(g,Assets.bold.deriveFont(14f)));g.dispose();
+            g=actual.createGraphics();g.scale(scale,scale);IntegralLabelPainter.paint(g,viewport,1,4,false);IntegralLabelPainter.paintFactor(g,viewport,factor);g.dispose();
+            long different=0;for(int y=0;y<expected.getHeight();y++)for(int x=0;x<expected.getWidth();x++){pixels++;if(expected.getRGB(x,y)!=actual.getRGB(x,y))different++;}
+            if(different!=0)throw new AssertionError(different+" factor label pixels differ: factor="+factor+" width="+width+" scale="+scale);cases++;
+        }
         System.out.println("PASS "+cases+" original integral label cases, "+pixels+" exact pixels");
     }
 }

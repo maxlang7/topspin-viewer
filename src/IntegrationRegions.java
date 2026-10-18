@@ -15,6 +15,17 @@ public final class IntegrationRegions {
     private Region selectedObject;
     private final Set<Region> selection=Collections.newSetFromMap(new IdentityHashMap<>());
     private boolean selectAllNext=true;
+    public record DisplayScale(double factor,double relative,boolean hideFactor) {}
+    private static final DisplayScale DEFAULT_DISPLAY=new DisplayScale(.8,1,true);
+    private final Map<Region,DisplayScale> displayScales=new IdentityHashMap<>();
+    public DisplayScale displayScale(int index) {return displayScales.getOrDefault(regions.get(index),DEFAULT_DISPLAY);}
+    public void scaleSelected(double amount) {
+        List<Integer> selected=selectedIndices();boolean hide=selected.isEmpty() || selected.size()==regions.size();
+        for(int index=0;index<regions.size();index++)if(selected.isEmpty() || isSelected(index)) {
+            DisplayScale old=displayScale(index);
+            displayScales.put(regions.get(index),new DisplayScale(Math.max(1e-7,amount*old.factor()),amount*old.relative(),hide));
+        }
+    }
     private int calibrationReference=0;
     private double calibrationValue=1;
     public double normalizingFactor=1;
@@ -23,7 +34,7 @@ public final class IntegrationRegions {
         IntegrationRegions result=new IntegrationRegions();result.regions.addAll(regions);
         result.normalizingFactor=normalizingFactor;result.calibrationReference=calibrationReference;
         result.calibrationValue=calibrationValue;result.selection.addAll(selection);
-        result.selectAllNext=selectAllNext;return result;
+        result.selectAllNext=selectAllNext;result.displayScales.putAll(displayScales);return result;
     }
     private void checkpoint() {previous=List.copyOf(regions);}
     public void select(int index) {selectedObject=index<0?null:regions.get(index);}
@@ -67,16 +78,18 @@ public final class IntegrationRegions {
     public void add(double a,double b) {checkpoint();regions.add(new Region(Math.max(a,b),Math.min(a,b),0,0));}
     public void remove(int index) {
         checkpoint();if(regions.size()==1){calibrationReference=0;calibrationValue=1;}
-        selection.remove(regions.remove(index));
+        Region removed=regions.remove(index);selection.remove(removed);displayScales.remove(removed);
     }
     public boolean removeSelected() {
         if(selection.isEmpty())return false;
         checkpoint();if(selection.size()==regions.size()){calibrationReference=0;calibrationValue=1;}
+        for(Region region:selection)displayScales.remove(region);
         regions.removeIf(selection::contains);selection.clear();return true;
     }
     public void replace(int index,Region region) {
         Region old=regions.set(index,region);if(selectedObject==old)selectedObject=region;
         if(selection.remove(old))selection.add(region);
+        DisplayScale display=displayScales.remove(old);if(display!=null)displayScales.put(region,display);
     }
     public void adjustBias(int index,double amount,double sensitivity) {
         Region r=regions.get(index);double correction=amount*sensitivity*1000.0;
@@ -92,7 +105,7 @@ public final class IntegrationRegions {
         if(!Double.isFinite(position) || position<r.right() || position>r.left())return;
         double start=Math.min((r.left()-fullLeft)/(fullRight-fullLeft)*size,size-1.0);
         double cut=Math.min((position-fullLeft)/(fullRight-fullLeft)*size,size-1.0);
-        checkpoint();selection.remove(regions.remove(index));
+        checkpoint();selection.remove(regions.remove(index));displayScales.remove(r);
         regions.add(new Region(r.left(),position,r.bias(),r.slope()));
         regions.add(new Region(Math.min(fullLeft,position+1e-16),r.right(),r.bias()+(cut-start)*r.slope(),r.slope()));
     }
@@ -100,7 +113,7 @@ public final class IntegrationRegions {
         if(previous.isEmpty())return false;
         List<Region> current=List.copyOf(regions);
         double bias=selectedObject==null?0:selectedObject.bias(),slope=selectedObject==null?0:selectedObject.slope();
-        selection.clear();regions.clear();for(Region r:previous)regions.add(new Region(r.left(),r.right(),bias,slope));
+        selection.clear();displayScales.clear();regions.clear();for(Region r:previous)regions.add(new Region(r.left(),r.right(),bias,slope));
         previous=current;
         return true;
     }
