@@ -12,13 +12,19 @@ public final class DatasetOpener {
             if(root.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(".zip"))root=extract(root);
             else root=root.getParent();
         }
-        if(Files.isRegularFile(root.resolve("procs")) || Files.isRegularFile(root.resolve("acqus")))return List.of(root);
+        if(Files.isRegularFile(root.resolve("procs")) || Files.isRegularFile(root.resolve("acqus")) || isRawProcessingDirectory(root))return List.of(root);
         List<Path> experiments=new ArrayList<>();
         try(var files=Files.find(root,6,(p,a)->a.isRegularFile() && p.getFileName().toString().equals("acqus"))) {
             for(Path file:files.sorted().toList())experiments.add(file.getParent());
         }
         if(experiments.isEmpty())throw new IOException("No Bruker acquisitions found in "+selected);
         return List.copyOf(experiments);
+    }
+    static boolean isRawProcessingDirectory(Path directory) {
+        Path pdata=directory.getParent(),experiment=pdata==null?null:pdata.getParent();
+        return pdata!=null && "pdata".equals(pdata.getFileName().toString()) && experiment!=null
+            && Files.isRegularFile(directory.resolve("proc")) && !Files.isRegularFile(directory.resolve("1r"))
+            && Files.isRegularFile(experiment.resolve("acqus")) && Files.isRegularFile(experiment.resolve("fid"));
     }
     private static Path extract(Path archive) throws IOException {
         Path cache=Path.of("build/opened-archives").toAbsolutePath();Files.createDirectories(cache);

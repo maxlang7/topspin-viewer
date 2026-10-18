@@ -22,7 +22,7 @@ public final class Spectrum {
 
     public Spectrum(Path selected) throws IOException {
         Path input=selected.toRealPath();if(Files.isRegularFile(input))input=input.getParent();
-        if(Files.isRegularFile(input.resolve("procs")))path=input;
+        if(Files.isRegularFile(input.resolve("procs")) || DatasetOpener.isRawProcessingDirectory(input))path=input;
         else if(Files.isRegularFile(input.resolve("acqus"))) {
             Path pdata=input.resolve("pdata/1");
             if(!Files.isRegularFile(pdata.resolve("proc")))throw new IOException("No processing parameters in pdata/1");

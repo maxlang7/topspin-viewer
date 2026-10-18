@@ -18,10 +18,22 @@ public class DatasetOpeningReference {
             throw new AssertionError("Archive opening changed data");
         if(!DatasetOpener.candidates(experiment.getParent()).contains(experiment))throw new AssertionError("Nested acquisition discovery failed");
         if(!DatasetOpener.candidates(experiment.resolve("fid")).equals(List.of(experiment)))throw new AssertionError("Raw-file opening failed");
+        Path rawExperiment=root.resolve("raw/10"),rawProcessing=rawExperiment.resolve("pdata/7");Files.createDirectories(rawProcessing);
+        for(String name:new String[]{"acqus","fid"})Files.copy(experiment.resolve(name),rawExperiment.resolve(name));
+        Files.copy(experiment.resolve("pdata/1/proc"),rawProcessing.resolve("proc"));
+        Path rawCandidate=DatasetOpener.candidates(rawProcessing).get(0);
+        if(!rawCandidate.equals(rawProcessing.toRealPath()))throw new AssertionError("Raw processing folder discovery failed");
+        Spectrum rawOpened=new Spectrum(rawCandidate);
+        var rawExpected=new RawDataset(rawExperiment,rawProcessing.resolve("proc")).process();
+        if(!Arrays.equals(rawOpened.real,rawExpected.real()) || !Arrays.equals(rawOpened.imaginary,rawExpected.imaginary()) || rawOpened.nc!=rawExpected.nc())throw new AssertionError("Raw processing folder opening changed results");
+        if(!DatasetOpener.candidates(rawProcessing.resolve("proc")).equals(List.of(rawProcessing.toRealPath())))throw new AssertionError("Raw processing parameter file discovery failed");
+        Spectrum rawFileOpened=new Spectrum(rawProcessing.resolve("proc"));
+        if(!Arrays.equals(rawFileOpened.real,rawOpened.real) || !Arrays.equals(rawFileOpened.imaginary,rawOpened.imaginary))throw new AssertionError("Raw parameter-file opening changed processing number or values");
+        if(Files.exists(rawProcessing.resolve("1r")) || Files.exists(rawProcessing.resolve("procs")))throw new AssertionError("Opening raw data wrote processing output");
         Path invalid=root.resolve("invalid.zip");
         try(ZipOutputStream zip=new ZipOutputStream(Files.newOutputStream(invalid,StandardOpenOption.CREATE_NEW))) {zip.putNextEntry(new ZipEntry("../../escape.txt"));zip.write(1);zip.closeEntry();}
         try {DatasetOpener.candidates(invalid);throw new AssertionError("Archive path escaped extraction root");}
         catch(java.io.IOException expected) {if(!expected.getMessage().equals("Invalid archive entry path"))throw expected;}
-        System.out.println("PASS loose folder, nested folder, raw filename and ZIP opening; "+original.real.length+" complex samples preserved");
+        System.out.println("PASS loose folder, nested folder, raw filename, raw-only processing folder/parameter file and ZIP opening; "+original.real.length+" complex samples preserved");
     }
 }

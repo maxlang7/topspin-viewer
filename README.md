@@ -38,6 +38,8 @@ The application does not load Bruker classes, executables, processing libraries,
 The font implementation was checked against the public [Wine 11 glyph rasterizer](https://github.com/wine-mirror/wine/blob/wine-11.0/dlls/win32u/freetype.c), [GDI intensity rules](https://github.com/wine-mirror/wine/blob/wine-11.0/dlls/win32u/dibdrv/graphics.c), and [OpenJDK LCD blending](https://github.com/openjdk/jdk11u/blob/master/src/java.desktop/share/native/libfontmanager/DrawGlyphList.c). `tests/capture_windows_text.py` regenerates an on-screen font reference using the bundled Windows JVM without loading TopSpin classes or accessing licensing services; compile `tests/WindowsTextReference.java` with `javac --release 11 -d build/test` first and choose a fresh capture filename.
 - Returning and saving updates the current processing number, with complete before/after versions retained under `pdata/.topspin-viewer-history`. Failure tests cover invalid staged data and rollback after components have been replaced and a new table created. Preparing a phase save uses a separate model so a failed save cannot apply the phase twice.
 
+Selecting a raw-only `pdata/<number>` folder or its `proc` file opens that processing number directly and processes in memory without creating `1r` or `procs`.
+
 Run `bash verify.sh` for the saved-reference and vendor Java comparisons. Reference data is local under ignored `artifacts/`; reference-generation scripts require the licensed TopSpin installation and operate only on isolated dataset copies. Original source inventories are checked separately by SHA256.
 
 ## Remaining work
