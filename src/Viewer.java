@@ -106,11 +106,10 @@ public final class Viewer extends JFrame {
         JPanel title=new JPanel(new BorderLayout());title.setOpaque(false);
         JButton data=new JButton("☷  Data");data.setBackground(new Color(175,201,216));data.setPreferredSize(new Dimension(72,32));
         data.addActionListener(e->chooseOpen());title.add(data,BorderLayout.WEST);
-        JPanel searchPanel=new JPanel(new BorderLayout(6,8));searchPanel.setBackground(Color.WHITE);
-        searchPanel.setBorder(BorderFactory.createEmptyBorder(8,4,8,4));
-        JTextField search=new JTextField();search.putClientProperty("JTextField.placeholderText","Search...");
-        searchPanel.add(search);JButton open=new JButton("Open...");open.addActionListener(e->chooseOpen());searchPanel.add(open,BorderLayout.EAST);
-        JPanel north=new JPanel(new BorderLayout(0,8));north.setOpaque(false);north.add(title,BorderLayout.NORTH);north.add(searchPanel);panel.add(north,BorderLayout.NORTH);
+        JPanel searchPanel=new JPanel(new FlowLayout(FlowLayout.LEFT,5,8));searchPanel.setBackground(Color.WHITE);
+        searchPanel.setPreferredSize(new Dimension(1,50));
+        JTextField search=new BrowserSearchField();search.setPreferredSize(new Dimension(149,34));searchPanel.add(search);
+        JPanel north=new JPanel(new BorderLayout(0,9));north.setOpaque(false);north.add(title,BorderLayout.NORTH);north.add(searchPanel);panel.add(north,BorderLayout.NORTH);
         tree.setRootVisible(false);tree.setBackground(Color.WHITE);
         tree.addMouseListener(new MouseAdapter(){@Override public void mouseClicked(MouseEvent e){
             if(e.getClickCount()==2 && tree.getLastSelectedPathComponent() instanceof DefaultMutableTreeNode node && node.getUserObject() instanceof Path p)open(p);
