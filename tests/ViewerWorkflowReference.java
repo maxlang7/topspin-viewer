@@ -141,10 +141,17 @@ public class ViewerWorkflowReference {
                     ViewRanges.Range expectedZoom=ViewRanges.zoom(new ViewRanges.Range(spectrum.left,spectrum.right),2,new ViewRanges.Range(spectrum.left,spectrum.right));
                     if(!zoomed.equals(expectedZoom))throw new AssertionError("Viewer zoom differs");
                     command(viewer,".all");
+                    DatasetTabs tabs=(DatasetTabs)field(viewer,"datasetTabs");
+                    if(!tabs.selected().equals("SPECTRUM"))throw new AssertionError("Spectrum tab was not initially selected");
+                    textButton(viewer.getContentPane(),"FID").doClick();
+                    if(!tabs.selected().equals("FID") || !(boolean)field(displayedPlot,"showFid") || spectrum.raw==null)throw new AssertionError("FID tab did not open raw data");
+                    if(!Arrays.equals(before,spectrum.real))throw new AssertionError("FID viewing changed the processed spectrum");
                     textButton(viewer.getContentPane(),"INTEGRALS").doClick();
+                    if(!tabs.selected().equals("INTEGRALS"))throw new AssertionError("Integral tab was not selected");
                     IntegralTable table=(IntegralTable)field(viewer,"integralTable");
                     if(!table.isShowing() || field(viewer,"mode")!=Viewer.Mode.VIEW || table.table.getRowCount()!=regions)throw new AssertionError("Integral tab did not display the table");
                     textButton(viewer.getContentPane(),"SPECTRUM").doClick();
+                    if(!tabs.selected().equals("SPECTRUM") || (boolean)field(displayedPlot,"showFid"))throw new AssertionError("Spectrum tab did not restore spectrum display");
                     if(!((Component)field(viewer,"plot")).isShowing())throw new AssertionError("Spectrum tab did not restore plot");
                     command(viewer,".ph");JButton phase=button(viewer.getContentPane(),"0 order correction");long time=System.currentTimeMillis();
                     phase.dispatchEvent(new MouseEvent(phase,MouseEvent.MOUSE_PRESSED,time,InputEvent.BUTTON1_DOWN_MASK,10,5,1,false,MouseEvent.BUTTON1));
@@ -208,11 +215,15 @@ public class ViewerWorkflowReference {
                     }
                     BrukerDataset reopened=new BrukerDataset(saved);
                     if(!Arrays.equals(reopened.real,spectrum.real) || !Arrays.equals(reopened.imaginary,spectrum.imaginary))throw new AssertionError("Saved phase differs from reopened view");
+                    textButton(viewer.getContentPane(),"FID").doClick();viewer.open(saved);
+                    DatasetTabs reopenedTabs=(DatasetTabs)field(viewer,"datasetTabs");Spectrum openedAgain=(Spectrum)field(viewer,"spectrum");
+                    if(!reopenedTabs.selected().equals("SPECTRUM") || (boolean)field(field(viewer,"plot"),"showFid"))throw new AssertionError("Opening another dataset retained the FID display state");
+                    if(!Arrays.equals(reopened.real,openedAgain.real))throw new AssertionError("Tab navigation changed saved data");
                     BufferedImage image=new BufferedImage(viewer.getContentPane().getWidth()*2,viewer.getContentPane().getHeight()*2,BufferedImage.TYPE_INT_ARGB);
                     Graphics2D graphics=image.createGraphics();graphics.scale(2,2);viewer.getContentPane().printAll(graphics);graphics.dispose();ImageIO.write(image,"png",root.resolve("viewer.png").toFile());
                 }catch(Exception error){throw new RuntimeException(error);}
             });
         } finally {SwingUtilities.invokeAndWait(()->reference[0].dispose());}
-        System.out.println("PASS viewer open, integral table tabs, phase preset/cancel/save/reopen, manual region drag/undo/cancel; "+root);
+        System.out.println("PASS viewer open, spectrum/integral/FID tabs and reopen reset, phase preset/cancel/save/reopen, manual region dialog/drag/undo/cancel; "+root);
     }
 }
