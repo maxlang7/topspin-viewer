@@ -58,14 +58,11 @@ public final class Viewer extends JFrame {
         JPanel first=new JPanel(new BorderLayout());first.setBackground(top);first.setPreferredSize(new Dimension(1,50));
         CardLayout sections=new CardLayout();JPanel second=new JPanel(sections);second.setBackground(lower);
         JPanel nav=new JPanel(new FlowLayout(FlowLayout.LEFT,0,0));nav.setOpaque(false);
-        JButton menu=Assets.button("phase","<html><b>Click here to access commands",this::fileMenu,66,50);
+        JButton menu=Assets.button("phase","<html><b>Click here to access commands",this::fileMenu,65,50);
         menu.setBackground(top);nav.add(menu);
-        for(String name:new String[]{"Process","Analyze"}) {
-            JButton tab=new JButton(name);tab.setForeground(ink);tab.setBackground(lower);
-            tab.setFont(Assets.regular.deriveFont(14f));
-            tab.setPreferredSize(new Dimension(75,50));tab.setBorder(BorderFactory.createLineBorder(new Color(0,24,43)));
-            tab.addActionListener(e->sections.show(second,name));nav.add(tab);
-        }
+        NavigationTabs navigation=new NavigationTabs();
+        navigation.addTab("Process",75,0,()->sections.show(second,"Process"));
+        navigation.addTab("Analyze",74,1,()->sections.show(second,"Analyze"));nav.add(navigation);
         first.add(nav,BorderLayout.WEST);
         JLabel title=new JLabel("TopSpin Processing",SwingConstants.CENTER);title.setForeground(Color.WHITE);title.setFont(Assets.regular.deriveFont(14f));first.add(title);
         Ribbon processing=new Ribbon();

@@ -26,6 +26,10 @@ public final class NativeText {
         return result;
     }
     public static void draw(Graphics2D g,Font font,String text,double x,double baseline,Color foreground,Color background) {
+        draw(g,font,text,x,baseline,foreground,background,0);
+    }
+    /** A separate first-glyph origin reproduces the retained HTML tab labels. */
+    public static void draw(Graphics2D g,Font font,String text,double x,double baseline,Color foreground,Color background,double firstGlyphOffset) {
         if(text.isEmpty())return;
         double sx=Math.abs(g.getTransform().getScaleX()),sy=Math.abs(g.getTransform().getScaleY());
         FontRenderContext context=new FontRenderContext(AffineTransform.getScaleInstance(sx,sy),RenderingHints.VALUE_TEXT_ANTIALIAS_LCD_HRGB,RenderingHints.VALUE_FRACTIONALMETRICS_OFF);
@@ -34,7 +38,7 @@ public final class NativeText {
         int[][] glyphs=new int[count][];int[] positions=new int[count];int left=0,top=0,right=0,bottom=0;
         for(int i=0;i<count;i++) {
             int[] mask=mask(height,vector.getGlyphCode(i));glyphs[i]=mask;
-            positions[i]=(int)Math.round(vector.getGlyphPosition(i).getX()*sx);
+            positions[i]=(int)Math.round((vector.getGlyphPosition(i).getX()+(i==0?firstGlyphOffset:0))*sx);
             left=Math.min(left,positions[i]+mask[0]);right=Math.max(right,positions[i]+mask[0]+mask[2]);
             top=Math.min(top,-mask[1]);bottom=Math.max(bottom,-mask[1]+mask[3]);
         }
