@@ -14,11 +14,16 @@ public class SpectrumRasterDifferential {
     }
     static long pixels;static int cases;
     private static void compare(double[] data,int width,int height,int scale,double baseline,double gain,double viewLeft,double viewRight) throws Exception {
+        compare(data,width,height,scale,baseline,gain,12,-2,viewLeft,viewRight);
+    }
+    private static void compare(double[] data,int width,int height,int scale,double baseline,double gain,double fullLeft,double fullRight,double viewLeft,double viewRight) throws Exception {
         var original=new VendorDifferential.ReferenceData(data);
+        String unit=fullLeft<fullRight?"s":"";
+        original.setFullPhysicalRange(new de.bruker.nmr.jview.ifc.PhysicalRangeIfc[]{new de.bruker.nmr.jview.data.PhysicalRange(fullLeft,fullRight,unit)});
         original.getProperties().setProperty("$localDATA_REF_INTENSITY","0");
         SpecView1D view=new SpecView1D();view.setViewedData(original);view.setProperty("DATA_COLOR","0 0 255");
         view.setViewport(new Rectangle(2,2,width,height));
-        view.getCoordinateMapper()[0].setPhysicalMapping(viewLeft,viewRight);view.getCoordinateMapper()[0].setScreenMapping(2,width+1);
+        view.getCoordinateMapper()[0].setPhysicalMapping(new de.bruker.nmr.jview.data.PhysicalRange(viewLeft,viewRight,unit));view.getCoordinateMapper()[0].setScreenMapping(2,width+1);
         double min=Arrays.stream(data).min().orElseThrow(),max=Arrays.stream(data).max().orElseThrow(),span=max-min;
         if(span==0){min-=1;span=max-min;}
         view.getValueMapper().setPhysicalMapping(min,max);view.getValueMapper().setScreenMapping(2,height+1);
@@ -30,7 +35,7 @@ public class SpectrumRasterDifferential {
         double left=-span*baseline;
         var range=view.getRange();double[] visible=original.getDataDouble(range);int start=original.getIndexRange(range)[0].getStart();
         SpectrumPainter.paint(g,visible,start,2,2,width,height,VisualNumerics.horizontal(viewLeft,viewRight,2,width+1),
-            VisualNumerics.vertical(left,left+span,2,height+1),12,-2,data.length,gain);g.dispose();
+            VisualNumerics.vertical(left,left+span,2,height+1),fullLeft,fullRight,data.length,gain);g.dispose();
         long diff=0;for(int y=0;y<actual.getHeight();y++)for(int x=0;x<actual.getWidth();x++) {
             pixels++;if(actual.getRGB(x,y)!=expected.getRGB(x,y))diff++;
         }
@@ -53,6 +58,15 @@ public class SpectrumRasterDifferential {
             for(int width:new int[]{31,257})compare(data,width,173,2,.15,1,range[0],range[1]);
         }
         for(double constant:new double[]{0,17,-123}){double[] data=new double[256];Arrays.fill(data,constant);compare(data,257,173,2,.15,1,12,-2);}
-        System.out.println("PASS "+cases+" spectrum raster cases, "+pixels+" exact pixel comparisons");
+        int spectrumCases=cases;long spectrumPixels=pixels;
+        for(int n:new int[]{4,17,71,256,4096,32768})for(double duration:new double[]{1e-6,.128,2.730666666666667}) {
+            double[] data=new double[n];
+            for(int i=0;i<n;i++)data[i]=Math.exp(-i/(n*.15))*Math.cos(i*.37)*1e8;
+            for(int width:new int[]{31,1033})for(int scale:new int[]{1,2}) {
+                compare(data,width,173,scale,.5,1,0,duration,0,duration);
+                compare(data,width,173,scale,.5,.5,0,duration,duration*.125,duration*.625);
+            }
+        }
+        System.out.println("PASS "+spectrumCases+" spectrum raster cases, "+spectrumPixels+" exact pixel comparisons; "+(cases-spectrumCases)+" ascending-time FID-like trace cases, "+(pixels-spectrumPixels)+" exact pixels");
     }
 }

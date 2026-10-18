@@ -21,8 +21,8 @@ public class AxisRasterReference {
     public static void main(String[] args) throws Exception {
         Assets.load();long compared=0;int cases=0;
         for(int width:new int[]{31,257,1033})for(int scale:new int[]{1,2})for(int position:new int[]{1,2})for(int offset:new int[]{0,2})
-        for(double cursorFraction:new double[]{Double.NaN,.001,.25,.97,1.2})for(double[] range:new double[][]{{12,-2},{7.321,7.019},{-23.001,102.345},{.000001,.000007},{3e8,9e8}}) {
-            String unit=range[0]<.001 && range[0]>0?"s":range[0]>1e6?"Hz":"ppm";
+        for(double cursorFraction:new double[]{Double.NaN,.001,.25,.97,1.2})for(double[] range:new double[][]{{12,-2},{7.321,7.019},{-23.001,102.345},{.000001,.000007},{3e8,9e8},{0,2.730666666666667},{0,.000001}}) {
+            String unit=range[0]==0 || range[0]<.001 && range[0]>0?"s":range[0]>1e6?"Hz":"ppm";
             int height=29;Rectangle viewport=new Rectangle(2,2,width,height);Font font=Assets.bold.deriveFont(14f);
             Axis axis=new Axis();axis.setViewport(viewport);axis.setPosition(position);axis.setOffset(offset);axis.setUnit(unit);
             axis.setProperty("AXIS_COLOR","128 128 128");axis.setProperty("AXIS_FONT","FN=Arial,FY=BOLD,FS=14");
