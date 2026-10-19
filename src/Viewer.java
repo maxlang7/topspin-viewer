@@ -170,7 +170,7 @@ public final class Viewer extends JFrame {
             if(choice==null)return;selected=(Path)choice;
         }
         Spectrum opened=new Spectrum(selected);
-        spectrum=opened;selectedIntegral=-1;ph0=ph1=0;mode=Mode.VIEW;surfaceLayout.show(surface,"plot");datasetLabel.setText(spectrum.label()+"  "+spectrum.path);plot.showFid=false;plot.full();rebuildModeBar();datasetBrowser.opened(spectrum);status.setText("Dataset opened");
+        spectrum=opened;selectedIntegral=-1;ph0=ph1=0;mode=Mode.VIEW;surfaceLayout.show(surface,"plot");datasetLabel.setText(spectrum.label()+"  "+spectrum.path);plot.resetData();rebuildModeBar();datasetBrowser.opened(spectrum);status.setText("Dataset opened");
     });}
     private void requireSpectrum() {if(spectrum==null)throw new IllegalStateException("Open a dataset first");}
     private void setMode(Mode next) {
@@ -179,7 +179,7 @@ public final class Viewer extends JFrame {
         if(mode==Mode.INTEGRATE && next!=Mode.INTEGRATE)plot.setBaseline(savedBaseline);
         mode=next;ph0=ph1=0;phaseOrder=0;
         surfaceLayout.show(surface,"plot");
-        plot.showFid=false;
+        plot.showRaw(false);
         if(next==Mode.INTEGRATE){sessionIntegrals=spectrum.integrals.copy();spectrum.integrals.resetLastCorrections();savedBaseline=plot.baseline;plot.setBaseline(.15);defineRegion=!spectrum.integrals.regions().isEmpty();integrationAction=defineRegion?"define":"select";}
         if(next==Mode.PHASE)plot.pivot=maxAmplitude(plot.start(),plot.end());
         rebuildModeBar();plot.repaint();
@@ -192,7 +192,7 @@ public final class Viewer extends JFrame {
                 if(name.equals("INTEGRALS")){integralTable.load(spectrum);surfaceLayout.show(surface,"integrals");}
                 else {
                     if(name.equals("FID") && spectrum.raw==null)spectrum.raw=new RawDataset(spectrum.experiment,spectrum.path.resolve("proc"));
-                    plot.showFid=name.equals("FID");surfaceLayout.show(surface,"plot");plot.repaint();
+                    plot.showRaw(name.equals("FID"));surfaceLayout.show(surface,"plot");plot.repaint();
                 }
                 datasetTabs.select(name);
             }));modeBar.add(datasetTabs);
@@ -289,6 +289,9 @@ public final class Viewer extends JFrame {
         private final Map<Integer,Rectangle> integralHitAreas=new LinkedHashMap<>();
         double viewLeft,viewRight,gain=1,baseline=.05;int pivot;
         ViewRanges.Range verticalRange;
+        RawTrace rawTrace;
+        private record ViewState(double left,double right,double gain,double baseline,ViewRanges.Range vertical,java.util.List<double[]> history){}
+        private ViewState spectrumView,fidView;
         boolean showFid;String dragAction="zoom";
         int pressX,pressY,lastY,lastX,dragX=-1;
         Point cursorPoint;Double cursorValue;
@@ -333,7 +336,7 @@ public final class Viewer extends JFrame {
             };addMouseListener(mouse);addMouseMotionListener(mouse);addMouseWheelListener(mouse);
         }
         private void updateCursor(MouseEvent event) {
-            if(spectrum!=null && !showFid && drawingBounds().contains(event.getPoint())){cursorPoint=event.getPoint();cursorValue=ppm(event.getX());}
+            if(spectrum!=null && drawingBounds().contains(event.getPoint())){cursorPoint=event.getPoint();cursorValue=ppm(event.getX());}
             else if(mode!=Mode.INTEGRATE){cursorPoint=null;cursorValue=null;}
             repaint();
         }
@@ -347,14 +350,31 @@ public final class Viewer extends JFrame {
         int width(){return Math.max(1,getWidth()-33);}int height(){return Math.max(1,getHeight()-top()-29);}int top(){return mode==Mode.PHASE?2+PhaseCaption.height():2;}
         double ppm(int x){return VisualNumerics.horizontal(viewLeft,viewRight,2,2+width()).physical(x);}
         double pixel(double value){return VisualNumerics.horizontal(viewLeft,viewRight,2,2+width()).screen(value,1);}
-        int start(){return spectrum.index(viewLeft);}int end(){return spectrum.index(viewRight);}
-        void full(){if(spectrum!=null){viewLeft=spectrum.left;viewRight=spectrum.right;cursorPoint=null;cursorValue=null;double minimum=Arrays.stream(spectrum.real).min().orElse(0),maximum=Arrays.stream(spectrum.real).max().orElse(1);if(maximum==minimum)minimum-=1;verticalRange=new ViewRanges.Range(minimum,maximum);}gain=1;setBaseline(.05);zoomHistory.clear();repaint();}
+        int start(){return showFid?rawTrace.index(viewLeft):spectrum.index(viewLeft);}int end(){return showFid?rawTrace.index(viewRight):spectrum.index(viewRight);}
+        ViewRanges.Range fullRange(){return showFid?rawTrace.fullRange():new ViewRanges.Range(spectrum.left,spectrum.right);}
+        void resetData(){showFid=false;rawTrace=null;spectrumView=fidView=null;full();}
+        void showRaw(boolean show) {
+            if(show==showFid)return;
+            if(show && rawTrace==null)try{rawTrace=new RawTrace(spectrum.raw);}catch(java.io.IOException error){throw new IllegalArgumentException(error.getMessage(),error);}
+            ViewState previous=new ViewState(viewLeft,viewRight,gain,baseline,verticalRange,new ArrayList<>(zoomHistory));
+            if(showFid)fidView=previous;else spectrumView=previous;
+            showFid=show;ViewState target=show?fidView:spectrumView;
+            cursorPoint=null;cursorValue=null;cursorSamples=null;
+            if(target==null)full();else {
+                viewLeft=target.left();viewRight=target.right();gain=target.gain();baseline=target.baseline();verticalRange=target.vertical();
+                zoomHistory.clear();zoomHistory.addAll(target.history());repaint();
+            }
+        }
+        void full(){if(spectrum!=null){var range=fullRange();viewLeft=range.start();viewRight=range.end();cursorPoint=null;cursorValue=null;
+            if(showFid)verticalRange=rawTrace.verticalRange();
+            else {double minimum=Arrays.stream(spectrum.real).min().orElse(0),maximum=Arrays.stream(spectrum.real).max().orElse(1);if(maximum==minimum)minimum-=1;verticalRange=new ViewRanges.Range(minimum,maximum);}
+        }gain=1;setBaseline(showFid?.5:.05);zoomHistory.clear();repaint();}
         void setBaseline(double value){baseline=value;if(verticalRange!=null)verticalRange=ViewRanges.baseline(verticalRange,value,0);repaint();}
-        void scale(double factor){if(spectrum==null)return;if(showFid)gain*=factor;else if(verticalRange!=null)verticalRange=ViewRanges.scale(verticalRange,factor,0);repaint();}
+        void scale(double factor){if(spectrum==null)return;if(verticalRange!=null)verticalRange=ViewRanges.scale(verticalRange,factor,0);repaint();}
         void setRange(double a,double b){zoomHistory.push(new double[]{viewLeft,viewRight});viewLeft=a;viewRight=b;repaint();}
         void zoom(double factor){zoomFactor(1.0/factor);}
-        void zoomFactor(double factor){if(spectrum==null)return;var range=ViewRanges.zoom(new ViewRanges.Range(viewLeft,viewRight),factor,new ViewRanges.Range(spectrum.left,spectrum.right));if(range!=null)setRange(range.start(),range.end());}
-        void pan(double amount){if(spectrum==null)return;var range=ViewRanges.pan(new ViewRanges.Range(viewLeft,viewRight),amount,width(),new ViewRanges.Range(spectrum.left,spectrum.right));setRange(range.start(),range.end());}
+        void zoomFactor(double factor){if(spectrum==null)return;var range=ViewRanges.zoom(new ViewRanges.Range(viewLeft,viewRight),factor,fullRange());if(range!=null)setRange(range.start(),range.end());}
+        void pan(double amount){if(spectrum==null)return;var range=ViewRanges.pan(new ViewRanges.Range(viewLeft,viewRight),amount,width(),fullRange());setRange(range.start(),range.end());}
         void previous(){if(!zoomHistory.isEmpty()){double[] range=zoomHistory.pop();viewLeft=range[0];viewRight=range[1];repaint();}}
         int integralHit(Point point) {
             for(var entry:integralHitAreas.entrySet())if(entry.getValue().contains(point))return entry.getKey();
@@ -369,23 +389,16 @@ public final class Viewer extends JFrame {
             return maxAmplitude(a,b);
         }
         void paintFid(Graphics2D g,int x,int y,int w,int h) {
-            double[] raw=spectrum.raw.fid;int count=raw.length/2;
-            double scale=Math.scalb(1.0,spectrum.raw.nc);double[] samples=new double[count];
-            double min=Double.POSITIVE_INFINITY,max=Double.NEGATIVE_INFINITY;
-            for(int i=0;i<count;i++){samples[i]=raw[i*2]*scale;min=Math.min(min,samples[i]);max=Math.max(max,samples[i]);}
-            double extent=max-min;if(extent==0)extent=1;
-            var yMapper=VisualNumerics.vertical(-extent*.5,extent*.5,y,y+h);
-            var compressed=VisualNumerics.compress(samples,0,w);
-            double[] drawing=compressed==null?samples:compressed.values();
-            g.setClip(x,y,w,h);g.setColor(Color.BLUE);int lastX=0,lastY=0;
-            for(int i=0;i<drawing.length;i++) {
-                int px=compressed==null?x+(int)(.5+i*w/(double)count):x+i/2;
-                int py=yMapper.screen(drawing[i],gain);if(i>0)g.drawLine(lastX,lastY,px,py);lastX=px;lastY=py;
-            }
-            g.setClip(null);g.setColor(new Color(135,135,135));g.setFont(Assets.bold);
-            double seconds=count/spectrum.raw.spectralWidth;
-            for(int i=0;i<=4;i++){int px=x+i*w/4;g.drawLine(px,y+h,px,y+h+6);g.drawString(String.format(Locale.ROOT,"%.2f",seconds*i/4),px-12,y+h+21);}
-            g.drawString("[sec]",x+w-35,y+h+21);
+            int from=start(),to=end();double[] visible=Arrays.copyOfRange(rawTrace.samples,from,to+1);
+            var horizontal=VisualNumerics.horizontal(viewLeft,viewRight,x,x+w);
+            var vertical=VisualNumerics.vertical(verticalRange.start(),verticalRange.end(),y,y+h);
+            g.setColor(Color.BLUE);
+            SpectrumPainter.paintPanel(g,visible,from,x,y,w,h,horizontal,vertical,rawTrace.time.start(),rawTrace.time.end(),rawTrace.samples.length,gain);
+            cursorSamples=VisualNumerics.cursorBoundaries(visible,from,w,x,horizontal,rawTrace.time.start(),rawTrace.time.end(),rawTrace.samples.length);
+            Color ink=new Color(128,128,128);Font font=Assets.bold.deriveFont(14f);
+            AxisPainter.paint(g,new Rectangle(x,y+h,w,27),horizontal,AxisTicks.calculate(viewLeft,viewRight,"s",null,true,true),font,ink,1,0,cursorValue);
+            AxisPainter.paintVertical(g,new Rectangle(x+w,y,27,h),verticalRange.start(),verticalRange.end(),1,gain,font,ink,1,0);
+            if(dragX>=0){g.setClip(x,y,w,h);g.setColor(new Color(100,150,190,35));g.fillRect(Math.min(pressX,dragX),y,Math.abs(pressX-dragX),h);g.setClip(null);}
         }
         @Override protected void paintComponent(Graphics graphics) {
             super.paintComponent(graphics);
@@ -398,7 +411,7 @@ public final class Viewer extends JFrame {
             Graphics2D display=(Graphics2D)graphics.create();
             display.setRenderingHint(RenderingHints.KEY_INTERPOLATION,RenderingHints.VALUE_INTERPOLATION_NEAREST_NEIGHBOR);
             display.drawImage(logicalCanvas,0,0,null);
-            if(spectrum!=null && !showFid && (mode==Mode.INTEGRATE || cursorPoint!=null)) {
+            if(spectrum!=null && (mode==Mode.INTEGRATE || cursorPoint!=null)) {
                 String[] readout=cursorReadout();
                 if(mode==Mode.INTEGRATE) {
                     double sum=0;for(var region:spectrum.integrals.regions())sum+=spectrum.integrals.calculate(region,spectrum.real,spectrum.left,spectrum.right).normalized(spectrum.integrals.normalizingFactor);
@@ -407,7 +420,7 @@ public final class Viewer extends JFrame {
                 }
                 CursorMessagePainter.paint(display,readout,drawingBounds(),22,new Color(51,51,51));
             }
-            if(spectrum!=null && cursorPoint!=null && drawingBounds().contains(cursorPoint) && !showFid) {
+            if(spectrum!=null && cursorPoint!=null && drawingBounds().contains(cursorPoint)) {
                 display.setColor(mode==Mode.INTEGRATE && defineRegion?new Color(237,28,36):new Color(51,51,51));
                 display.setRenderingHint(RenderingHints.KEY_ANTIALIASING,RenderingHints.VALUE_ANTIALIAS_OFF);
                 display.setStroke(new BasicStroke(1,BasicStroke.CAP_BUTT,BasicStroke.JOIN_MITER));
@@ -419,6 +432,10 @@ public final class Viewer extends JFrame {
             if(cursorPoint==null || cursorValue==null || cursorSamples==null || cursorSamples.length<2)return null;
             int column=Math.max(0,Math.min(width()-1,cursorPoint.x-2));
             int index=cursorSamples[column],count=cursorSamples[column+1]-index;
+            if(showFid) {
+                if(index<0 || index>=rawTrace.samples.length)return null;
+                return CursorReadout.timeLabels(VisualNumerics.horizontal(viewLeft,viewRight,2,2+width()),drawingBounds(),cursorValue,index,count,rawTrace.samples[index],1);
+            }
             if(index<0 || index>=spectrum.real.length)return null;
             double value=mode==Mode.PHASE?Numerics.phasePreview(spectrum.real,spectrum.imaginary,ph0,ph1,spectrum.ftSize,spectrum.stripStart,0,index+1)[index]:spectrum.real[index];
             double frequency=Double.parseDouble(spectrum.parameters.get("SF"));

@@ -12,7 +12,10 @@ public final class CursorReadoutReference {
     static class Original extends Cursor1D {
         Original(ViewIfc view){super(view);}
         String[] labels(SpecView1D view,Point point,double value,double frequency,int start,int count) {
-            PhysicalPoint physical=new PhysicalPoint();physical.setValue(value);physical.setUnit("ppm");physical.setReference(frequency);
+            return labels(view,point,value,frequency,start,count,"ppm");
+        }
+        String[] labels(SpecView1D view,Point point,double value,double frequency,int start,int count,String unit) {
+            PhysicalPoint physical=new PhysicalPoint();physical.setValue(value);physical.setUnit(unit);physical.setReference(frequency);
             currentPhysical[0]=physical;currentIndex[0]=new IndexRange(start,count);return createLabels(view,point);
         }
     }
@@ -31,6 +34,16 @@ public final class CursorReadoutReference {
             String[] actual=CursorReadout.labels(VisualNumerics.horizontal(left,right,2,viewport.width+2),viewport,coordinate,frequency,start,count,values[start],vertical.getReference());
             if(!Arrays.equals(expected,actual))throw new AssertionError(Arrays.toString(expected)+" != "+Arrays.toString(actual));
         }
-        System.out.println("PASS 10000 original cursor readouts, exact coordinate, index and amplitude text");
+        for(int run=0;run<5000;run++) {
+            double left=run%2==0?0:.000002,right=left+Math.pow(10,run%12-7);
+            Rectangle viewport=new Rectangle(2,2,20+random.nextInt(1800),636);view.setViewport(viewport);
+            view.getCoordinateMapper()[0].setPhysicalMapping(new PhysicalRange(left,right,"s"));view.getCoordinateMapper()[0].setScreenMapping(2,viewport.width+2);
+            int x=2+random.nextInt(viewport.width),start=random.nextInt(200),count=1+random.nextInt(10);
+            double coordinate=view.getCoordinateMapper()[0].mapToPhysical(x);
+            String[] expected=original.labels(view,new Point(x,100),coordinate,1,start,count,"s");
+            String[] actual=CursorReadout.timeLabels(VisualNumerics.horizontal(left,right,2,viewport.width+2),viewport,coordinate,start,count,values[start],vertical.getReference());
+            if(!Arrays.equals(expected,actual))throw new AssertionError(Arrays.toString(expected)+" != "+Arrays.toString(actual));
+        }
+        System.out.println("PASS 10000 original spectrum and 5000 original time-domain cursor readouts, exact coordinate, index and amplitude text");
     }
 }
