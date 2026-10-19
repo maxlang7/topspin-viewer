@@ -24,6 +24,8 @@ public final class Viewer extends JFrame {
     private final JTextField command=new JTextField();
     private final DefaultMutableTreeNode root=new DefaultMutableTreeNode("Data");
     private final JTree tree=new BrowserTree(root);
+    private final BrowserLocations browserLocations;
+    private DatasetBrowser datasetBrowser;
     private double ph0,ph1,sensitivity=.00625;
     private int phaseOrder;
     private int selectedIntegral=-1;
@@ -36,9 +38,11 @@ public final class Viewer extends JFrame {
     private final boolean warpPointer;
 
     Viewer(){this(true);}
-    Viewer(boolean warpPointer) {
+    Viewer(boolean warpPointer) {this(warpPointer,BrowserLocations.userDefault());}
+    Viewer(boolean warpPointer,BrowserLocations locations) {
         super("TopSpin Viewer");setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
         this.warpPointer=warpPointer;
+        browserLocations=locations;
         setSize(1438,927);setMinimumSize(new Dimension(960,640));
         JPanel content=new JPanel(new BorderLayout());setContentPane(content);
         content.add(header(),BorderLayout.NORTH);
@@ -112,26 +116,29 @@ public final class Viewer extends JFrame {
         JTextField search=new BrowserSearchField();search.setPreferredSize(new Dimension(149,34));searchPanel.add(search);
         JPanel north=new JPanel(new BorderLayout(0,9));north.setOpaque(false);north.add(title,BorderLayout.NORTH);north.add(searchPanel);panel.add(north,BorderLayout.NORTH);
         tree.setRootVisible(false);tree.setBackground(Color.WHITE);
-        tree.addMouseListener(new MouseAdapter(){@Override public void mouseClicked(MouseEvent e){
-            if(e.getClickCount()==2 && tree.getLastSelectedPathComponent() instanceof DefaultMutableTreeNode node && node.getUserObject() instanceof Path p)open(p);
-        }});
+        datasetBrowser=new DatasetBrowser(tree,root,browserLocations,this::open,status::setText);
+        datasetBrowser.bindSearch(search);
+        tree.addMouseListener(new MouseAdapter(){
+            private void popup(MouseEvent event){if(event.isPopupTrigger())browserMenu(event);}
+            @Override public void mousePressed(MouseEvent event){popup(event);}
+            @Override public void mouseReleased(MouseEvent event){popup(event);}
+        });
         JScrollPane scroll=new JScrollPane(tree);scroll.setBorder(BorderFactory.createEmptyBorder());panel.add(scroll);
-        search.addActionListener(e->populateTree(search.getText()));
-        populateTree("");return panel;
+        return panel;
     }
-    private void populateTree(String filter) {
-        root.removeAllChildren();Path base=Path.of(System.getProperty("user.home"),"Documents/IGB Lab/NMRs");
-        DefaultMutableTreeNode folder=new DefaultMutableTreeNode(base);root.add(folder);
-        if(Files.isDirectory(base))try(var dirs=Files.list(base)) {
-            for(Path p:dirs.filter(Files::isDirectory).sorted().toList()) {
-                if(p.getFileName().toString().startsWith(".") || !p.getFileName().toString().toLowerCase().contains(filter.toLowerCase()))continue;
-                DefaultMutableTreeNode n=new DefaultMutableTreeNode(p);folder.add(n);
-                try(var experiments=Files.find(p,3,(path,attr)->attr.isRegularFile() && path.getFileName().toString().equals("acqus"))) {
-                    for(Path acq:experiments.sorted().toList())n.add(new DefaultMutableTreeNode(acq.getParent()));
-                }
-            }
-        }catch(Exception e){status.setText(e.getMessage());}
-        ((DefaultTreeModel)tree.getModel()).reload();if(!filter.isEmpty())tree.expandRow(0);
+    private void browserMenu(MouseEvent event) {
+        TreePath path=tree.getPathForLocation(event.getX(),event.getY());if(path!=null)tree.setSelectionPath(path);
+        JPopupMenu menu=new JPopupMenu();
+        if(tree.getLastSelectedPathComponent() instanceof DefaultMutableTreeNode node && node.getUserObject() instanceof DatasetBrowserModel.Entry entry && entry.dataset()) {
+            JMenuItem display=new JMenuItem("Display");display.addActionListener(e->open(entry.path()));menu.add(display);menu.addSeparator();
+        }
+        JMenuItem add=new JMenuItem("Add data directory...");add.addActionListener(e->chooseDataDirectory());menu.add(add);
+        JMenuItem refresh=new JMenuItem("Refresh");refresh.addActionListener(e->datasetBrowser.refresh());menu.add(refresh);menu.show(tree,event.getX(),event.getY());
+    }
+    private void chooseDataDirectory() {
+        JFileChooser chooser=new JFileChooser(browserLocations.lastDirectory().toFile());chooser.setDialogTitle("Add data directory");
+        chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
+        if(chooser.showOpenDialog(this)==JFileChooser.APPROVE_OPTION)perform(()->{Path path=chooser.getSelectedFile().toPath();datasetBrowser.addRoot(path);browserLocations.remember(path);});
     }
     private JPanel workbench() {
         JPanel panel=new JPanel(new BorderLayout());panel.setBackground(new Color(204,204,204));
@@ -148,14 +155,22 @@ public final class Viewer extends JFrame {
         JPopupMenu menu=new JPopupMenu();JMenuItem open=new JMenuItem("Open...",KeyEvent.VK_O);open.addActionListener(e->chooseOpen());menu.add(open);
         JMenuItem save=new JMenuItem("Save");save.addActionListener(e->save());menu.add(save);menu.show(getContentPane(),8,50);
     }
-    private void chooseOpen() {JFileChooser chooser=new JFileChooser(System.getProperty("user.home")+"/Documents/IGB Lab/NMRs");chooser.setFileSelectionMode(JFileChooser.FILES_AND_DIRECTORIES);if(chooser.showOpenDialog(this)==JFileChooser.APPROVE_OPTION)open(chooser.getSelectedFile().toPath());}
+    private void chooseOpen() {
+        JFileChooser chooser=new JFileChooser(browserLocations.lastDirectory().toFile());
+        chooser.setDialogTitle("Open Bruker data");chooser.setFileSelectionMode(JFileChooser.FILES_AND_DIRECTORIES);
+        if(chooser.showOpenDialog(this)==JFileChooser.APPROVE_OPTION) {
+            try{browserLocations.remember(chooser.getCurrentDirectory().toPath());}catch(java.io.IOException error){status.setText(error.getMessage());}
+            open(chooser.getSelectedFile().toPath());
+        }
+    }
     public void open(Path path) {perform(()->{
         java.util.List<Path> candidates=DatasetOpener.candidates(path);Path selected=candidates.get(0);
         if(candidates.size()>1) {
             Object choice=JOptionPane.showInputDialog(this,"Dataset","Open Bruker data",JOptionPane.PLAIN_MESSAGE,null,candidates.toArray(),selected);
             if(choice==null)return;selected=(Path)choice;
         }
-        spectrum=new Spectrum(selected);selectedIntegral=-1;ph0=ph1=0;mode=Mode.VIEW;surfaceLayout.show(surface,"plot");datasetLabel.setText(spectrum.label()+"  "+spectrum.path);plot.showFid=false;plot.full();rebuildModeBar();status.setText("Dataset opened");
+        Spectrum opened=new Spectrum(selected);
+        spectrum=opened;selectedIntegral=-1;ph0=ph1=0;mode=Mode.VIEW;surfaceLayout.show(surface,"plot");datasetLabel.setText(spectrum.label()+"  "+spectrum.path);plot.showFid=false;plot.full();rebuildModeBar();datasetBrowser.opened(spectrum);status.setText("Dataset opened");
     });}
     private void requireSpectrum() {if(spectrum==null)throw new IllegalStateException("Open a dataset first");}
     private void setMode(Mode next) {

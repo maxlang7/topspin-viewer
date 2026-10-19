@@ -8,7 +8,7 @@ mkdir -p build/app build/test build/native
 javac -proc:none -cp lib/flatlaf-3.4.1.jar -d build/app src/*.java \
   tests/RawReference.java tests/RawTimeRangeReference.java tests/RawValueRangeReference.java tests/SavedPhaseReference.java tests/ReaderReference.java \
   tests/WriterReference.java tests/LiveNumericsReference.java tests/LiveIntegrationReference.java \
-  tests/DatasetOpeningReference.java tests/ViewerWorkflowReference.java tests/IntegrationEditReference.java tests/IntegrationReopenReference.java tests/PlotRasterReference.java tests/IntegralTableReference.java tests/IntegralTableRasterProbe.java tests/SaveTransactionReference.java \
+  tests/DatasetOpeningReference.java tests/ViewerWorkflowReference.java tests/BrowserWorkflowReference.java tests/IntegrationEditReference.java tests/IntegrationReopenReference.java tests/PlotRasterReference.java tests/IntegralTableReference.java tests/IntegralTableRasterProbe.java tests/SaveTransactionReference.java \
   tests/CapturedAxisReference.java tests/CapturedSpectrumReference.java tests/CapturedIntegralPanelReference.java tests/CursorMessageRasterReference.java tests/EditingToolsRasterReference.java tests/ViewerToolsRasterReference.java tests/BrowserTreeRasterReference.java tests/BrowserSearchRasterReference.java tests/RangeEntryRasterReference.java tests/DatasetTabsRasterReference.java tests/NavigationTabsRasterReference.java tests/WindowsTextReference.java tests/NativeTextRasterReference.java tests/RibbonRasterReference.java tests/WindowsPhaseControllerReference.java
 gcc -std=c11 -O2 -fPIC -shared -ffp-contract=off \
   -I"$JAVA_HOME/include" -I"$JAVA_HOME/include/linux" \
@@ -51,6 +51,8 @@ java -Djava.awt.headless=true -Djava.library.path=build/native -cp build/app:lib
 java -Djava.awt.headless=true -Djava.library.path=build/native -cp build/app:lib/flatlaf-3.4.1.jar BrowserSearchRasterReference
 java -Djava.awt.headless=true -cp build/app:lib/flatlaf-3.4.1.jar DatasetTabsRasterReference
 task_vendor_root="${TOPSPIN_REFERENCE_ROOT:-/home/maxlang/.wine-topspin-5/drive_c/Bruker/TopSpinProcessing5.0.0}"
+javac -proc:none -cp "build/app:$task_vendor_root/classes/lib/*" -d build/test tests/BrowserBehaviorReference.java
+java -cp "build/test:build/app:$task_vendor_root/classes/lib/*" BrowserBehaviorReference
 javac -proc:none -cp "$task_vendor_root/classes/lib/*" -d build/test \
   src/Numerics.java src/IntegrationRegions.java src/IntegralScale.java src/VisualNumerics.java src/SpectrumPainter.java src/PointerGesture.java src/PlotSelection.java src/ViewRanges.java tests/VendorDifferential.java \
   src/CursorReadout.java tests/CursorReadoutReference.java tests/CursorBoundariesReference.java src/Assets.java src/PhaseCaption.java src/IntegralLabelPainter.java src/IntegralCurvePainter.java tests/IntegralCurveRasterReference.java tests/IntegralDisplayRangeReference.java tests/PhaseCaptionReference.java tests/IntegralLabelRasterReference.java src/AxisTicks.java src/AxisPainter.java tests/AxisTicksReference.java tests/AxisRasterReference.java tests/VerticalAxisRasterReference.java tests/IntegrationFileReference.java tests/IntegralScaleReference.java tests/IntegrationUndoReference.java tests/IntegrationSelectionReference.java tests/IntegrationDisplayScaleReference.java tests/IntegrationDialogAddReference.java tests/DisplayCompressionReference.java tests/DisplayMappingReference.java tests/PivotProbe.java tests/PhaseControlReference.java tests/PlotSelectionReference.java tests/SpectrumRasterDifferential.java tests/PointerGestureReference.java tests/ViewRangesReference.java
@@ -79,6 +81,7 @@ java -Djava.awt.headless=true -cp "build/test:$task_vendor_root/classes/lib/*" P
 java -Djava.awt.headless=true -cp "build/test:$task_vendor_root/classes/lib/*" PointerGestureReference
 java -Djava.awt.headless=true -cp "build/test:$task_vendor_root/classes/lib/*" ViewRangesReference
 if [ -n "${DISPLAY:-}" ]; then
+  _JAVA_AWT_WM_NONREPARENTING=1 java -Dsun.java2d.uiScale=2 -Djava.library.path=build/native -cp build/app:lib/flatlaf-3.4.1.jar BrowserWorkflowReference
   _JAVA_AWT_WM_NONREPARENTING=1 java -Dsun.java2d.uiScale=2 -cp build/app:lib/flatlaf-3.4.1.jar RangeEntryRasterReference
   _JAVA_AWT_WM_NONREPARENTING=1 java -Dsun.java2d.uiScale=2 -cp build/app:lib/flatlaf-3.4.1.jar ViewerToolsRasterReference
   _JAVA_AWT_WM_NONREPARENTING=1 java -Dsun.java2d.uiScale=2 -Djava.library.path=build/native \

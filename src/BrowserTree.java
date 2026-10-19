@@ -1,4 +1,5 @@
 import java.awt.*;
+import java.awt.event.MouseEvent;
 import javax.swing.*;
 import javax.swing.tree.*;
 import com.formdev.flatlaf.ui.FlatTreeUI;
@@ -18,6 +19,12 @@ public final class BrowserTree extends JTree {
                 NativeText.draw(g,Assets.regular,getText(),textX,13.5,new Color(51,51,51),background);g.dispose();
             }
         });
+    }
+    @Override public String getToolTipText(MouseEvent event) {
+        TreePath path=getPathForLocation(event.getX(),event.getY());
+        if(path!=null && path.getLastPathComponent() instanceof DefaultMutableTreeNode node
+            && node.getUserObject() instanceof DatasetBrowserModel.Entry entry)return entry.path().toString();
+        return null;
     }
     static Icon expansionIcon(boolean collapsed) {
         return new Icon(){

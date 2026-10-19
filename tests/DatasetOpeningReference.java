@@ -30,10 +30,15 @@ public class DatasetOpeningReference {
         Spectrum rawFileOpened=new Spectrum(rawProcessing.resolve("proc"));
         if(!Arrays.equals(rawFileOpened.real,rawOpened.real) || !Arrays.equals(rawFileOpened.imaginary,rawOpened.imaginary))throw new AssertionError("Raw parameter-file opening changed processing number or values");
         if(Files.exists(rawProcessing.resolve("1r")) || Files.exists(rawProcessing.resolve("procs")))throw new AssertionError("Opening raw data wrote processing output");
+        if(!DatasetOpener.candidates(rawExperiment.resolve("pdata")).equals(List.of(rawProcessing.toRealPath())))throw new AssertionError("Opening pdata did not expose its processing numbers");
+        Spectrum nonDefault=new Spectrum(rawExperiment);
+        if(!nonDefault.path.equals(rawProcessing.toRealPath()) || !Arrays.equals(nonDefault.real,rawOpened.real))throw new AssertionError("Experiment without pdata/1 did not retain its available processing number");
+        Path proc10=rawExperiment.resolve("pdata/10");Files.createDirectories(proc10);Files.copy(rawProcessing.resolve("proc"),proc10.resolve("proc"));
+        if(!DatasetOpener.processingDirectories(rawExperiment).equals(List.of(rawProcessing,proc10)))throw new AssertionError("Processing choices are not numerically ordered");
         Path invalid=root.resolve("invalid.zip");
         try(ZipOutputStream zip=new ZipOutputStream(Files.newOutputStream(invalid,StandardOpenOption.CREATE_NEW))) {zip.putNextEntry(new ZipEntry("../../escape.txt"));zip.write(1);zip.closeEntry();}
         try {DatasetOpener.candidates(invalid);throw new AssertionError("Archive path escaped extraction root");}
         catch(java.io.IOException expected) {if(!expected.getMessage().equals("Invalid archive entry path"))throw expected;}
-        System.out.println("PASS loose folder, nested folder, raw filename, raw-only processing folder/parameter file and ZIP opening; "+original.real.length+" complex samples preserved");
+        System.out.println("PASS loose/nested folder, raw filename, raw-only processing folder/parameter file, pdata choices, missing pdata/1 fallback and ZIP opening; "+original.real.length+" complex samples preserved");
     }
 }

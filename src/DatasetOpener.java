@@ -6,6 +6,14 @@ import java.util.zip.*;
 
 /** Opens loose Bruker directories and archived acquisitions without changing their inputs. */
 public final class DatasetOpener {
+    public static List<Path> processingDirectories(Path experiment) throws IOException {
+        Path pdata=experiment.resolve("pdata");
+        if(!Files.isDirectory(pdata))return List.of();
+        try(var files=Files.list(pdata)) {
+            return files.filter(Files::isDirectory).filter(p->Files.isRegularFile(p.resolve("procs")) || isRawProcessingDirectory(p))
+                .sorted(DatasetBrowserModel::comparePaths).toList();
+        }
+    }
     public static List<Path> candidates(Path selected) throws IOException {
         Path root=selected.toRealPath();
         if(Files.isRegularFile(root)) {
@@ -13,9 +21,12 @@ public final class DatasetOpener {
             else root=root.getParent();
         }
         if(Files.isRegularFile(root.resolve("procs")) || Files.isRegularFile(root.resolve("acqus")) || isRawProcessingDirectory(root))return List.of(root);
+        if(root.getFileName()!=null && root.getFileName().toString().equals("pdata") && root.getParent()!=null) {
+            List<Path> processing=processingDirectories(root.getParent());if(!processing.isEmpty())return processing;
+        }
         List<Path> experiments=new ArrayList<>();
         try(var files=Files.find(root,6,(p,a)->a.isRegularFile() && p.getFileName().toString().equals("acqus"))) {
-            for(Path file:files.sorted().toList())experiments.add(file.getParent());
+            for(Path file:files.sorted(DatasetBrowserModel::comparePaths).toList())experiments.add(file.getParent());
         }
         if(experiments.isEmpty())throw new IOException("No Bruker acquisitions found in "+selected);
         return List.copyOf(experiments);

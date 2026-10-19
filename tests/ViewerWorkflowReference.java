@@ -122,7 +122,7 @@ public class ViewerWorkflowReference {
         byte[] original=Files.readAllBytes(experiment.resolve("pdata/1/1r"));
         Assets.load();FlatLightLaf.setup();UIManager.put("defaultFont",Assets.regular);JFrame.setDefaultLookAndFeelDecorated(true);
         Viewer[] reference=new Viewer[1];
-        SwingUtilities.invokeAndWait(()->{reference[0]=new Viewer(false);reference[0].setVisible(true);reference[0].open(experiment);});
+        SwingUtilities.invokeAndWait(()->{reference[0]=new Viewer(false,new BrowserLocations(root.resolve("browser.properties"),root));reference[0].setVisible(true);reference[0].open(experiment);});
         try {
             SwingUtilities.invokeAndWait(()->{
                 try {

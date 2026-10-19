@@ -24,8 +24,12 @@ public final class Spectrum {
         Path input=selected.toRealPath();if(Files.isRegularFile(input))input=input.getParent();
         if(Files.isRegularFile(input.resolve("procs")) || DatasetOpener.isRawProcessingDirectory(input))path=input;
         else if(Files.isRegularFile(input.resolve("acqus"))) {
+            var available=DatasetOpener.processingDirectories(input);
             Path pdata=input.resolve("pdata/1");
-            if(!Files.isRegularFile(pdata.resolve("proc")))throw new IOException("No processing parameters in pdata/1");
+            if(!available.contains(pdata)) {
+                if(available.isEmpty())throw new IOException("No processing parameters found in "+input.resolve("pdata"));
+                pdata=available.get(0);
+            }
             path=pdata;
         } else throw new IOException("Choose a Bruker experiment or processed-spectrum directory");
         experiment=path.getParent()!=null && "pdata".equals(path.getParent().getFileName().toString())

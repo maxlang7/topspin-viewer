@@ -4,6 +4,8 @@ Work in progress for opening Bruker 1D data, spectrum viewing, manual integratio
 
 Run `bash run.sh /path/to/experiment` or `bash run.sh /path/to/pdata/1`. The launcher enters the project Nix shell, compiles Java and the independent C processing library, and opens the viewer. It currently uses the laptop's 2x display scale.
 
+The data browser shows folders, experiments, then processing numbers. Double-click a processing number or press Enter to open it. Search filters names and spectrum titles as you type. Right-click the tree to add a data directory or refresh it. Added directories and the last Open dialog location are retained in `~/.config/topspin-viewer/browser.properties`, respecting `XDG_CONFIG_HOME` when set. Browser enumeration and searching run in background workers.
+
 The application does not load Bruker classes, executables, processing libraries, Python or the TopSpin network API. It uses a pinned FlatLaf 3.4.1 dependency, captured control graphics and pinned fonts. These local reference assets have not been published. Native interface text uses FreeType, with the target's glyph coverage and LCD color blending reconstructed independently of Wine.
 
 ## Verified numerical behavior
