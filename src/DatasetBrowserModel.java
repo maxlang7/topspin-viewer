@@ -5,8 +5,8 @@ import java.util.*;
 
 /** Filesystem-backed dataset hierarchy. Processing numbers sit directly below experiments. */
 public final class DatasetBrowserModel {
-    public record Entry(Path path,String label,boolean dataset) {
-        @Override public String toString(){return label;}
+    public record Entry(Path path,String label,boolean dataset,String pulseProgram) {
+        @Override public String toString(){return pulseProgram.isEmpty()?label:label+" - "+pulseProgram;}
     }
     public static int compareNames(String first,String second) {
         try{return Integer.compare(Integer.parseInt(first),Integer.parseInt(second));}
@@ -23,7 +23,12 @@ public final class DatasetBrowserModel {
     }
     public static Entry entry(Path path,boolean root) {
         boolean dataset=Files.isRegularFile(path.resolve("procs")) || DatasetOpener.isRawProcessingDirectory(path);
-        return new Entry(path,root?path.toString():path.getFileName().toString(),dataset);
+        String pulseProgram="";
+        if(!root && Files.isRegularFile(path.resolve("acqus")))try {
+            pulseProgram=BrukerDataset.readParameters(path.resolve("acqus")).getOrDefault("PULPROG","");
+            if(pulseProgram.startsWith("<") && pulseProgram.endsWith(">"))pulseProgram=pulseProgram.substring(1,pulseProgram.length()-1);
+        }catch(IOException ignored){}
+        return new Entry(path,root?path.toString():path.getFileName().toString(),dataset,pulseProgram);
     }
     public static List<Entry> children(Entry parent) throws IOException {
         if(parent.dataset())return List.of();

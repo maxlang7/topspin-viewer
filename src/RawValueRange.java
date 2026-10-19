@@ -1,4 +1,4 @@
-/** Raw buffer extrema include zero, even when every sample has the same sign. */
+/** Native 1D buffer extrema include zero, even when every sample has the same sign. */
 public final class RawValueRange {
     public record Range(double minimum,double maximum) {}
     public static Range calculate(double[] values) {

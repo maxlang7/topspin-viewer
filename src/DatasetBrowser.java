@@ -17,6 +17,7 @@ public final class DatasetBrowser {
             if(!loaded)add(new DefaultMutableTreeNode("Loading...",false));
         }
         DatasetBrowserModel.Entry entry(){return (DatasetBrowserModel.Entry)getUserObject();}
+        @Override public boolean isLeaf(){return entry().dataset();}
     }
     private final JTree tree;
     private final DefaultMutableTreeNode root;

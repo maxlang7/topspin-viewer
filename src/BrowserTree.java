@@ -10,7 +10,7 @@ public final class BrowserTree extends JTree {
         super(root);setFont(Assets.regular);setRootVisible(false);setShowsRootHandles(true);setRowHeight(16);setBackground(Color.WHITE);setBorder(BorderFactory.createEmptyBorder(0,8,0,0));
         setUI(new FlatTreeUI(){@Override protected void installDefaults(){super.installDefaults();setExpandedIcon(expansionIcon(false));setCollapsedIcon(expansionIcon(true));}});
         setCellRenderer(new DefaultTreeCellRenderer(){
-            {setOpenIcon(null);setClosedIcon(null);}
+            {setOpenIcon(null);setClosedIcon(null);setLeafIcon(null);}
             @Override protected void paintComponent(Graphics graphics) {
                 Color background=selected?getBackgroundSelectionColor():Color.WHITE;
                 Graphics2D g=(Graphics2D)graphics.create();g.setColor(background);g.fillRect(0,0,getWidth(),getHeight());

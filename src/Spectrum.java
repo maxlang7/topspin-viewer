@@ -32,7 +32,7 @@ public final class Spectrum {
             }
             path=pdata;
         } else throw new IOException("Choose a Bruker experiment or processed-spectrum directory");
-        experiment=path.getParent()!=null && "pdata".equals(path.getParent().getFileName().toString())
+        experiment=path.getParent()!=null && path.getParent().getFileName()!=null && "pdata".equals(path.getParent().getFileName().toString())
             ?path.getParent().getParent():null;
         if(Files.isRegularFile(path.resolve("1r"))) {
             BrukerDataset data=new BrukerDataset(path);parameters=new LinkedHashMap<>(data.parameters);

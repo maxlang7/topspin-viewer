@@ -25,8 +25,7 @@ public final class RawTrace {
     public int index(double coordinate){return Math.max(0,Math.min(samples.length-1,Numerics.index(coordinate,time.start(),time.end(),samples.length)));}
     public ViewRanges.Range fullRange(){return new ViewRanges.Range(time.start(),time.end());}
     public ViewRanges.Range verticalRange() {
-        double minimum=values.minimum(),maximum=values.maximum();if(minimum==maximum)minimum-=1;
-        return new ViewRanges.Range(minimum,maximum);
+        return ViewRanges.initial(new ViewRanges.Range(values.minimum(),values.maximum()));
     }
     private static double number(Map<String,String> values,String name)throws IOException {
         try{double value=Double.parseDouble(values.get(name));if(Double.isFinite(value))return value;}

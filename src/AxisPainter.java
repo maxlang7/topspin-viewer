@@ -16,6 +16,7 @@ public final class AxisPainter {
     }
     public static void paintVertical(Graphics2D graphics,Rectangle viewport,double start,double end,
             double reference,double gain,Font font,Color color,int position,int offset) {
+        if(start==end)return;
         Graphics2D g=(Graphics2D)graphics.create();
         g.translate(viewport.x,viewport.y+viewport.height);g.rotate(-Math.PI/2);
         var mapper=VisualNumerics.vertical(end,start,0,viewport.height);

@@ -61,6 +61,17 @@ public class BrowserWorkflowReference {
             frame=new JFrame("Dataset browser verification");frame.setSize(520,650);frame.add(search,BorderLayout.NORTH);frame.add(new JScrollPane(tree));frame.setVisible(true);
         });
         try {
+            expand(second);expand(second.resolve("nested"));expand(second.resolve("nested/deep"));
+            await(()->find(second.resolve("nested/deep")).getChildCount()==0,"Empty directory did not finish loading");
+            SwingUtilities.invokeAndWait(()->{if(find(second.resolve("nested/deep")).isLeaf())throw new AssertionError("Empty folder appeared as a dataset leaf");});
+            Path actualCopy=Path.of("artifacts/live-fid-reference-20261019/datasets/panel-modes-fresh/10");
+            var capturedEntry=DatasetBrowserModel.entry(actualCopy,false);
+            if(!capturedEntry.toString().equals("10 - zg45"))throw new AssertionError("Live Windows experiment label differs");
+            SwingUtilities.invokeAndWait(()->{
+                var renderer=tree.getCellRenderer();
+                JLabel leaf=(JLabel)renderer.getTreeCellRendererComponent(tree,new DefaultMutableTreeNode("1"),false,false,true,0,false);
+                if(leaf.getIcon()!=null)throw new AssertionError("Processing row has an icon absent in live TopSpin");
+            });
             expand(data);expand(data.resolve("sample"));
             await(()->exists(data.resolve("sample/100")),"Experiments not loaded");
             SwingUtilities.invokeAndWait(()->{

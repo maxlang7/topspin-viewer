@@ -48,7 +48,7 @@ public final class Viewer extends JFrame {
         content.add(header(),BorderLayout.NORTH);
         JPanel center=new JPanel(new BorderLayout());center.add(viewToolbar(),BorderLayout.NORTH);
         JSplitPane split=new JSplitPane(JSplitPane.HORIZONTAL_SPLIT,browser(),workbench());
-        split.setDividerLocation(328);split.setDividerSize(12);split.setBorder(BorderFactory.createEmptyBorder(0,9,0,9));
+        split.setDividerLocation(331);split.setDividerSize(10);split.setOneTouchExpandable(true);split.setBorder(BorderFactory.createEmptyBorder(0,9,0,9));
         center.add(split);content.add(center);content.add(footer(),BorderLayout.SOUTH);
         command.addActionListener(e->execute(command.getText()));
         getRootPane().registerKeyboardAction(e->chooseOpen(),KeyStroke.getKeyStroke(KeyEvent.VK_O,InputEvent.CTRL_DOWN_MASK),JComponent.WHEN_IN_FOCUSED_WINDOW);
@@ -109,8 +109,7 @@ public final class Viewer extends JFrame {
         JPanel panel=new JPanel(new BorderLayout());panel.setBackground(new Color(207,207,207));
         panel.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(new Color(142,142,142)),BorderFactory.createEmptyBorder(8,8,8,8)));
         JPanel title=new JPanel(new BorderLayout());title.setOpaque(false);
-        JButton data=new JButton("☷  Data");data.setBackground(new Color(175,201,216));data.setPreferredSize(new Dimension(72,32));
-        data.addActionListener(e->chooseOpen());title.add(data,BorderLayout.WEST);
+        JButton data=new BrowserDataTab(()->tree.requestFocusInWindow());title.add(data,BorderLayout.WEST);
         JPanel searchPanel=new JPanel(new FlowLayout(FlowLayout.LEFT,5,8));searchPanel.setBackground(Color.WHITE);
         searchPanel.setPreferredSize(new Dimension(1,50));
         JTextField search=new BrowserSearchField();search.setPreferredSize(new Dimension(149,34));searchPanel.add(search);
@@ -347,7 +346,8 @@ public final class Viewer extends JFrame {
             JMenuItem calculate=new JMenuItem("Calculate ph0");calculate.addActionListener(e->{if(pivot>=0 && pivot<spectrum.real.length){ph0=Numerics.wrapPhaseZero(Numerics.phaseAtPivot(spectrum.real[pivot],spectrum.imaginary[pivot]));repaint();}});menu.add(calculate);
             menu.show(this,event.getX()-1,event.getY()-2);
         }
-        int width(){return Math.max(1,getWidth()-33);}int height(){return Math.max(1,getHeight()-top()-29);}int top(){return mode==Mode.PHASE?2+PhaseCaption.height():2;}
+        // The Windows phase layout reserves 15 logical pixels; local font metrics reserve 14.
+        int width(){return Math.max(1,getWidth()-33);}int height(){return Math.max(1,getHeight()-top()-29);}int top(){return mode==Mode.PHASE?17:2;}
         double ppm(int x){return VisualNumerics.horizontal(viewLeft,viewRight,2,2+width()).physical(x);}
         double pixel(double value){return VisualNumerics.horizontal(viewLeft,viewRight,2,2+width()).screen(value,1);}
         int start(){return showFid?rawTrace.index(viewLeft):spectrum.index(viewLeft);}int end(){return showFid?rawTrace.index(viewRight):spectrum.index(viewRight);}
@@ -367,13 +367,14 @@ public final class Viewer extends JFrame {
         }
         void full(){if(spectrum!=null){var range=fullRange();viewLeft=range.start();viewRight=range.end();cursorPoint=null;cursorValue=null;
             if(showFid)verticalRange=rawTrace.verticalRange();
-            else {double minimum=Arrays.stream(spectrum.real).min().orElse(0),maximum=Arrays.stream(spectrum.real).max().orElse(1);if(maximum==minimum)minimum-=1;verticalRange=new ViewRanges.Range(minimum,maximum);}
-        }gain=1;setBaseline(showFid?.5:.05);zoomHistory.clear();repaint();}
+            else {var values=RawValueRange.calculate(spectrum.real);verticalRange=ViewRanges.initial(new ViewRanges.Range(values.minimum(),values.maximum()));}
+            baseline=(0-verticalRange.start())/(verticalRange.end()-verticalRange.start());
+        }gain=1;zoomHistory.clear();repaint();}
         void setBaseline(double value){baseline=value;if(verticalRange!=null)verticalRange=ViewRanges.baseline(verticalRange,value,0);repaint();}
         void scale(double factor){if(spectrum==null)return;if(verticalRange!=null)verticalRange=ViewRanges.scale(verticalRange,factor,0);repaint();}
         void setRange(double a,double b){zoomHistory.push(new double[]{viewLeft,viewRight});viewLeft=a;viewRight=b;repaint();}
         void zoom(double factor){zoomFactor(1.0/factor);}
-        void zoomFactor(double factor){if(spectrum==null)return;var range=ViewRanges.zoom(new ViewRanges.Range(viewLeft,viewRight),factor,fullRange());if(range!=null)setRange(range.start(),range.end());}
+        void zoomFactor(double factor){if(spectrum==null)return;var range=ViewRanges.zoom(new ViewRanges.Range(viewLeft,viewRight),factor,fullRange(),showFid);if(range!=null)setRange(range.start(),range.end());}
         void pan(double amount){if(spectrum==null)return;var range=ViewRanges.pan(new ViewRanges.Range(viewLeft,viewRight),amount,width(),fullRange());setRange(range.start(),range.end());}
         void previous(){if(!zoomHistory.isEmpty()){double[] range=zoomHistory.pop();viewLeft=range[0];viewRight=range[1];repaint();}}
         int integralHit(Point point) {
@@ -477,7 +478,7 @@ public final class Viewer extends JFrame {
             AxisPainter.paintVertical(g,new Rectangle(x+w,y,27,h),valueLeft,valueRight,reference,gain,
                 Assets.bold.deriveFont(14f),new Color(128,128,128),1,0);
             g.setClip(x,y,w,h);
-            if(mode==Mode.PHASE){g.setColor(new Color(237,28,36));int px=(int)pixel(spectrum.ppm(pivot));if(px>x && px<x+w)g.drawLine(px,y,px,y+h);}
+            if(mode==Mode.PHASE){g.setClip(x,y,w,h+1);g.setColor(new Color(237,28,36));int px=(int)pixel(spectrum.ppm(pivot));if(px>x && px<x+w)g.drawLine(px,y,px,y+h);g.setClip(x,y,w,h);}
             integralHitAreas.clear();
             if(mode==Mode.INTEGRATE || !spectrum.integrals.regions().isEmpty()) {
                 var regions=spectrum.integrals.regions();

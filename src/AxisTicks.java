@@ -6,7 +6,7 @@ public final class AxisTicks {
     public record Tick(double value,boolean large,String label) {}
     public record Layout(List<Tick> ticks,String unitLabel,double multiplier,int subdivisions,String pattern,boolean exponents) {}
     public static Layout calculate(double start,double end,String unit,String label,boolean exponents,boolean engineering) {
-        if(!Double.isFinite(start) || !Double.isFinite(end) || start==end)throw new IllegalArgumentException("A finite nonzero axis range is required");
+        if(!Double.isFinite(start) || !Double.isFinite(end))throw new IllegalArgumentException("A finite axis range is required");
         if(unit==null)throw new IllegalArgumentException("Axis unit is required");
         double desired=(end-start)/5.0;
         double logarithm=Math.log(Math.abs(desired))/2.302585092994046;
@@ -30,7 +30,7 @@ public final class AxisTicks {
             }
             if(engineering)while(exponent%3!=0){multiplier*=.1;exponent--;first*=10;last*=10;step*=10;extent*=10;}
         }
-        String pattern=!exponents || Math.abs(first)<100000 && Math.abs(last)<100000?" 0 ":" 0E0 ";
+        String pattern=start==end?" 0E0 ":!exponents || Math.abs(first)<100000 && Math.abs(last)<100000?" 0 ":" 0E0 ";
         DecimalFormat format=new DecimalFormat(pattern,DecimalFormatSymbols.getInstance(Locale.ROOT));
         power=(int)Math.floor(Math.log(Math.abs(step))/2.302585092994046);
         if(power<0)format.setMinimumFractionDigits(-power);

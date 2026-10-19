@@ -6,10 +6,10 @@ if ! command -v javac >/dev/null || ! command -v gcc >/dev/null || ! pkg-config 
 fi
 mkdir -p build/app build/test build/native
 javac -proc:none -cp lib/flatlaf-3.4.1.jar -d build/app src/*.java \
-  tests/RawReference.java tests/RawTimeRangeReference.java tests/RawValueRangeReference.java tests/RawReadReference.java tests/SavedPhaseReference.java tests/ReaderReference.java \
+  tests/LiveRawReadReference.java tests/LiveFidPanelReference.java tests/LiveModePanelReference.java tests/RawReference.java tests/RawTimeRangeReference.java tests/RawValueRangeReference.java tests/RawReadReference.java tests/SavedPhaseReference.java tests/ReaderReference.java \
   tests/WriterReference.java tests/LiveNumericsReference.java tests/LiveIntegrationReference.java \
-  tests/DatasetOpeningReference.java tests/ViewerWorkflowReference.java tests/BrowserWorkflowReference.java tests/IntegrationEditReference.java tests/IntegrationReopenReference.java tests/PlotRasterReference.java tests/IntegralTableReference.java tests/IntegralTableRasterProbe.java tests/SaveTransactionReference.java \
-  tests/CapturedAxisReference.java tests/CapturedSpectrumReference.java tests/CapturedIntegralPanelReference.java tests/CursorMessageRasterReference.java tests/EditingToolsRasterReference.java tests/ViewerToolsRasterReference.java tests/BrowserTreeRasterReference.java tests/BrowserSearchRasterReference.java tests/RangeEntryRasterReference.java tests/DatasetTabsRasterReference.java tests/NavigationTabsRasterReference.java tests/WindowsTextReference.java tests/NativeTextRasterReference.java tests/RibbonRasterReference.java tests/WindowsPhaseControllerReference.java
+  tests/DatasetOpeningReference.java tests/ViewerWorkflowReference.java tests/ViewerCapturedPanelReference.java tests/BrowserWorkflowReference.java tests/IntegrationEditReference.java tests/IntegrationReopenReference.java tests/PlotRasterReference.java tests/IntegralTableReference.java tests/IntegralTableRasterProbe.java tests/SaveTransactionReference.java \
+  tests/CapturedAxisReference.java tests/CapturedSpectrumReference.java tests/CapturedIntegralPanelReference.java tests/CursorMessageRasterReference.java tests/EditingToolsRasterReference.java tests/ViewerToolsRasterReference.java tests/BrowserTreeRasterReference.java tests/BrowserSearchRasterReference.java tests/BrowserDataTabRasterReference.java tests/RangeEntryRasterReference.java tests/DatasetTabsRasterReference.java tests/NavigationTabsRasterReference.java tests/WindowsTextReference.java tests/NativeTextRasterReference.java tests/RibbonRasterReference.java tests/WindowsPhaseControllerReference.java
 gcc -std=c11 -O2 -fPIC -shared -ffp-contract=off \
   -I"$JAVA_HOME/include" -I"$JAVA_HOME/include/linux" \
   -o build/native/libtopspin_reconstructed.so native/kernel.c native/jni.c -lm
@@ -19,6 +19,7 @@ gcc -std=c11 -O2 -fPIC -shared $(pkg-config --cflags freetype2) \
 gcc -std=c11 -O2 -Wall -Wextra -o build/test/native-raw-axis-oracle tests/native_raw_axis_oracle.c
 gcc -std=c11 -O2 -Wall -Wextra -o build/test/native-raw-range-oracle tests/native_raw_range_oracle.c
 gcc -std=c11 -O2 -Wall -Wextra -Werror -o build/test/native-raw-read-oracle tests/native_raw_read_oracle.c
+java -cp build/app LiveRawReadReference artifacts/live-fid-reference-20261019
 java -cp build/app RawReadReference "${TOPSPIN_NATIVE_REFERENCE_BINARY:-/home/maxlang/.local/share/topspin/opt/topspin5.0.0/prog/mod/dataserver}"
 java -cp build/app RawValueRangeReference "${TOPSPIN_NATIVE_REFERENCE_BINARY:-/home/maxlang/.local/share/topspin/opt/topspin5.0.0/prog/mod/dataserver}"
 java -cp build/app RawTimeRangeReference "${TOPSPIN_NATIVE_REFERENCE_BINARY:-/home/maxlang/.local/share/topspin/opt/topspin5.0.0/prog/mod/dataserver}"
@@ -51,6 +52,7 @@ java -Djava.awt.headless=true -Djava.library.path=build/native -cp build/app:lib
 java -Djava.awt.headless=true -Djava.library.path=build/native -cp build/app:lib/flatlaf-3.4.1.jar NavigationTabsRasterReference
 java -Djava.awt.headless=true -Djava.library.path=build/native -cp build/app:lib/flatlaf-3.4.1.jar BrowserTreeRasterReference
 java -Djava.awt.headless=true -Djava.library.path=build/native -cp build/app:lib/flatlaf-3.4.1.jar BrowserSearchRasterReference
+java -Djava.awt.headless=true -Djava.library.path=build/native -cp build/app:lib/flatlaf-3.4.1.jar BrowserDataTabRasterReference
 java -Djava.awt.headless=true -cp build/app:lib/flatlaf-3.4.1.jar DatasetTabsRasterReference
 task_vendor_root="${TOPSPIN_REFERENCE_ROOT:-/home/maxlang/.wine-topspin-5/drive_c/Bruker/TopSpinProcessing5.0.0}"
 javac -proc:none -cp "build/app:$task_vendor_root/classes/lib/*" -d build/test tests/BrowserBehaviorReference.java
@@ -83,6 +85,13 @@ java -Djava.awt.headless=true -cp "build/test:$task_vendor_root/classes/lib/*" P
 java -Djava.awt.headless=true -cp "build/test:$task_vendor_root/classes/lib/*" PointerGestureReference
 java -Djava.awt.headless=true -cp "build/test:$task_vendor_root/classes/lib/*" ViewRangesReference
 if [ -n "${DISPLAY:-}" ]; then
+  javac -proc:none -cp "build/test:build/app:lib/flatlaf-3.4.1.jar:$task_vendor_root/classes/lib/*" -d build/test tests/ModuleRangesReference.java tests/RawInitialViewReference.java tests/ViewerFidTraceReference.java
+  java -Djava.awt.headless=true -cp "build/test:build/app:lib/flatlaf-3.4.1.jar:$task_vendor_root/classes/lib/*" ModuleRangesReference
+  java -Djava.awt.headless=true -cp "build/test:build/app:lib/flatlaf-3.4.1.jar:$task_vendor_root/classes/lib/*" RawInitialViewReference
+  _JAVA_AWT_WM_NONREPARENTING=1 java -Dsun.java2d.uiScale=2 -Djava.library.path=build/native -cp "build/test:build/app:lib/flatlaf-3.4.1.jar:$task_vendor_root/classes/lib/*" ViewerFidTraceReference
+  for task_panel_reference in LiveFidPanelReference LiveModePanelReference ViewerCapturedPanelReference; do
+    _JAVA_AWT_WM_NONREPARENTING=1 java -Dsun.java2d.uiScale=2 -Djava.library.path=build/native -cp build/app:lib/flatlaf-3.4.1.jar "$task_panel_reference"
+  done
   _JAVA_AWT_WM_NONREPARENTING=1 java -Dsun.java2d.uiScale=2 -Djava.library.path=build/native -cp build/app:lib/flatlaf-3.4.1.jar BrowserWorkflowReference
   _JAVA_AWT_WM_NONREPARENTING=1 java -Dsun.java2d.uiScale=2 -cp build/app:lib/flatlaf-3.4.1.jar RangeEntryRasterReference
   _JAVA_AWT_WM_NONREPARENTING=1 java -Dsun.java2d.uiScale=2 -cp build/app:lib/flatlaf-3.4.1.jar ViewerToolsRasterReference

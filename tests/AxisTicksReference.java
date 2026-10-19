@@ -30,6 +30,10 @@ public class AxisTicksReference {
             Original original=new Original();original.run(start,end,unit,label,exponents,engineering);
             original.check(AxisTicks.calculate(start,end,unit,label,exponents,engineering));cases++;
         }
+        for(double value:new double[]{0,1,-2,1e-30,1e30})for(String unit:new String[]{"s","rel","ppm"})for(boolean exponents:new boolean[]{false,true}) {
+            Original original=new Original();original.run(value,value,unit,null,exponents,true);
+            original.check(AxisTicks.calculate(value,value,unit,null,exponents,true));cases++;
+        }
         System.out.println("PASS "+cases+" original linear-axis layouts, "+VendorDifferential.comparisons+" bitwise tick comparisons and exact labels");
     }
 }

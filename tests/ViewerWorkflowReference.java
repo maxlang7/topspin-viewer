@@ -41,6 +41,37 @@ public class ViewerWorkflowReference {
     private static void collectFields(Container parent,java.util.List<JTextField> fields) {
         for(Component child:parent.getComponents())if(child instanceof JTextField field)fields.add(field);else if(child instanceof Container container)collectFields(container,fields);
     }
+    private static JFileChooser chooser(Container parent) {
+        for(Component child:parent.getComponents()) {
+            if(child instanceof JFileChooser found)return found;
+            if(child instanceof Container container){JFileChooser found=chooser(container);if(found!=null)return found;}
+        }
+        return null;
+    }
+    private static void openingDialogWorkflow(Viewer viewer,Path experiment)throws Exception {
+        Method choose=Viewer.class.getDeclaredMethod("chooseOpen");choose.setAccessible(true);Throwable[] failure={null};
+        for(boolean approve:new boolean[]{true,false}) {
+            Spectrum before=(Spectrum)field(viewer,"spectrum");
+            javax.swing.Timer timer=new javax.swing.Timer(80,null);
+            timer.addActionListener(event->{for(Window window:viewer.getOwnedWindows())if(window instanceof JDialog dialog && dialog.isShowing()) {
+                JFileChooser chooser=chooser(dialog);if(chooser==null)continue;timer.stop();
+                try {
+                    if(chooser.getFileSelectionMode()!=JFileChooser.FILES_AND_DIRECTORIES)throw new AssertionError("Open dialog cannot select both acquisitions and files");
+                    if(approve) {
+                        chooser.setCurrentDirectory(experiment.getParent().toFile());chooser.setSelectedFile(experiment.toFile());chooser.approveSelection();
+                    } else {
+                        if(!chooser.getCurrentDirectory().toPath().toRealPath().equals(experiment.getParent().toRealPath()))throw new AssertionError("Open dialog did not remember its last directory");
+                        chooser.cancelSelection();
+                    }
+                }catch(Throwable error){failure[0]=error;chooser.cancelSelection();}
+            }});
+            timer.start();try{choose.invoke(viewer);}finally{timer.stop();}
+            if(failure[0]!=null)throw new AssertionError("Opening dialog workflow",failure[0]);
+            Spectrum after=(Spectrum)field(viewer,"spectrum");
+            if(approve && !after.experiment.equals(experiment.toRealPath()))throw new AssertionError("Open dialog did not load the chosen acquisition");
+            if(!approve && after!=before)throw new AssertionError("Cancel replaced the current dataset");
+        }
+    }
     private static void regionDialogWorkflow(Viewer viewer,Spectrum spectrum,Object plot) throws Exception {
         spectrum.integrals.adjustBias(0,.003,1);spectrum.integrals.adjustSlope(0,.002,1,spectrum.real,spectrum.left,spectrum.right);
         var inherited=spectrum.integrals.regions().get(0);int count=spectrum.integrals.regions().size();Throwable[] failure={null};
@@ -126,7 +157,7 @@ public class ViewerWorkflowReference {
         try {
             SwingUtilities.invokeAndWait(()->{
                 try {
-                    Viewer viewer=reference[0];Spectrum spectrum=(Spectrum)field(viewer,"spectrum");
+                    Viewer viewer=reference[0];openingDialogWorkflow(viewer,experiment);Spectrum spectrum=(Spectrum)field(viewer,"spectrum");
                     double[] before=spectrum.real.clone();int regions=spectrum.integrals.regions().size();
                     textButton(viewer.getContentPane(),"Analyze").doClick();
                     if(field(viewer,"mode")!=Viewer.Mode.VIEW)throw new AssertionError("Analyze ribbon changed the active data tool");
@@ -147,10 +178,10 @@ public class ViewerWorkflowReference {
                     if(!tabs.selected().equals("FID") || !(boolean)field(displayedPlot,"showFid") || spectrum.raw==null)throw new AssertionError("FID tab did not open raw data");
                     if(!Arrays.equals(before,spectrum.real))throw new AssertionError("FID viewing changed the processed spectrum");
                     RawTrace trace=(RawTrace)field(displayedPlot,"rawTrace");
-                    if(trace.samples.length!=spectrum.raw.fid.length || (double)field(displayedPlot,"viewLeft")!=0 || (double)field(displayedPlot,"viewRight")!=trace.time.end() || (double)field(displayedPlot,"baseline")!=.5)throw new AssertionError("FID view did not use the full interleaved trace, time axis and centered baseline");
+                    if(trace.samples.length!=spectrum.raw.fid.length || (double)field(displayedPlot,"viewLeft")!=0 || (double)field(displayedPlot,"viewRight")!=trace.time.end() || !field(displayedPlot,"verticalRange").equals(trace.verticalRange()))throw new AssertionError("FID view did not use the full interleaved trace, native time axis and padded intensity range");
                     command(viewer,".zi");
                     double fidLeft=(double)field(displayedPlot,"viewLeft"),fidRight=(double)field(displayedPlot,"viewRight");
-                    if(!(fidLeft>0 && fidRight<trace.time.end()))throw new AssertionError("FID zoom used spectrum coordinates");
+                    if(!(fidLeft==0 && fidRight<trace.time.end()))throw new AssertionError("FID zoom did not preserve its native left boundary");
                     click(viewer,"Larger by factor 2");ViewRanges.Range fidVertical=(ViewRanges.Range)field(displayedPlot,"verticalRange");
                     Component fidPlot=(Component)displayedPlot;long fidTime=System.currentTimeMillis();
                     fidPlot.dispatchEvent(new MouseEvent(fidPlot,MouseEvent.MOUSE_MOVED,fidTime,0,fidPlot.getWidth()/3,120,0,false,MouseEvent.NOBUTTON));

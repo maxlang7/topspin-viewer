@@ -8,7 +8,11 @@ public final class ViewRanges {
         return new Range(start,end);
     }
     public static Range zoom(Range range,double factor,Range full) {
+        return zoom(range,factor,full,false);
+    }
+    public static Range zoom(Range range,double factor,Range full,boolean leftBound) {
         if(factor==0)return intersect(range,full);
+        if(leftBound)return intersect(new Range(range.start(),range.start()-(range.start()-range.end())/factor),full);
         double half=(range.start()-range.end())/factor/2.0,center=(range.end()+range.start())/2.0;
         return intersect(new Range(center+half,center-half),full);
     }
@@ -35,6 +39,15 @@ public final class ViewRanges {
     public static Range baseline(Range range,double baseline,double reference) {
         double extent=range.end()-range.start(),start=reference-extent*baseline;
         return new Range(start,start+extent);
+    }
+    public static Range padded(Range range) {
+        double padding=(range.start()-range.end())*.05;
+        return new Range(range.start()+padding,range.end()-padding);
+    }
+    public static Range initial(Range range) {
+        Range padded=padded(range);
+        if(padded.start()!=padded.end())return padded;
+        return padded.start()==0?new Range(-1,1):new Range(padded.start()/2,2*padded.start());
     }
     private ViewRanges(){}
 }

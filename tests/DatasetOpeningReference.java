@@ -4,6 +4,7 @@ import java.util.zip.*;
 
 public class DatasetOpeningReference {
     public static void main(String[] args) throws Exception {
+        if(DatasetOpener.isRawProcessingDirectory(Path.of("/home")))throw new AssertionError("A top-level folder was classified as raw processing data");
         Path experiment=Path.of(args[0]).toRealPath();Path root=Files.createTempDirectory(Path.of("artifacts"),"opening-reference-");
         Path archive=root.resolve("acquisition.zip");
         try(ZipOutputStream zip=new ZipOutputStream(Files.newOutputStream(archive,StandardOpenOption.CREATE_NEW));var files=Files.walk(experiment)) {

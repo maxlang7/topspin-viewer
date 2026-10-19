@@ -33,7 +33,7 @@ public final class DatasetOpener {
     }
     static boolean isRawProcessingDirectory(Path directory) {
         Path pdata=directory.getParent(),experiment=pdata==null?null:pdata.getParent();
-        return pdata!=null && "pdata".equals(pdata.getFileName().toString()) && experiment!=null
+        return pdata!=null && pdata.getFileName()!=null && "pdata".equals(pdata.getFileName().toString()) && experiment!=null
             && Files.isRegularFile(directory.resolve("proc")) && !Files.isRegularFile(directory.resolve("1r"))
             && Files.isRegularFile(experiment.resolve("acqus")) && Files.isRegularFile(experiment.resolve("fid"));
     }
