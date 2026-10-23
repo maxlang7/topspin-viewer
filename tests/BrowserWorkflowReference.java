@@ -107,6 +107,6 @@ public class BrowserWorkflowReference {
                 try{ImageIO.write(image,"png",work.resolve("browser.png").toFile());}catch(Exception error){throw new RuntimeException(error);}
             });
             System.out.println("PASS browser hierarchy, numeric order, leaf-only double-click, Enter, live title search, clear, refresh and persisted locations: "+work);
-        }finally{SwingUtilities.invokeAndWait(frame::dispose);}
+        }finally{SwingUtilities.invokeAndWait(()->{browser.close();frame.dispose();});}
     }
 }

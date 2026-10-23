@@ -132,6 +132,12 @@ public final class Viewer extends JFrame {
             JMenuItem display=new JMenuItem("Display");display.addActionListener(e->open(entry.path()));menu.add(display);menu.addSeparator();
         }
         JMenuItem add=new JMenuItem("Add data directory...");add.addActionListener(e->chooseDataDirectory());menu.add(add);
+        JMenu sort=new JMenu("Sort by");ButtonGroup sorting=new ButtonGroup();
+        for(var order:DatasetBrowserModel.SortOrder.values()) {
+            JRadioButtonMenuItem item=new JRadioButtonMenuItem(order.label,datasetBrowser.sortOrder()==order);
+            item.addActionListener(e->perform(()->datasetBrowser.sortOrder(order)));sorting.add(item);sort.add(item);
+        }
+        menu.add(sort);
         JMenuItem refresh=new JMenuItem("Refresh");refresh.addActionListener(e->datasetBrowser.refresh());menu.add(refresh);menu.show(tree,event.getX(),event.getY());
     }
     private void chooseDataDirectory() {
@@ -139,6 +145,7 @@ public final class Viewer extends JFrame {
         chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
         if(chooser.showOpenDialog(this)==JFileChooser.APPROVE_OPTION)perform(()->{Path path=chooser.getSelectedFile().toPath();datasetBrowser.addRoot(path);browserLocations.remember(path);});
     }
+    @Override public void dispose(){if(datasetBrowser!=null)datasetBrowser.close();super.dispose();}
     private JPanel workbench() {
         JPanel panel=new JPanel(new BorderLayout());panel.setBackground(new Color(204,204,204));
         panel.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(new Color(142,142,142)),BorderFactory.createEmptyBorder(8,8,2,8)));

@@ -7,9 +7,11 @@ public final class BrowserLocations {
     private final Path file;
     private final List<Path> roots=new ArrayList<>();
     private Path lastDirectory;
+    private DatasetBrowserModel.SortOrder sortOrder=DatasetBrowserModel.SortOrder.NAME;
     public BrowserLocations(Path file,Path initial) {
         this.file=file;Properties props=new Properties();
         if(Files.isRegularFile(file))try(var input=Files.newInputStream(file)){props.load(input);}catch(IOException ignored){}
+        try{sortOrder=DatasetBrowserModel.SortOrder.valueOf(props.getProperty("sortOrder","NAME"));}catch(IllegalArgumentException ignored){}
         int count;try{count=Math.min(1000,Integer.parseInt(props.getProperty("root.count","0")));}catch(NumberFormatException ignored){count=0;}
         for(int i=0;i<count;i++) {
             try{Path root=Path.of(props.getProperty("root."+i,"")).toAbsolutePath().normalize();
@@ -30,6 +32,8 @@ public final class BrowserLocations {
     }
     public List<Path> roots(){return List.copyOf(roots);}
     public Path lastDirectory(){return lastDirectory;}
+    public DatasetBrowserModel.SortOrder sortOrder(){return sortOrder;}
+    public void sortOrder(DatasetBrowserModel.SortOrder order)throws IOException {sortOrder=order;save();}
     public boolean add(Path directory) throws IOException {
         Path root=directory.toRealPath();
         if(!Files.isDirectory(root))throw new IOException("Choose a data directory");
@@ -43,6 +47,7 @@ public final class BrowserLocations {
         Properties props=new Properties();props.setProperty("root.count",Integer.toString(roots.size()));
         for(int i=0;i<roots.size();i++)props.setProperty("root."+i,roots.get(i).toString());
         props.setProperty("lastDirectory",lastDirectory.toString());
+        props.setProperty("sortOrder",sortOrder.name());
         Files.createDirectories(file.getParent());
         Path temp=Files.createTempFile(file.getParent(),"browser-",".properties");
         try(var output=Files.newOutputStream(temp)){props.store(output,"TopSpin Viewer browser");}

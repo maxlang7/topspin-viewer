@@ -3,12 +3,13 @@ import java.io.IOException;
 import java.nio.file.*;
 import java.util.*;
 import java.util.function.Consumer;
+import java.util.concurrent.atomic.AtomicBoolean;
 import javax.swing.*;
 import javax.swing.event.*;
 import javax.swing.tree.*;
 
 /** Lazy folder browsing and background search, with leaf-only dataset opening. */
-public final class DatasetBrowser {
+public final class DatasetBrowser implements AutoCloseable {
     private static final class Node extends DefaultMutableTreeNode {
         boolean loaded;
         boolean loading;
@@ -31,9 +32,14 @@ public final class DatasetBrowser {
     private String filter="";
     private int generation;
     private SwingWorker<DefaultMutableTreeNode,Void> search;
+    private final javax.swing.Timer liveRefresh;
+    private BrowserWatcher watcher;
+    private boolean closed;
+    private final AtomicBoolean refreshQueued=new AtomicBoolean();
 
     public DatasetBrowser(JTree tree,DefaultMutableTreeNode root,BrowserLocations locations,Consumer<Path> open,Consumer<String> status) {
         this.tree=tree;this.root=root;this.locations=locations;this.open=open;this.status=status;
+        liveRefresh=new javax.swing.Timer(600,event->refresh());liveRefresh.setRepeats(false);
         model=(DefaultTreeModel)tree.getModel();
         tree.setToggleClickCount(2);tree.setToolTipText("");
         tree.addTreeWillExpandListener(new TreeWillExpandListener(){
@@ -59,6 +65,10 @@ public final class DatasetBrowser {
             }
         }});
         expanded.addAll(locations.roots());refresh();
+        try{watcher=new BrowserWatcher(locations.roots(),()->{
+            if(refreshQueued.compareAndSet(false,true))SwingUtilities.invokeLater(()->{refreshQueued.set(false);if(!closed)liveRefresh.restart();});
+        });}
+        catch(IOException error){status.accept("Live folder refresh unavailable: "+error.getMessage());}
     }
     public void bindSearch(JTextField field) {
         javax.swing.Timer timer=new javax.swing.Timer(180,event->filter(field.getText()));timer.setRepeats(false);
@@ -70,8 +80,10 @@ public final class DatasetBrowser {
         field.addActionListener(event->{timer.stop();filter(field.getText());});
     }
     public void addRoot(Path path) throws IOException {
-        if(locations.add(path)){expanded.add(path.toRealPath());refresh();}
+        if(locations.add(path)){if(watcher!=null)watcher.roots(locations.roots());expanded.add(path.toRealPath());refresh();}
     }
+    public DatasetBrowserModel.SortOrder sortOrder(){return locations.sortOrder();}
+    public void sortOrder(DatasetBrowserModel.SortOrder order)throws IOException {locations.sortOrder(order);refresh();}
     public void opened(Spectrum spectrum) {
         Path location=spectrum.experiment==null?spectrum.path:spectrum.experiment;
         Path target=spectrum.path;
@@ -83,6 +95,7 @@ public final class DatasetBrowser {
         if(filter.isEmpty()){savedSelection=target;restore(root);}
     }
     public void refresh() {
+        if(closed)return;
         generation++;if(search!=null)search.cancel(true);
         if(!filter.isEmpty()){startSearch();return;}
         Path selected=selection();if(selected!=null)savedSelection=selected;
@@ -93,9 +106,9 @@ public final class DatasetBrowser {
     private Path selection(){return tree.getLastSelectedPathComponent() instanceof Node node?node.entry().path():null;}
     private void load(Node node) {
         if(node.loaded || node.loading || !filter.isEmpty())return;
-        node.loading=true;int version=generation;
+        node.loading=true;int version=generation;var order=sortOrder();
         new SwingWorker<java.util.List<DatasetBrowserModel.Entry>,Void>(){
-            protected java.util.List<DatasetBrowserModel.Entry> doInBackground()throws IOException{return DatasetBrowserModel.children(node.entry());}
+            protected java.util.List<DatasetBrowserModel.Entry> doInBackground()throws IOException{return DatasetBrowserModel.children(node.entry(),order);}
             protected void done(){
                 if(version!=generation)return;
                 node.loading=false;
@@ -126,7 +139,8 @@ public final class DatasetBrowser {
         refresh();
     }
     private void startSearch() {
-        final int version=generation;final String query=filter;
+        final int version=generation;final String query=filter;final var order=sortOrder();
+        Path selected=selection();if(selected!=null)savedSelection=selected;
         status.accept("Searching data folders...");
         search=new SwingWorker<DefaultMutableTreeNode,Void>(){
             protected DefaultMutableTreeNode doInBackground()throws IOException {
@@ -143,7 +157,7 @@ public final class DatasetBrowser {
                     || DatasetBrowserModel.title(entry).toLowerCase(Locale.ROOT).contains(query);
                 Node result=new Node(entry);result.removeAllChildren();result.loaded=true;
                 if(!entry.dataset()) {
-                    try{for(var child:DatasetBrowserModel.children(entry)){Node match=find(child,matches);if(match!=null)result.add(match);}}
+                    try{for(var child:DatasetBrowserModel.children(entry,order)){Node match=find(child,matches);if(match!=null)result.add(match);}}
                     catch(AccessDeniedException ignored){}
                 }
                 return matches || result.getChildCount()>0?result:null;
@@ -154,9 +168,13 @@ public final class DatasetBrowser {
                     DefaultMutableTreeNode results=get();root.removeAllChildren();
                     while(results.getChildCount()>0)root.add((DefaultMutableTreeNode)results.getFirstChild());
                     model.reload();for(int row=0;row<tree.getRowCount();row++)tree.expandRow(row);
+                    restore(root);
                     status.accept(root.getChildCount()==0?"No matching datasets":"Search complete");
                 }catch(Exception error){status.accept("Search failed: "+(error.getCause()==null?error:error.getCause()).getMessage());}
             }
         };search.execute();
+    }
+    @Override public void close(){
+        closed=true;generation++;liveRefresh.stop();if(search!=null)search.cancel(true);if(watcher!=null)watcher.close();
     }
 }

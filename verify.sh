@@ -8,7 +8,7 @@ mkdir -p build/app build/test build/native
 javac -proc:none -cp lib/flatlaf-3.4.1.jar -d build/app src/*.java \
   tests/LiveRawReadReference.java tests/LiveFidPanelReference.java tests/LiveModePanelReference.java tests/RawReference.java tests/RawTimeRangeReference.java tests/RawValueRangeReference.java tests/RawReadReference.java tests/SavedPhaseReference.java tests/ReaderReference.java \
   tests/WriterReference.java tests/LiveNumericsReference.java tests/LiveIntegrationReference.java \
-  tests/DatasetOpeningReference.java tests/ViewerWorkflowReference.java tests/ViewerCapturedPanelReference.java tests/BrowserWorkflowReference.java tests/IntegrationEditReference.java tests/IntegrationReopenReference.java tests/PlotRasterReference.java tests/IntegralTableReference.java tests/IntegralTableRasterProbe.java tests/SaveTransactionReference.java \
+  tests/DatasetOpeningReference.java tests/ViewerWorkflowReference.java tests/ViewerCapturedPanelReference.java tests/BrowserWorkflowReference.java tests/BrowserLiveReference.java tests/IntegrationEditReference.java tests/IntegrationReopenReference.java tests/PlotRasterReference.java tests/IntegralTableReference.java tests/IntegralTableRasterProbe.java tests/SaveTransactionReference.java \
   tests/CapturedAxisReference.java tests/CapturedSpectrumReference.java tests/CapturedIntegralPanelReference.java tests/CursorMessageRasterReference.java tests/EditingToolsRasterReference.java tests/ViewerToolsRasterReference.java tests/BrowserTreeRasterReference.java tests/BrowserSearchRasterReference.java tests/BrowserDataTabRasterReference.java tests/RangeEntryRasterReference.java tests/DatasetTabsRasterReference.java tests/NavigationTabsRasterReference.java tests/WindowsTextReference.java tests/NativeTextRasterReference.java tests/RibbonRasterReference.java tests/WindowsPhaseControllerReference.java
 gcc -std=c11 -O2 -fPIC -shared -ffp-contract=off \
   -I"$JAVA_HOME/include" -I"$JAVA_HOME/include/linux" \
@@ -93,6 +93,7 @@ if [ -n "${DISPLAY:-}" ]; then
     _JAVA_AWT_WM_NONREPARENTING=1 java -Dsun.java2d.uiScale=2 -Djava.library.path=build/native -cp build/app:lib/flatlaf-3.4.1.jar "$task_panel_reference"
   done
   _JAVA_AWT_WM_NONREPARENTING=1 java -Dsun.java2d.uiScale=2 -Djava.library.path=build/native -cp build/app:lib/flatlaf-3.4.1.jar BrowserWorkflowReference
+  _JAVA_AWT_WM_NONREPARENTING=1 java -Dsun.java2d.uiScale=2 -Djava.library.path=build/native -cp build/app:lib/flatlaf-3.4.1.jar BrowserLiveReference
   _JAVA_AWT_WM_NONREPARENTING=1 java -Dsun.java2d.uiScale=2 -cp build/app:lib/flatlaf-3.4.1.jar RangeEntryRasterReference
   _JAVA_AWT_WM_NONREPARENTING=1 java -Dsun.java2d.uiScale=2 -cp build/app:lib/flatlaf-3.4.1.jar ViewerToolsRasterReference
   _JAVA_AWT_WM_NONREPARENTING=1 java -Dsun.java2d.uiScale=2 -Djava.library.path=build/native \
