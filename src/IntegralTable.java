@@ -16,17 +16,17 @@ public final class IntegralTable extends JScrollPane {
     public IntegralTable() {
         setViewport(new JViewport(){
             @Override protected void paintComponent(Graphics graphics) {
-                super.paintComponent(graphics);graphics.setColor(new Color(245,245,245));
+                super.paintComponent(graphics);graphics.setColor(Theme.color(new Color(245,245,245)));
                 int width=table.getColumnModel().getTotalColumnWidth();
                 for(int row=1;row*table.getRowHeight()<getHeight();row+=2)
                     graphics.fillRect(0,row*table.getRowHeight(),width,table.getRowHeight());
             }
-        });getViewport().setBackground(Color.WHITE);
-        setViewportView(table);setBorder(BorderFactory.createLineBorder(new Color(179,179,179)));
+        });getViewport().setBackground(Theme.color(Color.WHITE));
+        setViewportView(table);setBorder(BorderFactory.createLineBorder(Theme.color(new Color(179,179,179))));
         table.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);table.setRowHeight(28);
         table.setShowHorizontalLines(false);table.setShowVerticalLines(true);table.setIntercellSpacing(new Dimension(1,1));
-        table.setGridColor(new Color(204,204,204));
-        table.setFont(Assets.regular);table.setForeground(Color.BLACK);table.setBackground(Color.WHITE);
+        table.setGridColor(Theme.color(new Color(204,204,204)));
+        table.setFont(Assets.regular);table.setForeground(Theme.color(Color.BLACK));table.setBackground(Theme.color(Color.WHITE));
         table.setModel(new AbstractTableModel() {
             public int getRowCount(){return values.length;}
             public int getColumnCount(){return NAMES.length;}
@@ -45,12 +45,12 @@ public final class IntegralTable extends JScrollPane {
                 setText(display(value,column));setFont(Assets.regular);
                 setBorder(BorderFactory.createEmptyBorder(1,column==0?21:10,1,10));
                 setHorizontalAlignment(column==0?SwingConstants.LEFT:SwingConstants.RIGHT);
-                if(!selected)setBackground(row%2==0?Color.WHITE:new Color(245,245,245));return this;
+                if(!selected)setBackground(row%2==0?Theme.color(Color.WHITE):Theme.color(new Color(245,245,245)));return this;
             }
         });
         table.setTableHeader(new JTableHeader(table.getColumnModel()) {
             @Override protected void paintComponent(Graphics graphics) {
-                super.paintComponent(graphics);graphics.setColor(new Color(204,204,204));
+                super.paintComponent(graphics);graphics.setColor(Theme.color(new Color(204,204,204)));
                 for(int column=0;column<getColumnModel().getColumnCount();column++) {
                     Rectangle rect=getHeaderRect(column);graphics.fillRect(rect.x+rect.width-1,0,1,getHeight()-1);
                 }
@@ -63,13 +63,13 @@ public final class IntegralTable extends JScrollPane {
             }
             @Override public Component getTableCellRendererComponent(JTable t,Object value,boolean selected,boolean focus,int row,int column) {
                 super.getTableCellRendererComponent(t,value,false,false,row,column);
-                setFont(Assets.regular);setBackground(new Color(230,230,230));setForeground(Color.BLACK);
+                setFont(Assets.regular);setBackground(Theme.color(new Color(230,230,230)));setForeground(Theme.color(Color.BLACK));
                 setBorder(BorderFactory.createEmptyBorder(2,3,2,3));setHorizontalAlignment(SwingConstants.CENTER);
                 setIcon(column==0?sortUp:null);return this;
             }
         });
         table.getTableHeader().setFont(Assets.regular);table.getTableHeader().setPreferredSize(new Dimension(1,28));
-        table.getTableHeader().setBackground(new Color(230,230,230));table.getTableHeader().setForeground(Color.BLACK);
+        table.getTableHeader().setBackground(Theme.color(new Color(230,230,230)));table.getTableHeader().setForeground(Theme.color(Color.BLACK));
         setColumnHeaderView(table.getTableHeader());
     }
     public void load(Spectrum spectrum) {
@@ -95,10 +95,10 @@ public final class IntegralTable extends JScrollPane {
     private static Icon sortIcon(boolean ascending) {
         Icon icon=ascending?new FlatAscendingSortIcon(){
             {chevron=true;}
-            @Override protected void paintIcon(Component component,Graphics2D graphics){graphics.setColor(Color.BLACK);paintArrow(component,graphics,true);}
+            @Override protected void paintIcon(Component component,Graphics2D graphics){graphics.setColor(Theme.color(Color.BLACK));paintArrow(component,graphics,true);}
         }:new FlatDescendingSortIcon(){
             {chevron=true;}
-            @Override protected void paintIcon(Component component,Graphics2D graphics){graphics.setColor(Color.BLACK);paintArrow(component,graphics,true);}
+            @Override protected void paintIcon(Component component,Graphics2D graphics){graphics.setColor(Theme.color(Color.BLACK));paintArrow(component,graphics,true);}
         };
         return new Icon(){
             public int getIconWidth(){return icon.getIconWidth();}

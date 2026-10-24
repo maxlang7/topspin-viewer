@@ -1,16 +1,24 @@
-# TopSpin viewer replacement
+# NMR Viewer
 
-Work in progress for opening Bruker 1D data, spectrum viewing, manual integration and manual phase correction. The target is the installed Windows TopSpin Processing 5.0.0. Exact numerical comparisons are required; tolerance matches do not pass.
+Standalone viewer for Bruker 1D data, spectrum viewing, manual integration, manual phase correction and manual frequency-axis calibration. The target is the installed Windows TopSpin Processing 5.0.0. Exact numerical comparisons are required; tolerance matches do not pass.
 
-Run `bash run.sh /path/to/experiment` or `bash run.sh /path/to/pdata/1`. The launcher enters the project Nix shell, compiles Java and the independent C processing library, and opens the viewer. It currently uses the laptop's 2x display scale.
+Run `bash run.sh /path/to/experiment` or `bash run.sh /path/to/pdata/1`. The launcher enters the project Nix shell, compiles Java and the independent C processing library, and opens the viewer. It currently uses the laptop's 2x display scale. The desktop launcher is named **NMR Viewer** and uses an independent spectrum icon.
 
 The data browser shows folders, experiments (including their pulse program), then processing numbers without file icons. Double-click a processing number or press Enter to open it. Search filters names and spectrum titles as you type. New and changed datasets refresh automatically after a brief pause in filesystem activity, including while searching. Expanded folders and selection are restored after refresh.
 
-Right-click the tree and choose **Sort by** for name order, newest modified first, or oldest modified first. Modification order uses the latest on-disk timestamp among each folder's visible files and subfolders, so edits to an existing spectrum also update its parent folders' position. Ties use the usual numeric-aware name ordering. The same menu lets you add a data directory or refresh manually. Added directories, sort order and the last Open dialog location are retained in `~/.config/topspin-viewer/browser.properties`, respecting `XDG_CONFIG_HOME` when set. Browser enumeration, modification-time scanning and searching run in background workers. Folder watchers stop when the viewer closes.
+Click the filter button at the right of the search field to choose alphabetical, **Alphabetical (natural order)**, newest modified first, or oldest modified first. Natural order compares each number within a name numerically, so `MLN1P99` precedes `MLN1P111`, including arbitrarily long digit sequences. Modification order uses the latest on-disk timestamp among each folder's visible files and subfolders. Sort choice survives reopening. Right-click remains available for adding data directories and manual refresh. Browser preferences are retained in `~/.config/topspin-viewer/browser.properties`, respecting `XDG_CONFIG_HOME`. Enumeration, timestamp scanning and searches run in background workers; watchers stop when the viewer closes.
 
 The application does not load Bruker classes, executables, processing libraries, Python or the TopSpin network API. It uses a pinned FlatLaf 3.4.1 dependency, captured control graphics and pinned fonts. These local reference assets have not been published. Native interface text uses FreeType, with the target's glyph coverage and LCD color blending reconstructed independently of Wine.
 
+The application always installs **Gruvbox Dark Hard**, using the [original Gruvbox palette](https://github.com/morhetz/gruvbox/blob/master/colors/gruvbox.vim): `#1d2021` canvas, warm foregrounds, aqua spectra and yellow integral curves. The TopSpin wordmark, logo and application title are removed from the interface and launcher. Spectrum/FID plots, axes, phase controls, integrals, tables, browser, menus and dialogs use the dark theme. Historical pixel-oracle tests keep their captured reference palette internally; that palette is not a production setting.
+
+Choose **Calib. Axis** in Process or Analyze, or enter `.cal`, then click the reference position and enter its known ppm value. Confirm saves SF and OFFSET for the current processing number with recoverable versions. Cancel and Escape leave the axis unchanged. For an existing processed spectrum, calibration changes only processing parameter files, preserving real/imaginary components and existing integral files. The arithmetic, 1e-5 modification threshold, 15-significant-digit parameter storage and post-return range clipping follow the original controller. On opening a raw-only acquisition, confirming calibration also saves its in-memory processing result.
+
 ## Verified numerical behavior
+
+- Axis calibration matches 20,000 executions of the unchanged original ppm/Hz JVM arithmetic blocks on 60,000 bitwise results, plus 2,000 executions of the original dialog threshold. Sixteen dialogs executed in licensed Windows TopSpin supply independent SF/OFFSET, translated-range and native API file-read endpoints. Cases with saved integrals retain matching component/region/title bytes. Additional captures after the calibration module returns verify clipping against the rounded on-disk axis limits. No vendor code is used at runtime.
+- The production UI workflow checks natural sorting through the actual inline filter button, persisted choices, dark spectrum/FID/phase/integration panels, branding removal, and calibration click/confirm/cancel/reopen. The complete October 24 scientific regression remains under `artifacts/verification-20261024-full-final.txt`.
+
 
 - The licensed Windows TopSpin API supplies independent full-buffer references for all 85 lab acquisitions: 5,570,560 bitwise raw samples, 170 bitwise time endpoints, index ranges and units match.
 - Nine composed Windows FID panels cover integer, floating-point and zero buffers at default, zoomed and vertically scaled states: 21,528,828 exact trace-area pixels, 1,591,164 exact axis pixels and 36 bitwise view endpoints. Source annotations are excluded.
@@ -61,6 +69,6 @@ Run `bash verify.sh` for the saved-reference and vendor Java comparisons. Refere
 
 ## Remaining work
 
-The app is not yet an equivalent replacement. Whole-window layout, cursor overlays, interaction defaults and remaining integration controls are still being reconstructed and tested. Unsupported raw modes, fractional group delay, other transform sizes and second-level FFT cache splitting are rejected until validated. Every acquisition in the current lab inventory uses the validated raw formats and transform size.
+The app implements the retained 1D workflow, rather than all TopSpin features. The production interface intentionally uses Gruvbox instead of replicating TopSpin appearance. Further interaction and processing-mode coverage remains to be validated. Unsupported raw modes, fractional group delay, other transform sizes and second-level FFT cache splitting are rejected until validated. Every acquisition in the current lab inventory uses the validated raw formats and transform size.
 
 Saving updates processed files in the current processing number and retains recoverable versions. Raw acquisition files are unchanged. Development and reference tests operate only on isolated dataset copies.

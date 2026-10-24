@@ -12,13 +12,19 @@ public final class BrukerWriter {
         return saveCurrent(spectrum,(staged,target)->Files.move(staged,target,StandardCopyOption.ATOMIC_MOVE,StandardCopyOption.REPLACE_EXISTING));
     }
     static Path saveCurrent(Spectrum spectrum,Installer installer) throws IOException {
+        return saveCurrent(spectrum,installer,false);
+    }
+    public static Path saveCalibration(Spectrum spectrum) throws IOException {
+        return saveCurrent(spectrum,(staged,target)->Files.move(staged,target,StandardCopyOption.ATOMIC_MOVE,StandardCopyOption.REPLACE_EXISTING),true);
+    }
+    private static Path saveCurrent(Spectrum spectrum,Installer installer,boolean calibrationOnly) throws IOException {
         if(spectrum.experiment==null || !spectrum.path.getFileName().toString().matches("[1-9][0-9]*"))
             throw new IOException("Choose an acquisition processing number before saving");
         Path target=spectrum.path;
         Path history=spectrum.experiment.resolve("pdata/.topspin-viewer-history").resolve(target.getFileName());
         Files.createDirectories(history);
         Path snapshot=Files.createTempDirectory(history,"save-"),after=Files.createDirectory(snapshot.resolve("after"));
-        write(spectrum,after,target.getFileName().toString());
+        write(spectrum,after,target.getFileName().toString(),calibrationOnly);
         Path before=Files.createDirectory(snapshot.resolve("before"));
         List<Path> replacements;
         try(var files=Files.list(after)){replacements=files.sorted().map(Path::getFileName).toList();}
@@ -68,6 +74,17 @@ public final class BrukerWriter {
         write(spectrum,target,target.getFileName().toString());
     }
     private static void write(Spectrum spectrum,Path target,String processingNumber) throws IOException {
+        write(spectrum,target,processingNumber,false);
+    }
+    private static void write(Spectrum spectrum,Path target,String processingNumber,boolean calibrationOnly) throws IOException {
+        if(calibrationOnly){
+            Map<String,String> axis=Map.of("SF",spectrum.parameters.get("SF"),"OFFSET",spectrum.parameters.get("OFFSET"));
+            for(String name:new String[]{"proc","procs"}){
+                Path source=spectrum.path.resolve(name);if(!Files.isRegularFile(source))source=spectrum.path.resolve("procs");
+                Files.writeString(target.resolve(name),replace(Files.readString(source,StandardCharsets.ISO_8859_1),axis),StandardCharsets.ISO_8859_1,StandardOpenOption.CREATE_NEW);
+            }
+            return;
+        }
         Map<String,String> params=new LinkedHashMap<>(spectrum.parameters);
         params.put("NC_proc",Integer.toString(spectrum.nc));params.put("BYTORDP","0");params.put("DTYPP","0");
         params.put("PHC0",scalar(spectrum.phc0));params.put("PHC1",scalar(spectrum.phc1));

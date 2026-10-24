@@ -32,7 +32,7 @@ public final class IntegralCurvePainter {
         var vertical=VisualNumerics.vertical(range.start(),range.end(),viewport.y,viewport.y+viewport.height);
         int start=Numerics.index(viewLeft,left,right,curve.length),end=Numerics.index(viewRight,left,right,curve.length);
         start=Math.max(0,Math.min(curve.length-1,start));end=Math.max(start,Math.min(curve.length-1,end));
-        Graphics2D g=(Graphics2D)graphics.create();g.setColor(new Color(237,28,36));
+        Graphics2D g=(Graphics2D)graphics.create();g.setColor(Theme.color(new Color(237,28,36)));
         SpectrumPainter.paintPanel(g,Arrays.copyOfRange(curve,start,end+1),start,viewport.x,viewport.y,viewport.width,viewport.height,horizontal,vertical,left,right,curve.length,1);g.dispose();
         return vertical.screen(curve[curve.length-1],1);
     }

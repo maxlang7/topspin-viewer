@@ -30,6 +30,7 @@ public final class Viewer extends JFrame {
     private int phaseOrder;
     private int selectedIntegral=-1;
     private boolean defineRegion=true;
+    private boolean calibratingAxis;
     private IntegrationRegions sessionIntegrals;
     private double savedBaseline;
     private double integrationSensitivity=1,integralBaseline=.2;
@@ -40,7 +41,7 @@ public final class Viewer extends JFrame {
     Viewer(){this(true);}
     Viewer(boolean warpPointer) {this(warpPointer,BrowserLocations.userDefault());}
     Viewer(boolean warpPointer,BrowserLocations locations) {
-        super("TopSpin Viewer");setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
+        super("NMR Viewer");setIconImage(Theme.appIcon());Theme.frame(this);setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
         this.warpPointer=warpPointer;
         browserLocations=locations;
         setSize(1438,927);setMinimumSize(new Dimension(960,640));
@@ -57,30 +58,32 @@ public final class Viewer extends JFrame {
     }
 
     private JPanel header() {
-        Color top=new Color(5,65,105),lower=new Color(4,48,77),ink=new Color(195,208,217);
+        Color top=Theme.color(new Color(5,65,105)),lower=Theme.color(new Color(4,48,77)),ink=Theme.color(new Color(195,208,217));
         JPanel header=new JPanel(new BorderLayout());header.setPreferredSize(new Dimension(1,104));header.setBackground(top);
         JPanel rows=new JPanel(new BorderLayout());rows.setBorder(BorderFactory.createEmptyBorder(1,1,1,1));
         JPanel first=new JPanel(new BorderLayout());first.setBackground(top);first.setPreferredSize(new Dimension(1,50));
         CardLayout sections=new CardLayout();JPanel second=new JPanel(sections);second.setBackground(lower);
         JPanel nav=new JPanel(new FlowLayout(FlowLayout.LEFT,0,0));nav.setOpaque(false);
-        JButton menu=Assets.button("phase","<html><b>Click here to access commands",this::fileMenu,65,50);
+        JButton menu=new JButton("File");menu.setPreferredSize(new Dimension(65,50));menu.addActionListener(event->fileMenu());
         menu.setBackground(top);nav.add(menu);
         NavigationTabs navigation=new NavigationTabs();
         navigation.addTab("Process",75,0,()->sections.show(second,"Process"));
         navigation.addTab("Analyze",74,1,()->sections.show(second,"Analyze"));nav.add(navigation);
         first.add(nav,BorderLayout.WEST);
-        JLabel title=new JLabel("TopSpin Processing",SwingConstants.CENTER);title.setForeground(Color.WHITE);title.setFont(Assets.regular.deriveFont(14f));first.add(title);
+        JLabel title=new JLabel("NMR Viewer",SwingConstants.CENTER);title.setForeground(Theme.foreground(Color.WHITE));title.setFont(Assets.regular.deriveFont(14f));first.add(title);
         Ribbon processing=new Ribbon();
         processing.addCommand("Proc. Spectrum",Assets.icon("phase","text.Proc. Spectrum"),125,()->perform(()->{requireSpectrum();spectrum.processRaw();plot.full();status.setText("efp: finished");}));
         processing.addCommand("Adjust Phase",Assets.icon("phase","text.Adjust Phase"),111,()->setMode(Mode.PHASE));
+        processing.addCommand("Calib. Axis",Assets.icon("phase","text.Calib. Axis"),104,this::beginAxisCalibration);
         Ribbon analysis=new Ribbon();
         analysis.addCommand("Integrate",Assets.colored(Assets.icon("integration","text.Integration"),Ribbon.FOREGROUND),83,()->setMode(Mode.INTEGRATE));
+        analysis.addCommand("Calib. Axis",Assets.icon("phase","text.Calib. Axis"),104,this::beginAxisCalibration);
         second.add(ribbonSection(processing),"Process");second.add(ribbonSection(analysis),"Analyze");
         rows.add(first,BorderLayout.NORTH);rows.add(second);header.add(rows);
-        JLabel logo=new JLabel(Assets.image("4d72af01e262c2de.png"),SwingConstants.CENTER);logo.setPreferredSize(new Dimension(132,104));header.add(logo,BorderLayout.EAST);return header;
+        return header;
     }
     private JPanel ribbonSection(Ribbon ribbon) {
-        JPanel panel=new JPanel(new BorderLayout()){@Override protected void paintComponent(Graphics g){super.paintComponent(g);g.setColor(Color.BLACK);g.fillRect(0,0,getWidth(),1);}};
+        JPanel panel=new JPanel(new BorderLayout()){@Override protected void paintComponent(Graphics g){super.paintComponent(g);g.setColor(Theme.color(Color.BLACK));g.fillRect(0,0,getWidth(),1);}};
         panel.setBackground(Ribbon.BACKGROUND);panel.setBorder(BorderFactory.createEmptyBorder(2,3,0,0));panel.add(ribbon);return panel;
     }
     private JPanel viewToolbar() {
@@ -102,21 +105,29 @@ public final class Viewer extends JFrame {
             if(i==5)new RelativeDragControl(b,()->{},plot::pan,warpPointer,PointerGesture.Kind.HORIZONTAL_SHIFT);
 
         }
-        JPanel row=new JPanel(new BorderLayout());row.setBackground(new Color(245,245,245));
+        JPanel row=new JPanel(new BorderLayout());row.setBackground(Theme.color(new Color(245,245,245)));
         row.setBorder(BorderFactory.createEmptyBorder(0,8,0,8));row.add(bar,BorderLayout.WEST);return row;
     }
     private JPanel browser() {
-        JPanel panel=new JPanel(new BorderLayout());panel.setBackground(new Color(207,207,207));
-        panel.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(new Color(142,142,142)),BorderFactory.createEmptyBorder(8,8,8,8)));
+        JPanel panel=new JPanel(new BorderLayout());panel.setBackground(Theme.color(new Color(207,207,207)));
+        panel.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(Theme.color(new Color(142,142,142))),BorderFactory.createEmptyBorder(8,8,8,8)));
         JPanel title=new JPanel(new BorderLayout());title.setOpaque(false);
         JButton data=new BrowserDataTab(()->tree.requestFocusInWindow());title.add(data,BorderLayout.WEST);
-        JPanel searchPanel=new JPanel(new FlowLayout(FlowLayout.LEFT,5,8));searchPanel.setBackground(Color.WHITE);
-        searchPanel.setPreferredSize(new Dimension(1,50));
-        JTextField search=new BrowserSearchField();search.setPreferredSize(new Dimension(149,34));searchPanel.add(search);
+        JPanel searchPanel=new JPanel(new BorderLayout(0,7));searchPanel.setBackground(Theme.color(Color.WHITE));
+        searchPanel.setBorder(BorderFactory.createEmptyBorder(8,6,8,6));searchPanel.setPreferredSize(new Dimension(1,50));
+        BrowserSearchField search=new BrowserSearchField();search.setPreferredSize(new Dimension(149,34));searchPanel.add(search,BorderLayout.NORTH);
         JPanel north=new JPanel(new BorderLayout(0,9));north.setOpaque(false);north.add(title,BorderLayout.NORTH);north.add(searchPanel);panel.add(north,BorderLayout.NORTH);
-        tree.setRootVisible(false);tree.setBackground(Color.WHITE);
+        tree.setRootVisible(false);tree.setBackground(Theme.color(Color.WHITE));
         datasetBrowser=new DatasetBrowser(tree,root,browserLocations,this::open,status::setText);
         datasetBrowser.bindSearch(search);
+        search.setFilterMenu(()->{
+            JPopupMenu filters=new JPopupMenu();JLabel label=new JLabel("Sort by");label.setBorder(BorderFactory.createEmptyBorder(6,10,6,10));filters.add(label);ButtonGroup group=new ButtonGroup();
+            for(var order:DatasetBrowserModel.SortOrder.values()){
+                JRadioButtonMenuItem item=new JRadioButtonMenuItem(order.label,datasetBrowser.sortOrder()==order);
+                if(order==DatasetBrowserModel.SortOrder.NATURAL)item.setToolTipText("Numbers within names sort numerically: MLN1P99 before MLN1P111");item.addActionListener(event->perform(()->datasetBrowser.sortOrder(order)));group.add(item);filters.add(item);
+            }
+            filters.addSeparator();JMenuItem clear=new JMenuItem("Clear search");clear.addActionListener(event->{search.setText("");search.postActionEvent();});filters.add(clear);return filters;
+        });
         tree.addMouseListener(new MouseAdapter(){
             private void popup(MouseEvent event){if(event.isPopupTrigger())browserMenu(event);}
             @Override public void mousePressed(MouseEvent event){popup(event);}
@@ -132,12 +143,6 @@ public final class Viewer extends JFrame {
             JMenuItem display=new JMenuItem("Display");display.addActionListener(e->open(entry.path()));menu.add(display);menu.addSeparator();
         }
         JMenuItem add=new JMenuItem("Add data directory...");add.addActionListener(e->chooseDataDirectory());menu.add(add);
-        JMenu sort=new JMenu("Sort by");ButtonGroup sorting=new ButtonGroup();
-        for(var order:DatasetBrowserModel.SortOrder.values()) {
-            JRadioButtonMenuItem item=new JRadioButtonMenuItem(order.label,datasetBrowser.sortOrder()==order);
-            item.addActionListener(e->perform(()->datasetBrowser.sortOrder(order)));sorting.add(item);sort.add(item);
-        }
-        menu.add(sort);
         JMenuItem refresh=new JMenuItem("Refresh");refresh.addActionListener(e->datasetBrowser.refresh());menu.add(refresh);menu.show(tree,event.getX(),event.getY());
     }
     private void chooseDataDirectory() {
@@ -147,8 +152,8 @@ public final class Viewer extends JFrame {
     }
     @Override public void dispose(){if(datasetBrowser!=null)datasetBrowser.close();super.dispose();}
     private JPanel workbench() {
-        JPanel panel=new JPanel(new BorderLayout());panel.setBackground(new Color(204,204,204));
-        panel.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(new Color(142,142,142)),BorderFactory.createEmptyBorder(8,8,2,8)));
+        JPanel panel=new JPanel(new BorderLayout());panel.setBackground(Theme.color(new Color(204,204,204)));
+        panel.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(Theme.color(new Color(142,142,142))),BorderFactory.createEmptyBorder(8,8,2,8)));
         modeBar.setOpaque(false);modeBar.setPreferredSize(new Dimension(1,41));panel.add(modeBar,BorderLayout.NORTH);
         surface.add(plot,"plot");surface.add(integralTable,"integrals");panel.add(surface);return panel;
     }
@@ -176,10 +181,11 @@ public final class Viewer extends JFrame {
             if(choice==null)return;selected=(Path)choice;
         }
         Spectrum opened=new Spectrum(selected);
-        spectrum=opened;selectedIntegral=-1;ph0=ph1=0;mode=Mode.VIEW;surfaceLayout.show(surface,"plot");datasetLabel.setText(spectrum.label()+"  "+spectrum.path);plot.resetData();rebuildModeBar();datasetBrowser.opened(spectrum);status.setText("Dataset opened");
+        spectrum=opened;calibratingAxis=false;plot.setCursor(Cursor.getDefaultCursor());selectedIntegral=-1;ph0=ph1=0;mode=Mode.VIEW;surfaceLayout.show(surface,"plot");datasetLabel.setText(spectrum.label()+"  "+spectrum.path);plot.resetData();rebuildModeBar();datasetBrowser.opened(spectrum);status.setText("Dataset opened");
     });}
     private void requireSpectrum() {if(spectrum==null)throw new IllegalStateException("Open a dataset first");}
     private void setMode(Mode next) {
+        calibratingAxis=false;plot.setCursor(Cursor.getDefaultCursor());
         if(next!=Mode.VIEW && spectrum==null)return;
         if(next==Mode.PHASE && spectrum.imaginary==null){status.setText("Imaginary spectrum is required for phase correction");return;}
         if(mode==Mode.INTEGRATE && next!=Mode.INTEGRATE)plot.setBaseline(savedBaseline);
@@ -194,7 +200,7 @@ public final class Viewer extends JFrame {
         modeBar.removeAll();editingTools=null;
         if(mode==Mode.VIEW) {
             datasetTabs=new DatasetTabs(name->perform(()->{
-                requireSpectrum();
+                calibratingAxis=false;plot.setCursor(Cursor.getDefaultCursor());requireSpectrum();
                 if(name.equals("INTEGRALS")){integralTable.load(spectrum);surfaceLayout.show(surface,"integrals");}
                 else {
                     if(name.equals("FID") && spectrum.raw==null)spectrum.raw=new RawDataset(spectrum.experiment,spectrum.path.resolve("proc"));
@@ -265,6 +271,32 @@ public final class Viewer extends JFrame {
         double[] bounds=RangeEntryDialog.show(this,plot.viewLeft,plot.viewRight);
         if(bounds!=null)perform(()->{spectrum.integrals.addFromDialog(bounds[0],bounds[1],spectrum.real,spectrum.left,spectrum.right);plot.repaint();});
     }
+    private void beginAxisCalibration() {perform(()->{
+        requireSpectrum();surfaceLayout.show(surface,"plot");plot.showRaw(false);if(mode==Mode.VIEW && datasetTabs!=null)datasetTabs.select("SPECTRUM");
+        calibratingAxis=true;plot.dragX=-1;plot.setCursor(Cursor.getPredefinedCursor(Cursor.CROSSHAIR_CURSOR));
+        status.setText("Click the reference position, then enter its ppm value. Escape cancels.");
+    });}
+    private void applyAxisCalibration(double clicked,double target)throws Exception {
+        if(!Double.isFinite(target))throw new IllegalArgumentException("Enter a finite ppm value");
+        if(!AxisCalibration.changed(clicked,target)){status.setText("Axis unchanged");return;}
+        Spectrum candidate=spectrum.copy();var result=candidate.calibrateAxis(clicked,target);
+        if(Files.isRegularFile(candidate.path.resolve("1r")))BrukerWriter.saveCalibration(candidate);else BrukerWriter.saveCurrent(candidate);
+        spectrum=candidate;var visible=ViewRanges.intersect(new ViewRanges.Range(plot.viewLeft+result.shift(),plot.viewRight+result.shift()),new ViewRanges.Range(spectrum.left,spectrum.right));
+        plot.viewLeft=visible==null?spectrum.left:visible.start();plot.viewRight=visible==null?spectrum.right:visible.end();
+        for(double[] range:zoomHistory){range[0]+=result.shift();range[1]+=result.shift();}
+        plot.cursorValue=null;plot.cursorPoint=null;plot.cursorSamples=null;plot.rawTrace=null;plot.fidView=null;plot.spectrumView=null;
+        status.setText("Frequency axis calibrated and saved");plot.repaint();
+    }
+    private void axisCalibrationDialog(double clicked) {
+        calibratingAxis=false;plot.dragX=-1;plot.setCursor(Cursor.getDefaultCursor());
+        JTextField target=new JTextField(new java.text.DecimalFormat("0.0000",java.text.DecimalFormatSymbols.getInstance(Locale.ROOT)).format(clicked),12);
+        target.setName("axisCalibrationPpm");JPanel panel=new JPanel(new BorderLayout(0,10));
+        panel.add(new JLabel("Reference position [ppm]"),BorderLayout.NORTH);panel.add(target);panel.add(new JLabel("Confirm to save calibration to this processing number."),BorderLayout.SOUTH);
+        JOptionPane pane=new JOptionPane(panel,JOptionPane.QUESTION_MESSAGE,JOptionPane.OK_CANCEL_OPTION);
+        JDialog dialog=pane.createDialog(this,"Calibrate axis");dialog.addWindowListener(new WindowAdapter(){@Override public void windowOpened(WindowEvent event){target.requestFocusInWindow();target.selectAll();}});
+        target.addActionListener(event->{pane.setValue(JOptionPane.OK_OPTION);dialog.setVisible(false);});
+        try{dialog.setVisible(true);if(Integer.valueOf(JOptionPane.OK_OPTION).equals(pane.getValue()))perform(()->applyAxisCalibration(clicked,Double.parseDouble(target.getText())));else status.setText("Calibration cancelled");}finally{dialog.dispose();}
+    }
     private void calibrate() {
         if(selectedIntegral<0)return;String value=JOptionPane.showInputDialog(this,"Integral value","Calibrate integral",JOptionPane.PLAIN_MESSAGE);
         if(value!=null)perform(()->{spectrum.integrals.calibrate(selectedIntegral,Double.parseDouble(value),spectrum.real,spectrum.left,spectrum.right);plot.repaint();});
@@ -276,7 +308,7 @@ public final class Viewer extends JFrame {
         if(first)spectrum.integrals.preserveScale();
     }
     private void cancelIntegration() {if(sessionIntegrals!=null)spectrum.integrals=sessionIntegrals;setMode(Mode.VIEW);}
-    private void returnWithoutSave() {if(mode==Mode.INTEGRATE)cancelIntegration();else setMode(Mode.VIEW);}
+    private void returnWithoutSave() {if(calibratingAxis){calibratingAxis=false;plot.setCursor(Cursor.getDefaultCursor());status.setText("Calibration cancelled");return;}if(mode==Mode.INTEGRATE)cancelIntegration();else setMode(Mode.VIEW);}
     private void savePhaseResult() throws Exception {
         requireSpectrum();Spectrum candidate=spectrum.copy();candidate.phase(ph0,ph1);saveResult(candidate);
     }
@@ -286,7 +318,7 @@ public final class Viewer extends JFrame {
         datasetLabel.setText(spectrum.label()+"  "+spectrum.path);status.setText("Saved processing "+saved.getFileName());
     }
     private void save() {perform(this::saveResult);}
-    private void execute(String input) {String text=input.trim();command.setText("");switch(text){case ".ph"->setMode(Mode.PHASE);case ".int"->setMode(Mode.INTEGRATE);case ".ret"->returnWithoutSave();case ".all"->plot.full();case ".zi"->plot.zoom(.5);case ".zo"->plot.zoom(2);case ".zl"->plot.previous();case "*2"->plot.scale(2);case "/2"->plot.scale(.5);case "open"->chooseOpen();default->status.setText("Unknown command: "+text);}}
+    private void execute(String input) {String text=input.trim();command.setText("");switch(text){case ".cal"->beginAxisCalibration();case ".ph"->setMode(Mode.PHASE);case ".int"->setMode(Mode.INTEGRATE);case ".ret"->returnWithoutSave();case ".all"->plot.full();case ".zi"->plot.zoom(.5);case ".zo"->plot.zoom(2);case ".zl"->plot.previous();case "*2"->plot.scale(2);case "/2"->plot.scale(.5);case "open"->chooseOpen();default->status.setText("Unknown command: "+text);}}
     @FunctionalInterface private interface Operation {void run() throws Exception;}
     private void perform(Operation op) {try{op.run();plot.repaint();}catch(Exception e){status.setText(e.getMessage());JOptionPane.showMessageDialog(this,e.getMessage(),"Error",JOptionPane.ERROR_MESSAGE);}}
 
@@ -303,10 +335,11 @@ public final class Viewer extends JFrame {
         Point cursorPoint;Double cursorValue;
         int[] cursorSamples;double relativeReference=1;
         Plot() {
-            setBackground(new Color(245,245,245));
+            setBackground(Theme.color(new Color(245,245,245)));
             MouseAdapter mouse=new MouseAdapter(){
                 @Override public void mousePressed(MouseEvent e){
                     updateCursor(e);
+                    if(calibratingAxis && spectrum!=null && SwingUtilities.isLeftMouseButton(e) && drawingBounds().contains(e.getPoint())){axisCalibrationDialog(ppm(e.getX()));return;}
                     pressX=lastX=e.getX();pressY=lastY=e.getY();
                     dragX=SwingUtilities.isLeftMouseButton(e) && (mode==Mode.INTEGRATE || drawingBounds().contains(e.getPoint()))?pressX:-1;
                     if(spectrum!=null && mode==Mode.INTEGRATE && SwingUtilities.isLeftMouseButton(e)) {
@@ -400,13 +433,13 @@ public final class Viewer extends JFrame {
             int from=start(),to=end();double[] visible=Arrays.copyOfRange(rawTrace.samples,from,to+1);
             var horizontal=VisualNumerics.horizontal(viewLeft,viewRight,x,x+w);
             var vertical=VisualNumerics.vertical(verticalRange.start(),verticalRange.end(),y,y+h);
-            g.setColor(Color.BLUE);
+            g.setColor(Theme.color(Color.BLUE));
             SpectrumPainter.paintPanel(g,visible,from,x,y,w,h,horizontal,vertical,rawTrace.time.start(),rawTrace.time.end(),rawTrace.samples.length,gain);
             cursorSamples=VisualNumerics.cursorBoundaries(visible,from,w,x,horizontal,rawTrace.time.start(),rawTrace.time.end(),rawTrace.samples.length);
-            Color ink=new Color(128,128,128);Font font=Assets.bold.deriveFont(14f);
+            Color ink=Theme.color(new Color(128,128,128));Font font=Assets.bold.deriveFont(14f);
             AxisPainter.paint(g,new Rectangle(x,y+h,w,27),horizontal,AxisTicks.calculate(viewLeft,viewRight,"s",null,true,true),font,ink,1,0,cursorValue);
             AxisPainter.paintVertical(g,new Rectangle(x+w,y,27,h),verticalRange.start(),verticalRange.end(),1,gain,font,ink,1,0);
-            if(dragX>=0){g.setClip(x,y,w,h);g.setColor(new Color(100,150,190,35));g.fillRect(Math.min(pressX,dragX),y,Math.abs(pressX-dragX),h);g.setClip(null);}
+            if(dragX>=0){g.setClip(x,y,w,h);g.setColor(Theme.color(new Color(100,150,190,35)));g.fillRect(Math.min(pressX,dragX),y,Math.abs(pressX-dragX),h);g.setClip(null);}
         }
         @Override protected void paintComponent(Graphics graphics) {
             super.paintComponent(graphics);
@@ -426,10 +459,10 @@ public final class Viewer extends JFrame {
                     var format=java.text.NumberFormat.getNumberInstance(Locale.ROOT);format.setMinimumFractionDigits(4);format.setMaximumFractionDigits(4);
                     readout=new String[]{"Mouse Sensitivity: "+integrationSensitivity,readout==null?null:readout[0],"Sum = "+format.format(sum),null,null,null};
                 }
-                CursorMessagePainter.paint(display,readout,drawingBounds(),22,new Color(51,51,51));
+                CursorMessagePainter.paint(display,readout,drawingBounds(),22,Theme.color(new Color(51,51,51)));
             }
             if(spectrum!=null && cursorPoint!=null && drawingBounds().contains(cursorPoint)) {
-                display.setColor(mode==Mode.INTEGRATE && defineRegion?new Color(237,28,36):new Color(51,51,51));
+                display.setColor(mode==Mode.INTEGRATE && defineRegion?Theme.color(new Color(237,28,36)):Theme.color(new Color(51,51,51)));
                 display.setRenderingHint(RenderingHints.KEY_ANTIALIASING,RenderingHints.VALUE_ANTIALIAS_OFF);
                 display.setStroke(new BasicStroke(1,BasicStroke.CAP_BUTT,BasicStroke.JOIN_MITER));
                 display.draw(new java.awt.geom.Line2D.Float(cursorPoint.x,top(),cursorPoint.x,top()+height()));
@@ -457,10 +490,10 @@ public final class Viewer extends JFrame {
         }
         private void paintCanvas(Graphics2D graphics) {
             Graphics2D g=(Graphics2D)graphics.create();g.setFont(Assets.regular);
-            int x=2,y=top(),w=width(),h=height();g.setColor(Color.WHITE);g.fillRect(x,y,w,h);g.setColor(new Color(128,128,128));g.drawRect(x,y,w,h);
+            int x=2,y=top(),w=width(),h=height();g.setColor(Theme.color(Color.WHITE));g.fillRect(x,y,w,h);g.setColor(Theme.color(new Color(128,128,128)));g.drawRect(x,y,w,h);
             if(spectrum==null){g.dispose();return;}
             if(mode==Mode.PHASE)PhaseCaption.paint(g,PhaseCaption.text(spectrum.ppm(pivot),sensitivity,ph0,ph1));
-            g.setFont(Assets.bold.deriveFont(14f));g.setColor(new Color(135,135,135));g.drawString(spectrum.label(),6,y+16);
+            g.setFont(Assets.bold.deriveFont(14f));g.setColor(Theme.color(new Color(135,135,135)));g.drawString(spectrum.label(),6,y+16);
             if(showFid && spectrum.raw!=null){paintFid(g,x,y,w,h);g.dispose();return;}
             int from=start(),to=end();double[] data=spectrum.real;
             if(mode==Mode.PHASE){data=Numerics.phasePreview(spectrum.real,spectrum.imaginary,ph0,ph1,spectrum.ftSize,spectrum.stripStart,from,to-from+1);}
@@ -470,22 +503,22 @@ public final class Viewer extends JFrame {
             double valueLeft=verticalRange.start(),valueRight=verticalRange.end();
             var mapper=VisualNumerics.vertical(valueLeft,valueRight,y,y+h);
             double zero=mapper.screen(0,gain);
-            g.setClip(x,y,w,h);g.setColor(Color.BLUE);
+            g.setClip(x,y,w,h);g.setColor(Theme.color(Color.BLUE));
             double[] visible=mode==Mode.PHASE?data:Arrays.copyOfRange(data,from,to+1);
             var xMapper=VisualNumerics.horizontal(viewLeft,viewRight,x,x+w);
             SpectrumPainter.paintPanel(g,visible,from,x,y,w,h,xMapper,mapper,spectrum.left,spectrum.right,spectrum.real.length,gain);
             cursorSamples=VisualNumerics.cursorBoundaries(visible,from,w,x,xMapper,spectrum.left,spectrum.right,spectrum.real.length);
-            g.setClip(null);g.setColor(new Color(128,128,128));g.setFont(Assets.bold.deriveFont(14f));
+            g.setClip(null);g.setColor(Theme.color(new Color(128,128,128)));g.setFont(Assets.bold.deriveFont(14f));
             AxisPainter.paint(g,new Rectangle(x,y+h,w,27),VisualNumerics.horizontal(viewLeft,viewRight,x,x+w),
-                AxisTicks.calculate(viewLeft,viewRight,"ppm",null,true,true),Assets.bold.deriveFont(14f),new Color(128,128,128),1,0,cursorValue);
+                AxisTicks.calculate(viewLeft,viewRight,"ppm",null,true,true),Assets.bold.deriveFont(14f),Theme.color(new Color(128,128,128)),1,0,cursorValue);
             double cy;
             try{cy=Double.parseDouble(spectrum.parameters.getOrDefault("CY","20"));}catch(NumberFormatException error){cy=20;}
             if(cy<=0)cy=20;
             double reference=maximum>0?cy/Math.abs(maximum):minimum!=0?cy/Math.abs(minimum):1;relativeReference=reference;
             AxisPainter.paintVertical(g,new Rectangle(x+w,y,27,h),valueLeft,valueRight,reference,gain,
-                Assets.bold.deriveFont(14f),new Color(128,128,128),1,0);
+                Assets.bold.deriveFont(14f),Theme.color(new Color(128,128,128)),1,0);
             g.setClip(x,y,w,h);
-            if(mode==Mode.PHASE){g.setClip(x,y,w,h+1);g.setColor(new Color(237,28,36));int px=(int)pixel(spectrum.ppm(pivot));if(px>x && px<x+w)g.drawLine(px,y,px,y+h);g.setClip(x,y,w,h);}
+            if(mode==Mode.PHASE){g.setClip(x,y,w,h+1);g.setColor(Theme.color(new Color(237,28,36)));int px=(int)pixel(spectrum.ppm(pivot));if(px>x && px<x+w)g.drawLine(px,y,px,y+h);g.setClip(x,y,w,h);}
             integralHitAreas.clear();
             if(mode==Mode.INTEGRATE || !spectrum.integrals.regions().isEmpty()) {
                 var regions=spectrum.integrals.regions();
@@ -504,7 +537,7 @@ public final class Viewer extends JFrame {
                     integralHitAreas.put(index,IntegralLabelPainter.paint(g,new Rectangle(begin,y,regionWidth,h),integral.normalized(spectrum.integrals.normalizingFactor),4,spectrum.integrals.isSelected(index)));
                     var displayScale=spectrum.integrals.displayScale(index);
                     if(mode==Mode.INTEGRATE && (r.bias()!=0 || r.slope()!=0)) {
-                        g.setClip(null);g.setColor(new Color(237,28,36));g.setFont(Assets.bold.deriveFont(14f));
+                        g.setClip(null);g.setColor(Theme.color(new Color(237,28,36)));g.setFont(Assets.bold.deriveFont(14f));
                         g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING,RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
                         g.drawString("#",begin+regionWidth,Math.max(lastPoint+20,20));
                     }
@@ -512,14 +545,13 @@ public final class Viewer extends JFrame {
                     g.setClip(x,y,w,h);
                 }
             }
-            if(dragX>=0){g.setColor(new Color(100,150,190,35));g.fillRect(Math.min(pressX,dragX),y,Math.abs(pressX-dragX),h);}
+            if(dragX>=0){g.setColor(Theme.color(new Color(100,150,190,35)));g.fillRect(Math.min(pressX,dragX),y,Math.abs(pressX-dragX),h);}
             g.dispose();
         }
     }
     public static void main(String[] args) throws Exception {
-        Assets.load();FlatLightLaf.setup();UIManager.put("defaultFont",Assets.regular);
+        Assets.load();Theme.install(Assets.regular);
         JFrame.setDefaultLookAndFeelDecorated(true);
-        UIManager.put("Button.arc",0);UIManager.put("Component.arc",0);UIManager.put("TextComponent.arc",0);
         SwingUtilities.invokeLater(()->{Viewer viewer=new Viewer();viewer.setVisible(true);if(args.length>0)viewer.open(Path.of(args[0]));});
     }
 }

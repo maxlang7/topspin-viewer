@@ -8,7 +8,7 @@ import java.util.*;
 /** Filesystem-backed dataset hierarchy. Processing numbers sit directly below experiments. */
 public final class DatasetBrowserModel {
     public enum SortOrder {
-        NAME("Name"), NEWEST("Modified: newest first"), OLDEST("Modified: oldest first");
+        NAME("Alphabetical"), NATURAL("Alphabetical (natural order)"), NEWEST("Modified: newest first"), OLDEST("Modified: oldest first");
         public final String label;
         SortOrder(String label){this.label=label;}
     }
@@ -18,6 +18,25 @@ public final class DatasetBrowserModel {
     public static int compareNames(String first,String second) {
         try{return Integer.compare(Integer.parseInt(first),Integer.parseInt(second));}
         catch(NumberFormatException ignored){return Collator.getInstance().compare(first.toLowerCase(),second.toLowerCase());}
+    }
+    public static int naturalNames(String first,String second) {
+        int a=0,b=0;
+        while(a<first.length() && b<second.length()) {
+            char x=first.charAt(a),y=second.charAt(b);
+            if(x>='0' && x<='9' && y>='0' && y<='9') {
+                int ae=a,be=b;while(ae<first.length() && first.charAt(ae)>='0' && first.charAt(ae)<='9')ae++;
+                while(be<second.length() && second.charAt(be)>='0' && second.charAt(be)<='9')be++;
+                int az=a,bz=b;while(az<ae && first.charAt(az)=='0')az++;while(bz<be && second.charAt(bz)=='0')bz++;
+                int result=Integer.compare(ae-az,be-bz);
+                if(result==0)result=first.substring(az,ae).compareTo(second.substring(bz,be));
+                if(result!=0)return result;a=ae;b=be;
+            } else {
+                int result=Character.compare(Character.toLowerCase(x),Character.toLowerCase(y));
+                if(result!=0)return result;a++;b++;
+            }
+        }
+        int result=Integer.compare(first.length()-a,second.length()-b);
+        return result==0?first.compareTo(second):result;
     }
     public static int comparePaths(Path first,Path second) {
         Iterator<Path> a=first.iterator(),b=second.iterator();
@@ -55,6 +74,7 @@ public final class DatasetBrowserModel {
     }
     private static List<Entry> sorted(List<Entry> entries,SortOrder order) throws IOException {
         if(order==SortOrder.NAME)return List.copyOf(entries);
+        if(order==SortOrder.NATURAL)return entries.stream().sorted((a,b)->naturalNames(a.label(),b.label())).toList();
         Map<Path,FileTime> times=new HashMap<>();
         for(Entry entry:entries)times.put(entry.path(),modified(entry.path()));
         List<Entry> result=new ArrayList<>(entries);

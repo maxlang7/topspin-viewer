@@ -66,6 +66,15 @@ public final class Spectrum {
         parameters.put("NC_proc",Integer.toString(nc));parameters.put("PHC0",Double.toString(phc0));
         parameters.put("PHC1",Double.toString(phc1));
     }
+    public AxisCalibration.Result calibrateAxis(double clicked,double target) {
+        if(!Double.isFinite(clicked) || !Double.isFinite(target))throw new IllegalArgumentException("Enter a finite ppm value");
+        double frequency=Double.parseDouble(parameters.get("SF")),offset=Double.parseDouble(parameters.get("OFFSET"));
+        var result=AxisCalibration.calculate(frequency,offset,clicked,target,false);
+        if(!Double.isFinite(result.frequency()) || result.frequency()<=0 || !Double.isFinite(result.offset()))throw new IllegalArgumentException("Invalid calibration frequency");
+        parameters.put("SF",AxisCalibration.scalar(result.frequency()));parameters.put("OFFSET",AxisCalibration.scalar(result.offset()));
+        left=Double.parseDouble(parameters.get("OFFSET"));right=left-Double.parseDouble(parameters.get("SW_p"))/Double.parseDouble(parameters.get("SF"));raw=null;
+        return result;
+    }
     public String label() {
         return experiment==null?path.toString():experiment.getParent().getFileName()+"  "+experiment.getFileName()+"  "+path.getFileName();
     }

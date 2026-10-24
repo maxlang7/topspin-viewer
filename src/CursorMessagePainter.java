@@ -16,7 +16,7 @@ public final class CursorMessagePainter {
             Rectangle bounds=metrics.getStringBounds(label,g).getBounds();if(windowsMono)bounds.height=15;totalHeight+=bounds.height;lastHeight=bounds.height;maxWidth=Math.max(maxWidth,bounds.width);
         }
         Rectangle bounds=new Rectangle(viewport.x+1,viewport.y+offset+1,maxWidth+height/2,totalHeight+lastHeight/3);
-        g.setColor(new Color(255,255,255,128));g.fill(bounds);g.setColor(foreground);
+        g.setColor(Theme.color(new Color(255,255,255,128)));g.fill(bounds);g.setColor(foreground);
         int x=viewport.x+height/4,y=viewport.y+offset+height;
         for(String label:labels){if(label!=null)g.drawString(label,x,y);y+=height;}
         g.dispose();return bounds;

@@ -6,7 +6,7 @@ if ! command -v javac >/dev/null || ! command -v gcc >/dev/null || ! pkg-config 
 fi
 mkdir -p build/app build/test build/native
 javac -proc:none -cp lib/flatlaf-3.4.1.jar -d build/app src/*.java \
-  tests/LiveRawReadReference.java tests/LiveFidPanelReference.java tests/LiveModePanelReference.java tests/RawReference.java tests/RawTimeRangeReference.java tests/RawValueRangeReference.java tests/RawReadReference.java tests/SavedPhaseReference.java tests/ReaderReference.java \
+  tests/NaturalSortReference.java tests/AxisCalibrationLiveReference.java tests/ModernViewerWorkflow.java tests/LiveRawReadReference.java tests/LiveFidPanelReference.java tests/LiveModePanelReference.java tests/RawReference.java tests/RawTimeRangeReference.java tests/RawValueRangeReference.java tests/RawReadReference.java tests/SavedPhaseReference.java tests/ReaderReference.java \
   tests/WriterReference.java tests/LiveNumericsReference.java tests/LiveIntegrationReference.java \
   tests/DatasetOpeningReference.java tests/ViewerWorkflowReference.java tests/ViewerCapturedPanelReference.java tests/BrowserWorkflowReference.java tests/BrowserLiveReference.java tests/IntegrationEditReference.java tests/IntegrationReopenReference.java tests/PlotRasterReference.java tests/IntegralTableReference.java tests/IntegralTableRasterProbe.java tests/SaveTransactionReference.java \
   tests/CapturedAxisReference.java tests/CapturedSpectrumReference.java tests/CapturedIntegralPanelReference.java tests/CursorMessageRasterReference.java tests/EditingToolsRasterReference.java tests/ViewerToolsRasterReference.java tests/BrowserTreeRasterReference.java tests/BrowserSearchRasterReference.java tests/BrowserDataTabRasterReference.java tests/RangeEntryRasterReference.java tests/DatasetTabsRasterReference.java tests/NavigationTabsRasterReference.java tests/WindowsTextReference.java tests/NativeTextRasterReference.java tests/RibbonRasterReference.java tests/WindowsPhaseControllerReference.java
@@ -19,6 +19,9 @@ gcc -std=c11 -O2 -fPIC -shared $(pkg-config --cflags freetype2) \
 gcc -std=c11 -O2 -Wall -Wextra -o build/test/native-raw-axis-oracle tests/native_raw_axis_oracle.c
 gcc -std=c11 -O2 -Wall -Wextra -o build/test/native-raw-range-oracle tests/native_raw_range_oracle.c
 gcc -std=c11 -O2 -Wall -Wextra -Werror -o build/test/native-raw-read-oracle tests/native_raw_read_oracle.c
+python3 tests/summarize_calibration_captures.py
+java -cp build/app NaturalSortReference
+java -Djava.library.path=build/native -cp build/app:lib/flatlaf-3.4.1.jar AxisCalibrationLiveReference
 java -cp build/app LiveRawReadReference artifacts/live-fid-reference-20261019
 java -cp build/app RawReadReference "${TOPSPIN_NATIVE_REFERENCE_BINARY:-/home/maxlang/.local/share/topspin/opt/topspin5.0.0/prog/mod/dataserver}"
 java -cp build/app RawValueRangeReference "${TOPSPIN_NATIVE_REFERENCE_BINARY:-/home/maxlang/.local/share/topspin/opt/topspin5.0.0/prog/mod/dataserver}"
@@ -55,10 +58,12 @@ java -Djava.awt.headless=true -Djava.library.path=build/native -cp build/app:lib
 java -Djava.awt.headless=true -Djava.library.path=build/native -cp build/app:lib/flatlaf-3.4.1.jar BrowserDataTabRasterReference
 java -Djava.awt.headless=true -cp build/app:lib/flatlaf-3.4.1.jar DatasetTabsRasterReference
 task_vendor_root="${TOPSPIN_REFERENCE_ROOT:-/home/maxlang/.wine-topspin-5/drive_c/Bruker/TopSpinProcessing5.0.0}"
+javac -proc:none --add-exports java.base/jdk.internal.org.objectweb.asm=ALL-UNNAMED --add-exports java.base/jdk.internal.org.objectweb.asm.tree=ALL-UNNAMED -cp build/app -d build/test tests/AxisCalibrationReference.java
+java --add-exports java.base/jdk.internal.org.objectweb.asm=ALL-UNNAMED --add-exports java.base/jdk.internal.org.objectweb.asm.tree=ALL-UNNAMED -cp "build/test:build/app:$task_vendor_root/classes/lib/*" AxisCalibrationReference "$task_vendor_root"
 javac -proc:none -cp "build/app:$task_vendor_root/classes/lib/*" -d build/test tests/BrowserBehaviorReference.java
 java -cp "build/test:build/app:$task_vendor_root/classes/lib/*" BrowserBehaviorReference
 javac -proc:none -cp "$task_vendor_root/classes/lib/*" -d build/test \
-  src/Numerics.java src/IntegrationRegions.java src/IntegralScale.java src/VisualNumerics.java src/SpectrumPainter.java src/PointerGesture.java src/PlotSelection.java src/ViewRanges.java tests/VendorDifferential.java \
+  src/Theme.java src/Numerics.java src/IntegrationRegions.java src/IntegralScale.java src/VisualNumerics.java src/SpectrumPainter.java src/PointerGesture.java src/PlotSelection.java src/ViewRanges.java tests/VendorDifferential.java \
   src/CursorReadout.java tests/CursorReadoutReference.java tests/CursorBoundariesReference.java src/Assets.java src/PhaseCaption.java src/IntegralLabelPainter.java src/IntegralCurvePainter.java tests/IntegralCurveRasterReference.java tests/IntegralDisplayRangeReference.java tests/PhaseCaptionReference.java tests/IntegralLabelRasterReference.java src/AxisTicks.java src/AxisPainter.java tests/AxisTicksReference.java tests/AxisRasterReference.java tests/VerticalAxisRasterReference.java tests/IntegrationFileReference.java tests/IntegralScaleReference.java tests/IntegrationUndoReference.java tests/IntegrationSelectionReference.java tests/IntegrationDisplayScaleReference.java tests/IntegrationDialogAddReference.java tests/DisplayCompressionReference.java tests/DisplayMappingReference.java tests/PivotProbe.java tests/PhaseControlReference.java tests/PlotSelectionReference.java tests/SpectrumRasterDifferential.java tests/PointerGestureReference.java tests/ViewRangesReference.java
 java -Djava.awt.headless=true -cp "build/test:$task_vendor_root/classes/lib/*" CursorReadoutReference
 java -Djava.awt.headless=true -cp "build/test:$task_vendor_root/classes/lib/*" CursorBoundariesReference
@@ -85,6 +90,7 @@ java -Djava.awt.headless=true -cp "build/test:$task_vendor_root/classes/lib/*" P
 java -Djava.awt.headless=true -cp "build/test:$task_vendor_root/classes/lib/*" PointerGestureReference
 java -Djava.awt.headless=true -cp "build/test:$task_vendor_root/classes/lib/*" ViewRangesReference
 if [ -n "${DISPLAY:-}" ]; then
+  _JAVA_AWT_WM_NONREPARENTING=1 java -Dsun.java2d.uiScale=2 -Djava.library.path=build/native -cp build/app:lib/flatlaf-3.4.1.jar ModernViewerWorkflow
   javac -proc:none -cp "build/test:build/app:lib/flatlaf-3.4.1.jar:$task_vendor_root/classes/lib/*" -d build/test tests/ModuleRangesReference.java tests/RawInitialViewReference.java tests/ViewerFidTraceReference.java
   java -Djava.awt.headless=true -cp "build/test:build/app:lib/flatlaf-3.4.1.jar:$task_vendor_root/classes/lib/*" ModuleRangesReference
   java -Djava.awt.headless=true -cp "build/test:build/app:lib/flatlaf-3.4.1.jar:$task_vendor_root/classes/lib/*" RawInitialViewReference

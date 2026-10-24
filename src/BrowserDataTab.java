@@ -9,8 +9,8 @@ public final class BrowserDataTab extends JButton {
         addActionListener(event->action.run());setToolTipText("Data browser");
     }
     @Override protected void paintComponent(Graphics graphics) {
-        Graphics2D g=(Graphics2D)graphics.create();g.setColor(new Color(174,200,217));g.fillRect(0,0,getWidth(),getHeight());
-        Color ink=new Color(51,51,51),background=new Color(174,200,217);g.setColor(ink);
+        Graphics2D g=(Graphics2D)graphics.create();g.setColor(Theme.color(new Color(174,200,217)));g.fillRect(0,0,getWidth(),getHeight());
+        Color ink=Theme.color(new Color(51,51,51)),background=Theme.color(new Color(174,200,217));g.setColor(ink);
         g.fillRect(0,0,getWidth(),1);g.fillRect(0,getHeight()-1,getWidth(),1);g.fillRect(0,0,1,getHeight());g.fillRect(getWidth()-1,0,1,getHeight());
         icon.paintIcon(this,g,12,4);
         NativeText.draw(g,Assets.regular,"Data",40,19.5,ink,background);g.dispose();

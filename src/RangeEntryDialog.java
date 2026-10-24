@@ -16,15 +16,15 @@ public final class RangeEntryDialog extends JDialog {
         Object unified=UIManager.get("TitlePane.unifiedBackground"),inactive=UIManager.get("TitlePane.inactiveForeground");
         try {
             UIManager.put("TitlePane.unifiedBackground",false);
-            UIManager.put("TitlePane.inactiveForeground",new Color(115,115,115));
+            UIManager.put("TitlePane.inactiveForeground",Theme.color(new Color(115,115,115)));
             getRootPane().setWindowDecorationStyle(JRootPane.PLAIN_DIALOG);
         }finally {
             UIManager.put("TitlePane.unifiedBackground",unified);UIManager.put("TitlePane.inactiveForeground",inactive);
         }
         getRootPane().putClientProperty(FlatClientProperties.TITLE_BAR_SHOW_ICON,false);
-        getRootPane().putClientProperty(FlatClientProperties.TITLE_BAR_BACKGROUND,Color.WHITE);
+        getRootPane().putClientProperty(FlatClientProperties.TITLE_BAR_BACKGROUND,Theme.color(Color.WHITE));
         for(Component component:getLayeredPane().getComponents())if(component instanceof FlatTitlePane title)styleCaption(title);
-        getRootPane().setBorder(BorderFactory.createMatteBorder(0,2,2,2,new Color(179,179,179)));
+        getRootPane().setBorder(BorderFactory.createMatteBorder(0,2,2,2,Theme.color(new Color(179,179,179))));
         DecimalFormat format=new DecimalFormat("0.0000",DecimalFormatSymbols.getInstance(Locale.ROOT));
         pane=new RangeEntryPane(format.format(left),format.format(right),this::accept,this::dispose);setContentPane(pane);
         getRootPane().registerKeyboardAction(event->dispose(),KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE,0),JComponent.WHEN_IN_FOCUSED_WINDOW);
@@ -41,7 +41,7 @@ public final class RangeEntryDialog extends JDialog {
         // The Windows reference reserves one logical pixel but paints a one-device-pixel line at 2x.
         title.setBorder(new javax.swing.border.EmptyBorder(1,0,0,0){
             @Override public void paintBorder(Component component,Graphics graphics,int x,int y,int width,int height) {
-                Graphics2D g=(Graphics2D)graphics.create();g.setColor(new Color(170,170,170));
+                Graphics2D g=(Graphics2D)graphics.create();g.setColor(Theme.color(new Color(170,170,170)));
                 g.fill(new java.awt.geom.Rectangle2D.Double(x,y,width,.5));g.dispose();
             }
         });

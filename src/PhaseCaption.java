@@ -22,8 +22,8 @@ public final class PhaseCaption {
         Graphics2D g=(Graphics2D)graphics.create();g.setFont(Assets.mono);
         g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING,RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
         Rectangle bounds=g.getFontMetrics().getStringBounds(text,g).getBounds();
-        g.setColor(Color.WHITE);g.fillRect(bounds.x+10,0,bounds.width,bounds.height);
-        g.setColor(new Color(237,28,36));g.drawString(text,10,-bounds.y);g.dispose();
+        g.setColor(Theme.color(Color.WHITE));g.fillRect(bounds.x+10,0,bounds.width,bounds.height);
+        g.setColor(Theme.color(new Color(237,28,36)));g.drawString(text,10,-bounds.y);g.dispose();
     }
     private PhaseCaption(){}
 }

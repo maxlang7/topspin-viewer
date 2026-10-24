@@ -50,7 +50,7 @@ public final class BrowserLocations {
         props.setProperty("sortOrder",sortOrder.name());
         Files.createDirectories(file.getParent());
         Path temp=Files.createTempFile(file.getParent(),"browser-",".properties");
-        try(var output=Files.newOutputStream(temp)){props.store(output,"TopSpin Viewer browser");}
+        try(var output=Files.newOutputStream(temp)){props.store(output,"NMR Viewer browser");}
         try{Files.move(temp,file,StandardCopyOption.ATOMIC_MOVE,StandardCopyOption.REPLACE_EXISTING);}
         catch(AtomicMoveNotSupportedException ignored){Files.move(temp,file,StandardCopyOption.REPLACE_EXISTING);}
     }

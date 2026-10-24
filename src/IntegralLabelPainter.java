@@ -8,7 +8,7 @@ public final class IntegralLabelPainter {
         if(digits==0)digits=4;
         NumberFormat format=NumberFormat.getNumberInstance(Locale.ROOT);format.setMaximumFractionDigits(digits);format.setMinimumFractionDigits(digits);
         String label=format.format(value);Graphics2D g=(Graphics2D)graphics.create();g.setClip(null);
-        g.setFont(Assets.bold.deriveFont(14f));g.setColor(new Color(237,28,36));
+        g.setFont(Assets.bold.deriveFont(14f));g.setColor(Theme.color(new Color(237,28,36)));
         g.setStroke(new BasicStroke(1,BasicStroke.CAP_BUTT,BasicStroke.JOIN_MITER));
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING,RenderingHints.VALUE_ANTIALIAS_OFF);
         g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING,RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
@@ -21,7 +21,7 @@ public final class IntegralLabelPainter {
         Graphics2D text=(Graphics2D)g.create();text.translate(middle+bounds.height/4,near);text.rotate(-Math.PI/2);text.drawString(label,0,0);text.dispose();
         if(selected) {
             int selection=bottom-bounds.height/2+2;
-            g.setColor(new Color(200,255,0));
+            g.setColor(Theme.color(new Color(200,255,0)));
             g.fillPolygon(new int[]{x+2,x+2,middle,x+w-2,x+w-2},new int[]{bottom-2,selection,selection-bounds.height/4,selection,bottom-2},5);
         }
         g.dispose();return new Rectangle(x,bottom-2*bounds.width,w,2*bounds.width);
@@ -31,7 +31,7 @@ public final class IntegralLabelPainter {
         String label="0.1";
         if(relative>1.001)label+="* "+format.format(relative);
         else if(relative<.999)label+="/ "+format.format(1.0/relative);
-        Graphics2D g=(Graphics2D)graphics.create();g.setClip(null);g.setFont(Assets.bold.deriveFont(14f));g.setColor(new Color(237,28,36));
+        Graphics2D g=(Graphics2D)graphics.create();g.setClip(null);g.setFont(Assets.bold.deriveFont(14f));g.setColor(Theme.color(new Color(237,28,36)));
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING,RenderingHints.VALUE_ANTIALIAS_OFF);
         g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING,RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
         Rectangle bounds=g.getFontMetrics().getStringBounds(label,g).getBounds();

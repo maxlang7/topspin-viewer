@@ -1,12 +1,12 @@
 [Desktop Entry]
 Version=1.0
 Type=Application
-Name=TopSpin Viewer
+Name=NMR Viewer
 Comment=Open Bruker NMR data, adjust phase, and integrate spectra manually
 Exec=/run/current-system/sw/bin/bash /home/maxlang/Projects/topspin-viewer/run.sh %f
 TryExec=/run/current-system/sw/bin/bash
 Path=/home/maxlang/Projects/topspin-viewer
-Icon=applications-science
+Icon=/home/maxlang/Projects/topspin-viewer/assets/nmr-viewer.svg
 Terminal=false
 Categories=Science;Chemistry;
 Keywords=NMR;Bruker;Spectrum;Phase;Integration;

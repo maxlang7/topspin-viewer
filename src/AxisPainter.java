@@ -56,7 +56,7 @@ public final class AxisPainter {
             shape.closePath();shape.transform(AffineTransform.getScaleInstance(factor,factor));
             shape.transform(AffineTransform.getTranslateInstance(at,position==2?viewport.y+viewport.height-shape.getBounds().height:viewport.y));
             if(viewport.contains(shape.getBounds())) {
-                g.setColor(new Color(0,141,235));g.fill(shape);
+                g.setColor(Theme.color(new Color(0,141,235)));g.fill(shape);
                 int precision=new DecimalFormat(layout.pattern(),DecimalFormatSymbols.getInstance(Locale.ROOT)).getMaximumFractionDigits()+2;
                 DecimalFormat format=new DecimalFormat("0.00",DecimalFormatSymbols.getInstance(Locale.ROOT));format.setMaximumFractionDigits(precision);format.setMinimumFractionDigits(precision);
                 String label=format.format(cursor/layout.multiplier());

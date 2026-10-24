@@ -3,7 +3,7 @@ import javax.swing.*;
 
 /** Selected editing-mode tab, using the target's native text rendering. */
 public final class ModeLabel extends JLabel {
-    private static final Color BACKGROUND=new Color(174,200,217),FOREGROUND=new Color(51,51,51);
+    private static final Color BACKGROUND=Theme.color(new Color(174,200,217)),FOREGROUND=Theme.color(new Color(51,51,51));
     public ModeLabel(String text,Icon icon) {
         super(text,icon,SwingConstants.LEFT);setFont(Assets.regular);setForeground(FOREGROUND);
     }
