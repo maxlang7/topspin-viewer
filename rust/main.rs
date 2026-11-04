@@ -1,4 +1,5 @@
 mod data;
+mod ui;
 use data::Spectrum;
 use eframe::egui::{self, Color32, Pos2, Stroke};
 use serde::{Deserialize, Serialize};
@@ -46,6 +47,9 @@ enum Message {
     Found(Result<Vec<PathBuf>, String>),
 }
 struct App {
+    nav: String,
+    data_tab: usize,
+    command: String,
     traces: Vec<Trace>,
     found: Vec<PathBuf>,
     selected: usize,
@@ -63,8 +67,8 @@ struct App {
     regions: Vec<(usize, f64, f64, f64)>,
     region_a: f64,
     region_b: f64,
-    peaks:Vec<(f64,f64)>,
-    peak_threshold:f64,
+    peaks: Vec<(f64, f64)>,
+    peak_threshold: f64,
     session_path: String,
     started: Instant,
     first_frame: bool,
@@ -86,6 +90,9 @@ impl App {
         cc.egui_ctx.set_visuals(v);
         let (tx, rx) = mpsc::channel();
         let mut s = Self {
+            nav: "Process".into(),
+            data_tab: 0,
+            command: String::new(),
             traces: vec![],
             found: vec![],
             selected: 0,
@@ -104,8 +111,8 @@ impl App {
             regions: vec![],
             region_a: 0.,
             region_b: 1.,
-            peaks:vec![],
-            peak_threshold:0.05,
+            peaks: vec![],
+            peak_threshold: 0.05,
             session_path: "comparison.nmr.json".into(),
             started,
             first_frame: true,
@@ -278,7 +285,10 @@ impl eframe::App for App {
                         self.status = format!("{} spectra loaded", self.traces.len());
                     }
                 }
-                Message::Loaded(Err(e), _) | Message::Found(Err(e)) => {self.status = e;self.regions.clear();},
+                Message::Loaded(Err(e), _) | Message::Found(Err(e)) => {
+                    self.status = e;
+                    self.regions.clear();
+                }
             }
         }
         for f in ctx.input(|i| i.raw.dropped_files.clone()) {
@@ -286,80 +296,83 @@ impl eframe::App for App {
                 self.open(p, ctx.clone());
             }
         }
-        egui::TopBottomPanel::top("toolbar").show(ctx, |ui| {
-            ui.horizontal_wrapped(|ui| {
-                ui.heading("NMR Viewer");
-                ui.label("Gruvbox · Rust");
+        self.topspin_chrome(ctx);
+        egui::SidePanel::left("browser")
+            .default_width(245.)
+            .min_width(180.)
+            .resizable(true)
+            .show(ctx, |ui| {
+                ui.horizontal(|ui| {
+                    ui.selectable_label(true, "☷  Data")
+                        .on_hover_text("Bruker datasets");
+                    ui.label("NMR Viewer");
+                });
                 ui.separator();
-                ui.selectable_value(&mut self.stacked, false, "Overlay");
-                ui.selectable_value(&mut self.stacked, true, "Stacked");
-                ui.checkbox(&mut self.normalize, "Normalize");
-                if ui.button("Full range").clicked() {
-                    self.range = None;
-                }
-                ui.checkbox(&mut self.integrate, "Measure integral");
-                if ui.button("CSV export").clicked() {
-                    self.export(ctx.clone());
-                }
-                if ui.button("Advanced processing…").on_hover_text("Open the retained Java/C app for raw FIDs, ZIPs and validated Bruker saves").clicked(){let mut command=std::process::Command::new("bash");command.arg(concat!(env!("CARGO_MANIFEST_DIR"),"/run-legacy.sh"));if let Some(t)=self.traces.get(self.selected){command.arg(&t.data.path);}self.status=match command.spawn(){Ok(_)=>"Opening advanced processing in the retained viewer".into(),Err(e)=>format!("Could not launch retained viewer: {e}")};}
-
-            });
-            ui.horizontal(|ui| {
-                ui.label("Data path");
-                let r = ui.text_edit_singleline(&mut self.path);
+                ui.label("Open data directory");
+                let response = ui.add(
+                    egui::TextEdit::singleline(&mut self.path)
+                        .hint_text("Folder or processing number"),
+                );
                 if ctx.input(|i| i.modifiers.command && i.key_pressed(egui::Key::O)) {
-                    r.request_focus();
+                    response.request_focus();
                 }
-                if ui.button("Open / scan").clicked()
-                    || (r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)))
+                if ui.button("Open / refresh").clicked()
+                    || (response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)))
                 {
                     self.open(PathBuf::from(&self.path), ctx.clone());
                 }
-                if self.pending > 0 {
-                    ui.spinner();
-                    ui.label(format!("{} pending", self.pending));
+                ui.separator();
+                ui.label("Dataset browser");
+                ui.text_edit_singleline(&mut self.filter);
+                if ui.button("Add matching spectra, up to 32").clicked() {
+                    let matches: Vec<_> = self
+                        .found
+                        .iter()
+                        .filter(|p| {
+                            p.to_string_lossy()
+                                .to_lowercase()
+                                .contains(&self.filter.to_lowercase())
+                        })
+                        .take(32)
+                        .cloned()
+                        .collect();
+                    for p in matches {
+                        self.load(p, None, ctx.clone());
+                    }
+                }
+                let filter = self.filter.to_lowercase();
+                let mut add = None;
+                egui::ScrollArea::vertical().show(ui, |ui| {
+                    for p in &self.found {
+                        let label = p.display().to_string();
+                        let short = format!(
+                            "▸ {} / {}",
+                            p.ancestors()
+                                .nth(3)
+                                .and_then(|p| p.file_name())
+                                .unwrap_or_default()
+                                .to_string_lossy(),
+                            p.file_name().unwrap_or_default().to_string_lossy()
+                        );
+                        if label.to_lowercase().contains(&filter)
+                            && ui
+                                .selectable_label(false, &short)
+                                .on_hover_text(&label)
+                                .clicked()
+                        {
+                            add = Some(p.clone());
+                        }
+                    }
+                });
+                if let Some(p) = add {
+                    self.load(p, None, ctx.clone());
                 }
             });
-        });
-        egui::TopBottomPanel::bottom("status").show(ctx, |ui| {
-            ui.label(&self.status);
-        });
-        egui::SidePanel::left("browser")
-            .default_width(280.)
-            .resizable(true)
-            .show(ctx, |ui| {
-                ui.heading("Comparison");
-                let mut remove = None;
-                for (i, t) in self.traces.iter_mut().enumerate() {
-                    ui.horizontal(|ui| {
-                        ui.checkbox(&mut t.settings.visible, "");
-                        let label = t
-                            .data
-                            .path
-                            .strip_prefix(t.data.path.ancestors().nth(4).unwrap_or(&t.data.path))
-                            .unwrap_or(&t.data.path)
-                            .display()
-                            .to_string();
-                        if ui
-                            .selectable_label(
-                                self.selected == i,
-                                egui::RichText::new(label).color(COLORS[i % 6]),
-                            )
-                            .on_hover_text(t.data.path.display().to_string())
-                            .clicked()
-                        {
-                            self.selected = i;self.peaks.clear();
-                        }
-                        if ui.small_button("×").clicked() {
-                            remove = Some(i);
-                        }
-                    });
-                }
-                if let Some(i) = remove {
-                    self.traces.remove(i);
-                    self.regions.clear();
-                    self.selected = self.selected.min(self.traces.len().saturating_sub(1));
-                }
+        egui::SidePanel::right("inspector").default_width(235.).min_width(180.).resizable(true).show(ctx,|ui|{
+            ui.heading("Display / analysis");
+            ui.horizontal(|ui|{ui.selectable_value(&mut self.stacked,false,"Overlay");ui.selectable_value(&mut self.stacked,true,"Stacked");});
+            ui.checkbox(&mut self.normalize,"Normalize spectra");
+            egui::ScrollArea::vertical().id_salt("inspector-scroll").show(ui,|ui|{
                 ui.separator();
                 if let Some(t) = self.traces.get_mut(self.selected) {
                     ui.label(&t.data.title);
@@ -433,42 +446,13 @@ impl eframe::App for App {
                         }
                     });
                 });
-                ui.separator();
-                ui.label("Dataset browser");
-                ui.text_edit_singleline(&mut self.filter);
-                if ui.button("Add matching spectra, up to 32").clicked() {
-                    let matches: Vec<_> = self
-                        .found
-                        .iter()
-                        .filter(|p| {
-                            p.to_string_lossy()
-                                .to_lowercase()
-                                .contains(&self.filter.to_lowercase())
-                        })
-                        .take(32)
-                        .cloned()
-                        .collect();
-                    for p in matches {
-                        self.load(p, None, ctx.clone());
-                    }
-                }
-                let filter = self.filter.to_lowercase();
-                let mut add = None;
-                egui::ScrollArea::vertical().show(ui, |ui| {
-                    for p in &self.found {
-                        let label = p.display().to_string();
-                        if label.to_lowercase().contains(&filter)
-                            && ui.selectable_label(false, &label).clicked()
-                        {
-                            add = Some(p.clone());
-                        }
-                    }
-                });
-                if let Some(p) = add {
-                    self.load(p, None, ctx.clone());
-                }
+
             });
+        });
+        self.spectrum_tabs(ctx);
         egui::CentralPanel::default().show(ctx,|ui|{
+   if self.data_tab==1 {ui.heading("INTEGRALS");egui::Grid::new("integral-table").striped(true).show(ui,|ui|{for h in ["Spectrum","From / ppm","To / ppm","Measured area"]{ui.strong(h);}ui.end_row();for(i,a,b,v)in &self.regions{ui.label(format!("{}",i+1));ui.label(format!("{a:.5}"));ui.label(format!("{b:.5}"));ui.label(format!("{v:.6}"));ui.end_row();}});return;}
+
    let (response,painter)=ui.allocate_painter(ui.available_size(),egui::Sense::click_and_drag());let rect=response.rect.shrink2(egui::vec2(14.,28.));if rect.width()<10.||rect.height()<10.{return}
    painter.rect_filled(response.rect,0.,Color32::from_rgb(29,32,33));let range=self.range.unwrap_or_else(||self.full_range());let width=range[0]-range[1];let ppm=|x:f32|range[0]-(x-rect.left())as f64/rect.width()as f64*width;
    for j in 0..=10{let x=rect.left()+rect.width()*j as f32/10.;painter.line_segment([Pos2::new(x,rect.top()),Pos2::new(x,rect.bottom())],Stroke::new(1.,Color32::from_rgb(50,48,47)));painter.text(Pos2::new(x,rect.bottom()+8.),egui::Align2::CENTER_TOP,format!("{:.2}",ppm(x)),egui::FontId::monospace(12.),Color32::from_rgb(189,174,147));}
@@ -487,7 +471,7 @@ impl eframe::App for App {
     painter.text(Pos2::new(rect.left()+8.,if self.stacked{rect.top()+lane_h*lane as f32+4.}else{rect.top()+idx as f32*18.}),egui::Align2::LEFT_TOP,format!("{} {}",idx+1,d.title),egui::FontId::proportional(12.),COLORS[idx%6]);
    }
    for (_,a,b,_) in self.regions.iter().filter(|(i,_,_,_)|*i==self.selected){let px=|p:f64|rect.left()+((range[0]-p)/width)as f32*rect.width();let r=egui::Rect::from_x_y_ranges(px(a.max(*b))..=px(a.min(*b)),rect.top()..=rect.bottom());painter.with_clip_rect(rect).rect_filled(r,0.,Color32::from_rgba_unmultiplied(250,189,47,22));}
-   if let Some(pos)=response.hover_pos(){let x=ppm(pos.x);painter.line_segment([Pos2::new(pos.x,rect.top()),Pos2::new(pos.x,rect.bottom())],Stroke::new(1.,Color32::from_gray(130)));self.status=format!("{x:.5} ppm · scroll to zoom · drag to pan · double-click to reset");let scroll=ctx.input(|i|i.smooth_scroll_delta.y);if scroll!=0.{let f=(-scroll as f64*0.002).exp().clamp(0.5,2.);let r=[x+(range[0]-x)*f,x+(range[1]-x)*f];if r[0]-r[1]>1e-8 && r[0]-r[1]<1e6{self.range=Some(r);}}}
+   if let Some(pos)=response.hover_pos(){let x=ppm(pos.x);painter.line_segment([Pos2::new(pos.x,rect.top()),Pos2::new(pos.x,rect.bottom())],Stroke::new(1.,Color32::from_gray(130)));painter.text(rect.right_top(),egui::Align2::RIGHT_TOP,format!("{x:.5} ppm"),egui::FontId::monospace(12.),COLORS[0]);let scroll=ctx.input(|i|i.smooth_scroll_delta.y);if scroll!=0.{let f=(-scroll as f64*0.002).exp().clamp(0.5,2.);let r=[x+(range[0]-x)*f,x+(range[1]-x)*f];if r[0]-r[1]>1e-8 && r[0]-r[1]<1e6{self.range=Some(r);}}}
    if response.double_clicked(){self.range=None;}
    if response.drag_started()&&self.integrate{self.start=response.interact_pointer_pos().map(|p|ppm(p.x));}
    if response.dragged()&&!self.integrate{let dx=ctx.input(|i|i.pointer.delta().x)as f64/rect.width()as f64*width;self.range=Some([range[0]+dx,range[1]+dx]);}
@@ -530,6 +514,7 @@ fn main() -> eframe::Result {
                     serde_json::json!({"path":p,"n":s.real.len(),"left":s.left,"right":s.right,"first":s.real[0],"last":s.real[s.real.len()-1],"sum":s.real.iter().sum::<f64>(),"left_bits":format!("{:016x}",s.left.to_bits()),"right_bits":format!("{:016x}",s.right.to_bits()),"real_digest":format!("{:016x}",digest(&s.real)),"imag_digest":format!("{:016x}",digest(&s.imag))})
                 ),
                 Err(e) => {
+                    println!("{}", serde_json::json!({"path":p,"error":e}));
                     eprintln!("{}: {e}", p.display());
                     failures += 1;
                 }

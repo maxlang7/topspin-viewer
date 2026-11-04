@@ -5,6 +5,10 @@ The launcher executes the release binary directly, with library paths recorded d
 
 The Java/C viewer remains available with `bash run.sh --legacy` or `bash run-legacy.sh`. Its original source, scientific regression suite, reference captures and Git history are retained.
 
+## TopSpin-style layout
+
+The Rust UI follows the retained TopSpin reference layout: Process/Analyze/Manage navigation, a processing ribbon, a separate view toolbar, left data browser, open-spectrum tabs, right display/analysis controls, and bottom SPECTRUM/INTEGRALS/FID tabs. The INTEGRALS tab shows measurements as a table. Commands marked ↗ open the retained application for validated processing; FID opens there too. The command bar supports `.all`, `.ph`, `int`, `.multi`, `.csv`, `efp`, and `.cal`. Gruvbox colors remain in use.
+
 ## Comparison workflow
 
 Enter a Bruker folder in Data path, then Open / scan, or pass paths on the command line. A single processed dataset opens directly. A larger folder is scanned in a worker thread and listed in Dataset browser. Click rows to add spectra, or use Add matching spectra to load up to 32 filtered results. Drop folders onto the window as an alternative.
@@ -48,3 +52,7 @@ Full TopSpin parity is not achieved by either version. The historical README's n
 `nix-shell shell.nix --run 'python tests/verify_rust_reader.py "/path/to/NMRs"'`
 
 The latter compares every decoded real/imaginary sample via ordered 64-bit rolling digests and compares exact axis endpoint bits against the independently compiled Java reader. It reads original acquisitions without modifying them. `--audit` provides machine-readable JSON for each processed dataset.
+
+## Checked on November 4, 2026
+
+Four native unit tests and Clippy with warnings denied pass. The lab-folder differential check matches 10 valid spectra, 655,360 real samples, all imaginary sample digests and both axis endpoint bits. One existing truncated `1r` in MLN1P93 is rejected by both implementations. This validates processed reading, not all processing operations.
