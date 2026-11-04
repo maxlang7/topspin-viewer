@@ -1,0 +1,3 @@
+REFERENCE REJECT /home/maxlang/Documents/IGB Lab/NMRs/MLN1P93/10/pdata/1: Truncated spectrum component: /home/maxlang/Documents/IGB Lab/NMRs/MLN1P93/10/pdata/1/1r
+RAW_REFERENCE valid=90 rejected=1
+RAW_STACK_PARITY valid=90 rejected=1 raw_bit_comparisons=11796660 mismatches=0

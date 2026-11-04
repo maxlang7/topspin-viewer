@@ -1,0 +1,25 @@
+running 21 tests
+test data::tests::natural_order_handles_long_numbers ... ok
+test integral_plot::tests::crowded_labels_do_not_overlap_or_leave_viewport ... ok
+test integral_plot::tests::labels_stay_below_baseline_and_curves_above_in_all_views ... ok
+test data::tests::phase_and_integral ... ok
+test integral_plot::tests::zoomed_negative_and_flat_curves_fit_display_band ... ok
+test native_ui::tests::invalid_baseline_preview_cannot_replace_processed_samples ... ok
+test native_ui::tests::baseline_preview_cancel_apply_and_undo_preserve_source ... ok
+test processing::tests::correction_and_polynomial ... ok
+test processing::tests::endpoint_and_padding ... ok
+test data::tests::browser_includes_raw_only_processing_numbers ... ok
+test native_ui::tests::session_roundtrip_keeps_corrected_values_and_normalization_bits ... ok
+test stack::tests::reorder_preserves_selection_processing_and_region_ownership ... ok
+test stack::tests::sidebar_click_opens_single_and_stack_preserves_current ... ok
+test data::tests::endian_scaling_and_rejection ... ok
+test stack::tests::late_load_cannot_replace_latest_sidebar_selection_or_clear_regions ... ok
+test stack::tests::vertical_zoom_targets_hovered_lane_or_overlay_trace_only ... ok
+test native_ui::tests::corrected_export_and_session_reload_use_production_pipeline ... ok
+test stack::tests::hover_s_stacks_without_typing_into_the_focused_search_field ... ok
+test stack::tests::hover_s_works_with_keyboard_focus_on_a_sidebar_button ... ok
+test native_ui::tests::native_baseline_window_renders_without_legacy_application ... ok
+test stack::tests::stack_window_drag_reorders_the_actual_trace_list ... ok
+
+test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+

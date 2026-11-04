@@ -13,9 +13,9 @@ The Rust UI follows the retained TopSpin reference layout: Process/Analyze/Manag
 
 ## Comparison workflow
 
-Enter a Bruker folder in Data path, then Open / scan, or pass paths on the command line. A single processed dataset opens directly. A larger folder is scanned in a worker thread and listed in Dataset browser. With no paths supplied, the app scans `~/Documents/IGB Lab/NMRs` when that folder exists. The browser includes raw-only processing numbers marked FID, which open in the retained processing app. Its list fills the panel and scrolls through every result. The clickable sort menu above the list offers Alphabetical and Alphabetical (natural), where MLN1P85 precedes MLN1P115. Click rows to add spectra, or use Add matching spectra to load up to 32 filtered results. Drop folders onto the window as an alternative.
+Enter a Bruker folder in Data path, then Open / scan, or pass paths on the command line. A single processed dataset opens directly. A larger folder is scanned in a worker thread and listed in Dataset browser. With no paths supplied, the app scans `~/Documents/IGB Lab/NMRs` when that folder exists. The browser includes raw-only processing numbers marked FID. Supported complex 1D acquisitions are processed in memory by the native viewer using the existing validated C FFT kernel, with Rust handling parameter parsing and sample decoding. No Java process or source-file write is needed. Unsupported modes and corrupt components remain explicit errors. Its list fills the panel and scrolls through every result. The clickable sort menu above the list offers Alphabetical and Alphabetical (natural), where MLN1P85 precedes MLN1P115. Click a row to open that spectrum on its own. Hover over another row and press **S** to stack it with the visible spectra. This shortcut also works after searching, without inserting S into the filter. Existing hidden spectra retain their processing and integral state. Add matching spectra loads up to 32 filtered results into the stack. Drop folders onto the window as an alternative.
 
-Overlay shares the ppm axis. Stacked separates visible spectra vertically while retaining the shared axis. Each spectrum has a color, visibility toggle, gain and vertical offset. Normalize scales each spectrum separately. Disable it to compare source amplitudes. Scroll above the spectrum baseline to zoom intensity for all visible spectra. Scroll below the baseline to zoom the ppm axis around the cursor; horizontal wheel gestures pan anywhere over the plot. The baseline hit area follows vertical offsets and stacked lanes. Use the + and − toolbar controls to zoom the ppm axis; drag to pan; double-click or Full range resets the axis. These operations apply to all displayed spectra.
+Overlay shares the ppm axis. Stacked separates visible spectra vertically while retaining the shared axis. Each spectrum has a color, visibility toggle, gain and vertical offset. Normalize scales each spectrum separately. Disable it to compare source amplitudes. Scroll above the spectrum baseline to zoom intensity only for the spectrum under the pointer. Stacked mode uses the hovered lane; overlay mode finds the nearest rendered trace at that ppm. Scroll below the baseline to zoom the ppm axis around the cursor; horizontal wheel gestures pan anywhere over the plot. The baseline hit area follows vertical offsets and stacked lanes. Use the + and − toolbar controls to zoom the ppm axis; drag to pan; double-click or Full range resets the axis. Horizontal navigation stays linked across the visible spectra.
 
 Phase preview supports PH0 and PH1 where a `1i` component is present. It uses the original recurrence arithmetic and FTSIZE. Processed samples are cached and shared by the plot, peak picker, integrator, and CSV exporter. It never writes source components.
 
@@ -26,6 +26,8 @@ Choose **Process → Baseline**, or enter `.basl`, for a native manual polynomia
 Spectrum baseline correction modifies the samples used by integrations. Per-region integral baseline correction adjusts the integral only. Both are distinct from the vertical display offset. Changes trigger recalculation of affected integral curves; they are no longer fixed measurement snapshots.
 
 CSV export writes `spectrum.csv` inside the selected processing folder, in a worker thread, containing ppm, original real/imaginary values and the corrected processed preview. Values use round-trip scientific precision. It refuses to overwrite an existing file. Comparison files save paths, phase/polynomial settings, region correction options, normalization, layout and view range as JSON, also refusing overwrites. Version 2 comparisons reload and recompute corrected values; old version 1 measurement snapshots are migrated and recalculated rather than trusted. Data remains external to comparison files. Original Bruker components and processing parameters remain unchanged; native Bruker write parity is not claimed.
+
+The floating **Stack** window starts in the top right. Drag its rows to change order, click a row to select a spectrum, or uncheck it to hide it. The window can be moved, resized and collapsed. Stack order is saved with comparison files. Reordering and closing individual tabs preserve the other spectra's integral ownership and processing settings.
 
 ## Performance
 
@@ -46,7 +48,8 @@ Folder scans, file reads and CSV writes run off the UI thread. Traces use min/ma
 | Automatic baseline commands | Pending | Not implemented |
 | Peak picking | Positive local maxima of processed preview | Not implemented |
 | Comparison files, CSV | Implemented | Not implemented |
-| Raw FID viewing / processing, ZIP opening | Pending | Supported within documented limits |
+| Raw 1D acquisition opening and processing | Native Rust reader + validated C FFT, within existing format/cache limits | Supported within documented limits |
+| FID time-domain tab, ZIP opening | Retained app | Supported |
 | Bruker phase / integration / calibration writes | Pending | Validated, recoverable saves |
 | Browser filesystem watching and remembered roots | Pending | Implemented |
 | Multidimensional spectra, acquisition control | Pending | Not implemented |
@@ -64,3 +67,7 @@ The latter compares every decoded real/imaginary sample via ordered 64-bit rolli
 ## Checked on November 4, 2026
 
 Native scientific validation is recorded in [NATIVE-PROCESSING-VALIDATION.md](NATIVE-PROCESSING-VALIDATION.md). Run `bash tests/parity-audit/run-native.sh` for original-class polynomial/integration/phase checks, saved-region import checks, and captured Windows JVM cases. Run `bash tests/parity-audit/run-current.sh` for the 33 region comparisons that previously failed. Run `nix-shell rust-shell.nix --run 'cargo test && cargo clippy -- -D warnings'` for application workflow checks.
+
+## Stack and raw-opening checks
+
+`bash tests/parity-audit/run-raw-stack.sh` compares complete real/imaginary buffers and both axis endpoints with the retained validated Java/C processor. All 90 readable processing numbers in the current lab folder match on 11,796,660 raw-bit comparisons. The same existing truncated MLN1P93 component is rejected. No original files are modified. The UI tests also cover real egui drag/drop, hover-S with search focus, per-spectrum wheel zoom, late asynchronous loads and region ownership after reordering/removing tabs. This is validation of the native raw bridge against the retained processor, not new licensed-TopSpin captures for every acquisition.
