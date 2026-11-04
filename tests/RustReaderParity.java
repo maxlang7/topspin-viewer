@@ -7,6 +7,6 @@ public class RustReaderParity {
     return hash;
   }
   public static void main(String[] args)throws Exception {
-    for(String arg:args){var d=new BrukerDataset(Path.of(arg));System.out.printf("%s\t%d\t%016x\t%016x\t%016x\t%016x%n",d.path,d.real.length,Double.doubleToRawLongBits(d.left),Double.doubleToRawLongBits(d.right),digest(d.real),digest(d.imaginary));}
+    for(String arg:args){try {var d=new BrukerDataset(Path.of(arg));System.out.printf("%s\t%d\t%016x\t%016x\t%016x\t%016x%n",d.path,d.real.length,Double.doubleToRawLongBits(d.left),Double.doubleToRawLongBits(d.right),digest(d.real),digest(d.imaginary));}catch(Exception error){System.out.println(Path.of(arg).toRealPath()+"\tREJECT");}}
   }
 }

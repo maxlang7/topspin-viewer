@@ -23,11 +23,19 @@ impl Spectrum {
         let angle = (p0 + p1 * i as f64 / self.ft_size as f64).to_radians();
         self.real[i] * angle.cos() - self.imag.get(i).copied().unwrap_or(0.) * angle.sin()
     }
-    pub fn peaks(&self, threshold:f64,p0:f64,p1:f64)->Vec<(f64,f64)> {
-        let cutoff=self.max_amplitude*threshold;
-        let mut peaks=Vec::new();
-        for i in 1..self.real.len().saturating_sub(1) {let v=self.phased(i,p0,p1);if v>cutoff && v>self.phased(i-1,p0,p1) && v>=self.phased(i+1,p0,p1){peaks.push((self.ppm(i),v));}}
-        peaks.sort_by(|a,b|b.1.total_cmp(&a.1));peaks.truncate(128);peaks.sort_by(|a,b|b.0.total_cmp(&a.0));peaks
+    pub fn peaks(&self, threshold: f64, p0: f64, p1: f64) -> Vec<(f64, f64)> {
+        let cutoff = self.max_amplitude * threshold;
+        let mut peaks = Vec::new();
+        for i in 1..self.real.len().saturating_sub(1) {
+            let v = self.phased(i, p0, p1);
+            if v > cutoff && v > self.phased(i - 1, p0, p1) && v >= self.phased(i + 1, p0, p1) {
+                peaks.push((self.ppm(i), v));
+            }
+        }
+        peaks.sort_by(|a, b| b.1.total_cmp(&a.1));
+        peaks.truncate(128);
+        peaks.sort_by(|a, b| b.0.total_cmp(&a.0));
+        peaks
     }
     pub fn integral(&self, a: f64, b: f64, p0: f64, p1: f64) -> f64 {
         let lo = a.min(b);
@@ -201,22 +209,43 @@ pub fn discover(root: &Path) -> Result<Vec<PathBuf>, String> {
             }
         }
     }
-    found.sort_by(|a,b|natural_cmp(&a.to_string_lossy(),&b.to_string_lossy()));
+    found.sort_by(|a, b| natural_cmp(&a.to_string_lossy(), &b.to_string_lossy()));
     Ok(found)
 }
 
-fn natural_cmp(a:&str,b:&str)->std::cmp::Ordering {
+fn natural_cmp(a: &str, b: &str) -> std::cmp::Ordering {
     use std::cmp::Ordering;
-    let(mut a,mut b)=(a.as_bytes(),b.as_bytes());
-    while !a.is_empty() && !b.is_empty(){
-        if a[0].is_ascii_digit() && b[0].is_ascii_digit(){
-            let an=a.iter().position(|v|!v.is_ascii_digit()).unwrap_or(a.len());
-            let bn=b.iter().position(|v|!v.is_ascii_digit()).unwrap_or(b.len());
-            let av=&a[..an];let bv=&b[..bn];
-            let az=av.iter().position(|v|*v!=b'0').unwrap_or(an);let bz=bv.iter().position(|v|*v!=b'0').unwrap_or(bn);
-            let order=(an-az).cmp(&(bn-bz)).then_with(||av[az..].cmp(&bv[bz..]));
-            if order!=Ordering::Equal{return order}a=&a[an..];b=&b[bn..];
-        }else{let order=a[0].to_ascii_lowercase().cmp(&b[0].to_ascii_lowercase());if order!=Ordering::Equal{return order}a=&a[1..];b=&b[1..];}
+    let (mut a, mut b) = (a.as_bytes(), b.as_bytes());
+    while !a.is_empty() && !b.is_empty() {
+        if a[0].is_ascii_digit() && b[0].is_ascii_digit() {
+            let an = a
+                .iter()
+                .position(|v| !v.is_ascii_digit())
+                .unwrap_or(a.len());
+            let bn = b
+                .iter()
+                .position(|v| !v.is_ascii_digit())
+                .unwrap_or(b.len());
+            let av = &a[..an];
+            let bv = &b[..bn];
+            let az = av.iter().position(|v| *v != b'0').unwrap_or(an);
+            let bz = bv.iter().position(|v| *v != b'0').unwrap_or(bn);
+            let order = (an - az)
+                .cmp(&(bn - bz))
+                .then_with(|| av[az..].cmp(&bv[bz..]));
+            if order != Ordering::Equal {
+                return order;
+            }
+            a = &a[an..];
+            b = &b[bn..];
+        } else {
+            let order = a[0].to_ascii_lowercase().cmp(&b[0].to_ascii_lowercase());
+            if order != Ordering::Equal {
+                return order;
+            }
+            a = &a[1..];
+            b = &b[1..];
+        }
     }
     a.len().cmp(&b.len())
 }
@@ -225,16 +254,31 @@ fn natural_cmp(a:&str,b:&str)->std::cmp::Ordering {
 mod tests {
     use super::*;
     #[test]
-    fn natural_order_handles_long_numbers(){
+    fn natural_order_handles_long_numbers() {
         use std::cmp::Ordering::*;
-        assert_eq!(natural_cmp("MLN1P9/10","MLN1P111/2"),Less);
-        assert_eq!(natural_cmp("a99999999999999999999999999","a100000000000000000000000000"),Less);
-        assert_eq!(natural_cmp("a002","a2"),Equal);
+        assert_eq!(natural_cmp("MLN1P9/10", "MLN1P111/2"), Less);
+        assert_eq!(
+            natural_cmp(
+                "a99999999999999999999999999",
+                "a100000000000000000000000000"
+            ),
+            Less
+        );
+        assert_eq!(natural_cmp("a002", "a2"), Equal);
     }
     #[test]
-    fn peaks_reject_noise_and_keep_positions(){
-        let s=Spectrum{path:PathBuf::new(),title:String::new(),real:vec![0.,1.,0.,4.,0.,0.1,0.],imag:vec![],max_amplitude:4.,ft_size:7,left:7.,right:0.};
-        assert_eq!(s.peaks(0.2,0.,0.),vec![(6.,1.),(4.,4.)]);
+    fn peaks_reject_noise_and_keep_positions() {
+        let s = Spectrum {
+            path: PathBuf::new(),
+            title: String::new(),
+            real: vec![0., 1., 0., 4., 0., 0.1, 0.],
+            imag: vec![],
+            max_amplitude: 4.,
+            ft_size: 7,
+            left: 7.,
+            right: 0.,
+        };
+        assert_eq!(s.peaks(0.2, 0., 0.), vec![(6., 1.), (4., 4.)]);
     }
     #[test]
     fn phase_and_integral() {
