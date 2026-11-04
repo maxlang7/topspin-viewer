@@ -1,0 +1,8 @@
+Traceback (most recent call last):
+  File "Z:/home/maxlang/Projects/topspin-viewer/tests/inspect_topspin_ui.py", line 35, in <module>
+    Capture().run()
+  File "Z:/home/maxlang/Projects/topspin-viewer/tests/inspect_topspin_ui.py", line 30, in run
+    if hasattr(w,'getTitle') and 'Bruker TopSpin' in str(w.getTitle()): windows.append(walk(w,'topspin'))
+  File "Z:/home/maxlang/Projects/topspin-viewer/tests/inspect_topspin_ui.py", line 13, in walk
+    d={'path':path,'class':c.getClass().getName(),'bounds':[b.x,b.y,b.width,b.height],'visible':c.isVisible(),'enabled':c.isEnabled(),'name':c.getName(),'background':color(c.getBackground()),'foreground':color(c.getForeground())}
+TypeError: getName(): expected 1 args; got 0
