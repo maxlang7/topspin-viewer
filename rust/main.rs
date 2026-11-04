@@ -1,4 +1,6 @@
 mod data;
+mod native_ui;
+mod processing;
 mod ui;
 use data::Spectrum;
 use eframe::egui::{self, Color32, Pos2, Stroke};
@@ -24,12 +26,47 @@ struct Settings {
     offset: f64,
     p0: f64,
     p1: f64,
+    #[serde(default)]
+    baseline: [f64; 5],
+    #[serde(default = "one")]
+    integral_scale: f64,
+    #[serde(default = "frozen")]
+    normalization_frozen: bool,
 }
+fn frozen() -> bool {
+    true
+}
+fn one() -> f64 {
+    1.
+}
+#[derive(Clone, Serialize, Deserialize)]
+struct Region {
+    trace: usize,
+    left: f64,
+    right: f64,
+    bias: f64,
+    slope: f64,
+    baseline: bool,
+    points: usize,
+    value: f64,
+    #[serde(skip)]
+    calculation_key: Vec<u64>,
+    #[serde(skip)]
+    curve: Vec<f64>,
+    #[serde(skip)]
+    error: Option<String>,
+}
+
 struct Trace {
     data: Arc<Spectrum>,
     settings: Settings,
     cache_key: String,
     cache: Vec<egui::Shape>,
+    processed: Arc<Vec<f64>>,
+    processing_key: Vec<u64>,
+    revision: u64,
+    processed_max: f64,
+    baseline_undo: Option<[f64; 5]>,
 }
 #[derive(Serialize, Deserialize)]
 struct Session {
@@ -40,10 +77,12 @@ struct Session {
     range: Option<[f64; 2]>,
     #[serde(default)]
     regions: Vec<(usize, f64, f64, f64)>,
+    #[serde(default)]
+    integration_regions: Vec<Region>,
 }
 enum Message {
     Exported(Result<String, String>),
-    Loaded(Result<Spectrum, String>, Option<Settings>),
+    Loaded(Result<Box<Spectrum>, String>, Option<Settings>),
     Found(Result<Vec<PathBuf>, String>),
 }
 struct App {
@@ -66,7 +105,15 @@ struct App {
     pending: usize,
     integrate: bool,
     start: Option<f64>,
-    regions: Vec<(usize, f64, f64, f64)>,
+    regions: Vec<Region>,
+    region_bias: f64,
+    region_slope: f64,
+    region_baseline: bool,
+    region_points: usize,
+    calibration_value: f64,
+    baseline_open: bool,
+    baseline_session: Option<(PathBuf, [f64; 5])>,
+    baseline_points: usize,
     region_a: f64,
     region_b: f64,
     peaks: Vec<(f64, f64)>,
@@ -90,8 +137,101 @@ impl App {
         v.override_text_color = Some(Color32::from_rgb(235, 219, 178));
         v.selection.bg_fill = Color32::from_rgb(80, 73, 69);
         cc.egui_ctx.set_visuals(v);
+        let mut s = Self::state(started, smoke);
+        if paths.is_empty()
+            && let Some(home) = std::env::var_os("HOME")
+        {
+            let root = PathBuf::from(home).join("Documents/IGB Lab/NMRs");
+            if root.is_dir() {
+                s.path = root.display().to_string();
+                s.open(root, cc.egui_ctx.clone());
+            }
+        }
+        for p in paths {
+            s.open(p, cc.egui_ctx.clone());
+        }
+        s
+    }
+    fn handle_message(&mut self, m: Message, ctx: &egui::Context) {
+        self.pending = self.pending.saturating_sub(1);
+        match m {
+            Message::Exported(r) => self.status = r.unwrap_or_else(|e| e),
+            Message::Found(Ok(paths)) => {
+                if paths.is_empty() {
+                    self.status =
+                        "No processed 1D spectra found. Raw FIDs and ZIPs: use run-legacy.sh."
+                            .into()
+                } else {
+                    self.status = format!(
+                        "Found {} spectra. Select rows to add to comparison.",
+                        paths.len()
+                    );
+                    if paths.len() == 1 && paths[0].join("1r").is_file() {
+                        self.load(paths[0].clone(), None, ctx.clone());
+                    }
+                    for p in paths {
+                        if !self.found.contains(&p) {
+                            self.found.push(p);
+                        }
+                    }
+                    data::sort_datasets(&mut self.found, self.natural_sort);
+                }
+            }
+            Message::Loaded(Ok(s), settings) => {
+                if !self.traces.iter().any(|t| t.data.path == s.path) {
+                    let import_saved = settings.is_none();
+                    let settings = settings.unwrap_or(Settings {
+                        path: s.path.clone(),
+                        visible: true,
+                        gain: 1.,
+                        offset: 0.,
+                        p0: 0.,
+                        p1: 0.,
+                        baseline: [0.; 5],
+                        integral_scale: s.integral_scale,
+                        normalization_frozen: !s.saved_regions.is_empty(),
+                    });
+                    if import_saved {
+                        for row in &s.saved_regions {
+                            self.regions.push(Region {
+                                trace: self.traces.len(),
+                                left: row[0],
+                                right: row[1],
+                                bias: row[2],
+                                slope: row[3],
+                                baseline: false,
+                                points: 1,
+                                value: 0.,
+                                calculation_key: vec![],
+                                curve: vec![],
+                                error: None,
+                            });
+                        }
+                    }
+                    self.traces.push(Trace {
+                        data: Arc::from(s),
+                        settings,
+                        cache_key: String::new(),
+                        cache: vec![],
+                        processed: Arc::new(vec![]),
+                        processing_key: vec![],
+                        revision: 0,
+                        processed_max: 1.,
+                        baseline_undo: None,
+                    });
+                    self.selected = self.traces.len() - 1;
+                    self.status = format!("{} spectra loaded", self.traces.len());
+                }
+            }
+            Message::Loaded(Err(e), _) | Message::Found(Err(e)) => {
+                self.status = e;
+                self.regions.clear();
+            }
+        }
+    }
+    fn state(started: Instant, smoke: bool) -> Self {
         let (tx, rx) = mpsc::channel();
-        let mut s = Self {
+        Self {
             show_inspector: false,
             nav: "Process".into(),
             data_tab: 0,
@@ -113,6 +253,14 @@ impl App {
             integrate: false,
             start: None,
             regions: vec![],
+            region_bias: 0.,
+            region_slope: 0.,
+            region_baseline: false,
+            region_points: 4,
+            calibration_value: 1.,
+            baseline_open: false,
+            baseline_session: None,
+            baseline_points: 32,
             region_a: 0.,
             region_b: 1.,
             peaks: vec![],
@@ -121,20 +269,7 @@ impl App {
             started,
             first_frame: true,
             smoke,
-        };
-        if paths.is_empty()
-            && let Some(home) = std::env::var_os("HOME")
-        {
-            let root = PathBuf::from(home).join("Documents/IGB Lab/NMRs");
-            if root.is_dir() {
-                s.path = root.display().to_string();
-                s.open(root, cc.egui_ctx.clone());
-            }
         }
-        for p in paths {
-            s.open(p, cc.egui_ctx.clone());
-        }
-        s
     }
     fn load(&mut self, p: PathBuf, settings: Option<Settings>, ctx: egui::Context) {
         if self.traces.iter().any(|t| t.data.path == p) {
@@ -144,7 +279,7 @@ impl App {
         let tx = self.tx.clone();
         std::thread::spawn(move || {
             let result = data::load(&p);
-            let _ = tx.send(Message::Loaded(result, settings));
+            let _ = tx.send(Message::Loaded(result.map(Box::new), settings));
             ctx.request_repaint();
         });
     }
@@ -179,21 +314,30 @@ impl App {
             let result = (|| -> Result<String, String> {
                 let p = data.path.join("spectrum.csv"); // explicit export creates a new file only
                 use std::io::Write;
+                let phased = processing::phase(
+                    &data.real,
+                    &data.imag,
+                    settings.p0,
+                    settings.p1,
+                    data.ft_size,
+                );
+                let processed =
+                    processing::polynomial(&phased, settings.baseline, 0, phased.len())?;
                 let f = std::fs::OpenOptions::new()
                     .write(true)
                     .create_new(true)
                     .open(&p)
                     .map_err(|e| e.to_string())?;
                 let mut w = std::io::BufWriter::new(f);
-                writeln!(w, "ppm,real,imaginary,phase_preview").map_err(|e| e.to_string())?;
-                for i in 0..data.real.len() {
+                writeln!(w, "ppm,real,imaginary,processed_preview").map_err(|e| e.to_string())?;
+                for (i, value) in processed.iter().enumerate() {
                     writeln!(
                         w,
-                        "{:.12},{:.12},{:.12},{:.12}",
+                        "{:.17e},{:.17e},{:.17e},{:.17e}",
                         data.ppm(i),
                         data.real[i],
                         data.imag.get(i).copied().unwrap_or(0.),
-                        data.phased(i, settings.p0, settings.p1)
+                        value
                     )
                     .map_err(|e| e.to_string())?;
                 }
@@ -206,13 +350,17 @@ impl App {
     }
     fn save_session(&self) -> Result<String, String> {
         use std::io::Write;
+        if self.baseline_open {
+            return Err("Apply or cancel the baseline preview before saving".into());
+        }
         let s = Session {
-            version: 1,
+            version: 2,
             traces: self.traces.iter().map(|t| t.settings.clone()).collect(),
             stacked: self.stacked,
             normalize: self.normalize,
             range: self.range,
-            regions: self.regions.clone(),
+            regions: vec![],
+            integration_regions: self.regions.clone(),
         };
         let bytes = serde_json::to_vec_pretty(&s).map_err(|e| e.to_string())?;
         let mut f = std::fs::OpenOptions::new()
@@ -224,32 +372,73 @@ impl App {
         Ok("Saved comparison. Choose a new filename for subsequent saves.".into())
     }
     fn restore(&mut self, ctx: egui::Context) -> Result<String, String> {
-        if self.pending > 0 {
-            return Err("Wait for pending loads and exports before restoring a comparison".into());
+        if self.pending > 0 || self.baseline_open {
+            return Err(
+                "Finish baseline preview, pending loads and exports before restoring a comparison"
+                    .into(),
+            );
         }
         let bytes = std::fs::read(&self.session_path).map_err(|e| e.to_string())?;
         let s: Session = serde_json::from_slice(&bytes).map_err(|e| e.to_string())?;
-        if s.version != 1
+        if ![1, 2].contains(&s.version)
             || s.traces.len() > 128
-            || s.range
-                .is_some_and(|r| !r[0].is_finite() || !r[1].is_finite() || r[0] <= r[1])
             || s.traces
                 .iter()
-                .any(|t| ![t.gain, t.offset, t.p0, t.p1].iter().all(|n| n.is_finite()))
+                .map(|t| &t.path)
+                .collect::<std::collections::HashSet<_>>()
+                .len()
+                != s.traces.len()
+            || s.range
+                .is_some_and(|r| !r[0].is_finite() || !r[1].is_finite() || r[0] <= r[1])
+            || s.traces.iter().any(|t| {
+                ![t.gain, t.offset, t.p0, t.p1, t.integral_scale]
+                    .iter()
+                    .chain(t.baseline.iter())
+                    .all(|n| n.is_finite())
+            })
         {
             return Err("Invalid comparison session".into());
+        }
+        let restored_regions = if s.version == 1 {
+            s.regions
+                .iter()
+                .map(|&(trace, left, right, _)| Region {
+                    trace,
+                    left,
+                    right,
+                    bias: 0.,
+                    slope: 0.,
+                    baseline: false,
+                    points: 1,
+                    value: 0.,
+                    calculation_key: vec![],
+                    curve: vec![],
+                    error: None,
+                })
+                .collect()
+        } else {
+            s.integration_regions
+        };
+        if restored_regions.iter().any(|r| {
+            r.trace >= s.traces.len()
+                || ![r.left, r.right, r.bias, r.slope]
+                    .iter()
+                    .all(|v| v.is_finite())
+                || r.points == 0
+        }) {
+            return Err("Invalid integration regions".into());
         }
         self.stacked = s.stacked;
         self.normalize = s.normalize;
         self.range = s.range;
-        self.regions = s.regions;
+        self.regions = restored_regions;
         self.traces.clear();
         self.selected = 0;
         let tx = self.tx.clone();
         self.pending += s.traces.len();
         std::thread::spawn(move || {
             for t in s.traces {
-                let _ = tx.send(Message::Loaded(data::load(&t.path), Some(t)));
+                let _ = tx.send(Message::Loaded(data::load(&t.path).map(Box::new), Some(t)));
                 ctx.request_repaint();
             }
         });
@@ -259,55 +448,7 @@ impl App {
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         while let Ok(m) = self.rx.try_recv() {
-            self.pending = self.pending.saturating_sub(1);
-            match m {
-                Message::Exported(r) => self.status = r.unwrap_or_else(|e| e),
-                Message::Found(Ok(paths)) => {
-                    if paths.is_empty() {
-                        self.status =
-                            "No processed 1D spectra found. Raw FIDs and ZIPs: use run-legacy.sh."
-                                .into()
-                    } else {
-                        self.status = format!(
-                            "Found {} spectra. Select rows to add to comparison.",
-                            paths.len()
-                        );
-                        if paths.len() == 1 && paths[0].join("1r").is_file() {
-                            self.load(paths[0].clone(), None, ctx.clone());
-                        }
-                        for p in paths {
-                            if !self.found.contains(&p) {
-                                self.found.push(p);
-                            }
-                        }
-                        data::sort_datasets(&mut self.found, self.natural_sort);
-                    }
-                }
-                Message::Loaded(Ok(s), settings) => {
-                    if !self.traces.iter().any(|t| t.data.path == s.path) {
-                        let settings = settings.unwrap_or(Settings {
-                            path: s.path.clone(),
-                            visible: true,
-                            gain: 1.,
-                            offset: 0.,
-                            p0: 0.,
-                            p1: 0.,
-                        });
-                        self.traces.push(Trace {
-                            data: Arc::new(s),
-                            settings,
-                            cache_key: String::new(),
-                            cache: vec![],
-                        });
-                        self.selected = self.traces.len() - 1;
-                        self.status = format!("{} spectra loaded", self.traces.len());
-                    }
-                }
-                Message::Loaded(Err(e), _) | Message::Found(Err(e)) => {
-                    self.status = e;
-                    self.regions.clear();
-                }
-            }
+            self.handle_message(m, ctx);
         }
         for f in ctx.input(|i| i.raw.dropped_files.clone()) {
             if let Some(p) = f.path {
@@ -454,37 +595,10 @@ impl eframe::App for App {
                         }
                     });
                 }
-                ui.collapsing("Integral measurements", |ui| {
-                    ui.horizontal(|ui| {
-                        ui.add(egui::DragValue::new(&mut self.region_a).speed(0.01));
-                        ui.add(egui::DragValue::new(&mut self.region_b).speed(0.01));
-                    });
-                    if ui.button("Measure ppm range").clicked()
-                        && let Some(t) = self.traces.get(self.selected)
-                    {
-                        self.regions.push((
-                            self.selected,
-                            self.region_a,
-                            self.region_b,
-                            t.data.integral(
-                                self.region_a,
-                                self.region_b,
-                                t.settings.p0,
-                                t.settings.p1,
-                            ),
-                        ));
-                    }
-                    for (i, a, b, v) in &self.regions {
-                        ui.label(format!("#{} {a:.3}–{b:.3}: {v:.5}", i + 1));
-                    }
-                    if ui.button("Clear measurements").clicked() {
-                        self.regions.clear();
-                    }
-                    ui.label("Signed sample sum × ppm step; no baseline correction.");
-                });
+                self.integral_controls(ui);
                 ui.collapsing("Peak picking",|ui|{
                 ui.add(egui::Slider::new(&mut self.peak_threshold,0.001..=1.).logarithmic(true).text("Threshold"));
-                if ui.button("Pick selected spectrum").clicked() && let Some(t)=self.traces.get(self.selected) {self.peaks=t.data.peaks(self.peak_threshold,t.settings.p0,t.settings.p1);}
+                if ui.button("Pick selected spectrum").clicked() && let Some(t)=self.traces.get_mut(self.selected) {self.peaks=t.pick_peaks(self.peak_threshold);}
                 ui.label("Positive local maxima, up to 128 strongest. Threshold relative to source maximum.");
                 egui::ScrollArea::vertical().max_height(150.).show(ui,|ui|{for (ppm,value) in &self.peaks{ui.monospace(format!("{ppm:.5} ppm   {value:.3}"));}});
             });
@@ -503,29 +617,37 @@ impl eframe::App for App {
             });
         });
         }
+        self.baseline_controls(ctx);
         self.spectrum_tabs(ctx);
+        self.refresh_processing();
         egui::CentralPanel::default().show(ctx,|ui|{
-   if self.data_tab==1 {ui.heading("INTEGRALS");egui::Grid::new("integral-table").striped(true).show(ui,|ui|{for h in ["Spectrum","From / ppm","To / ppm","Measured area"]{ui.strong(h);}ui.end_row();for(i,a,b,v)in &self.regions{ui.label(format!("{}",i+1));ui.label(format!("{a:.5}"));ui.label(format!("{b:.5}"));ui.label(format!("{v:.6}"));ui.end_row();}});return;}
+   if self.data_tab==1 {self.integral_table(ui);return;}
 
    let (response,painter)=ui.allocate_painter(ui.available_size(),egui::Sense::click_and_drag());let rect=response.rect.shrink2(egui::vec2(14.,28.));if rect.width()<10.||rect.height()<10.{return}
    painter.rect_filled(response.rect,0.,Color32::from_rgb(29,32,33));let range=self.range.unwrap_or_else(||self.full_range());let width=range[0]-range[1];let ppm=|x:f32|range[0]-(x-rect.left())as f64/rect.width()as f64*width;
    let ticks=(rect.width()/75.).floor().clamp(2.,10.)as usize;
    for j in 0..=ticks{let x=rect.left()+rect.width()*j as f32/ticks as f32;painter.line_segment([Pos2::new(x,rect.top()),Pos2::new(x,rect.bottom())],Stroke::new(1.,Color32::from_rgb(50,48,47)));painter.text(Pos2::new(x,rect.bottom()+8.),egui::Align2::CENTER_TOP,format!("{:.2}",ppm(x)),egui::FontId::monospace(12.),Color32::from_rgb(189,174,147));}
-   let count=self.traces.iter().filter(|t|t.settings.visible).count().max(1);let common=self.traces.iter().filter(|t|t.settings.visible).fold(f64::MIN_POSITIVE,|m,t|m.max(t.data.max_amplitude));
-   for (lane,(idx,t)) in self.traces.iter_mut().enumerate().filter(|(_,t)|t.settings.visible).enumerate(){let d=&t.data;let s=&t.settings;let scale=if self.normalize{d.max_amplitude}else{common};let lane_h=if self.stacked{rect.height()/count as f32}else{rect.height()};let base=if self.stacked{rect.top()+lane_h*(lane as f32+0.85)}else{rect.bottom()-lane_h*0.12};let amp=lane_h*0.7;
+   let count=self.traces.iter().filter(|t|t.settings.visible).count().max(1);let common=self.traces.iter().filter(|t|t.settings.visible).fold(f64::MIN_POSITIVE,|m,t|m.max(t.processed_max));
+   for (lane,(idx,t)) in self.traces.iter_mut().enumerate().filter(|(_,t)|t.settings.visible).enumerate(){let d=&t.data;let s=&t.settings;if t.processed.is_empty(){continue;}let scale=if self.normalize{t.processed_max}else{common};let lane_h=if self.stacked{rect.height()/count as f32}else{rect.height()};let base=if self.stacked{rect.top()+lane_h*(lane as f32+0.85)}else{rect.bottom()-lane_h*0.12};let amp=lane_h*0.7;
     let y=|v:f64|base-((v/scale*s.gain+s.offset)as f32*amp).clamp(-1e6,1e6);
     // Min/max per physical column retains narrow peaks at all zoom levels.
-    let key=format!("{rect:?}/{range:?}/{:?}/{common}/{}",(s.gain,s.offset,s.p0,s.p1,self.normalize,self.stacked,lane,count,idx),ctx.pixels_per_point());
+    let key=format!("{rect:?}/{range:?}/{:?}/{common}/{}",(s.gain,s.offset,s.p0,s.p1,self.normalize,self.stacked,lane,count,idx,t.revision),ctx.pixels_per_point());
     if t.cache_key!=key {
     t.cache.clear();
     let columns=(rect.width()*ctx.pixels_per_point()).ceil()as usize;let mut previous=None;
-    for column in 0..columns{let x0=rect.left()+column as f32/columns as f32*rect.width();let x1=rect.left()+(column+1)as f32/columns as f32*rect.width();let index=|p:f64|((d.left-p)/(d.left-d.right)*d.real.len()as f64).floor()as isize;let lo=index(ppm(x0)).max(0)as usize;let hi=index(ppm(x1)).max(0)as usize;if lo>=d.real.len()||ppm(x1)>d.left||ppm(x0)<d.right{previous=None;continue}let hi=hi.max(lo+1).min(d.real.len());let(mut low,mut high)=(f64::INFINITY,f64::NEG_INFINITY);for i in lo..hi{let v=d.phased(i,s.p0,s.p1);low=low.min(v);high=high.max(v);}let a=Pos2::new(x0,y(low));let b=Pos2::new(x0,y(high));let stroke=Stroke::new(1.,COLORS[idx%6]);t.cache.push(egui::Shape::line_segment([a,b],stroke));if let Some(p)=previous{t.cache.push(egui::Shape::line_segment([p,a],stroke));}previous=Some(b);}
+    for column in 0..columns{let x0=rect.left()+column as f32/columns as f32*rect.width();let x1=rect.left()+(column+1)as f32/columns as f32*rect.width();let index=|p:f64|((d.left-p)/(d.left-d.right)*d.real.len()as f64).floor()as isize;let lo=index(ppm(x0)).max(0)as usize;let hi=index(ppm(x1)).max(0)as usize;if lo>=d.real.len()||ppm(x1)>d.left||ppm(x0)<d.right{previous=None;continue}let hi=hi.max(lo+1).min(d.real.len());let(mut low,mut high)=(f64::INFINITY,f64::NEG_INFINITY);for i in lo..hi{let v=t.processed[i];low=low.min(v);high=high.max(v);}let a=Pos2::new(x0,y(low));let b=Pos2::new(x0,y(high));let stroke=Stroke::new(1.,COLORS[idx%6]);t.cache.push(egui::Shape::line_segment([a,b],stroke));if let Some(p)=previous{t.cache.push(egui::Shape::line_segment([p,a],stroke));}previous=Some(b);}
     t.cache_key=key;
     }
     painter.with_clip_rect(rect).extend(t.cache.iter().cloned());
     painter.text(Pos2::new(rect.left()+8.,if self.stacked{rect.top()+lane_h*lane as f32+4.}else{rect.top()+idx as f32*18.}),egui::Align2::LEFT_TOP,format!("{} {}",idx+1,d.title),egui::FontId::proportional(12.),COLORS[idx%6]);
    }
-   for (_,a,b,_) in self.regions.iter().filter(|(i,_,_,_)|*i==self.selected){let px=|p:f64|rect.left()+((range[0]-p)/width)as f32*rect.width();let r=egui::Rect::from_x_y_ranges(px(a.max(*b))..=px(a.min(*b)),rect.top()..=rect.bottom());painter.with_clip_rect(rect).rect_filled(r,0.,Color32::from_rgba_unmultiplied(250,189,47,22));}
+   for r in self.regions.iter().filter(|r|r.trace==self.selected&&r.error.is_none()){let px=|p:f64|rect.left()+((range[0]-p)/width)as f32*rect.width();let region=egui::Rect::from_x_y_ranges(px(r.left.max(r.right))..=px(r.left.min(r.right)),rect.top()..=rect.bottom());painter.with_clip_rect(rect).rect_filled(region,0.,Color32::from_rgba_unmultiplied(250,189,47,22));
+        if let Some(t)=self.traces.get(r.trace){let peak=r.curve.iter().fold(f64::MIN_POSITIVE,|m,v|m.max(v.abs()));let start=((((r.left-t.data.left)/(t.data.right-t.data.left))*t.data.real.len()as f64+0.5)as isize).clamp(0,t.data.real.len()as isize)as usize;let step=(r.curve.len()/(rect.width()as usize).max(1)).max(1);let mut previous=None;
+            for i in (0..r.curve.len()).step_by(step){let p=Pos2::new(px(t.data.ppm(start+i)),rect.bottom()-rect.height()*0.18-(r.curve[i]/peak)as f32*rect.height()*0.18);if let Some(before)=previous{painter.with_clip_rect(rect).line_segment([before,p],Stroke::new(1.,COLORS[1]));}previous=Some(p);}
+            painter.with_clip_rect(rect).text(Pos2::new(px(r.right),rect.bottom()-rect.height()*0.39),egui::Align2::RIGHT_TOP,format!("{:.5}",r.value*t.settings.integral_scale),egui::FontId::monospace(12.),COLORS[1]);
+        }
+   }
+
    if let Some(pos)=response.hover_pos(){let x=ppm(pos.x);painter.line_segment([Pos2::new(pos.x,rect.top()),Pos2::new(pos.x,rect.bottom())],Stroke::new(1.,Color32::from_gray(130)));painter.text(rect.right_top(),egui::Align2::RIGHT_TOP,format!("{x:.5} ppm"),egui::FontId::monospace(12.),COLORS[0]);let scroll=ctx.input(|i|i.smooth_scroll_delta);
     let lane_h=if self.stacked{rect.height()/count as f32}else{rect.height()};
     let lane=if self.stacked{((pos.y-rect.top())/lane_h).floor().clamp(0.,count.saturating_sub(1)as f32)}else{0.};
@@ -547,7 +669,8 @@ impl eframe::App for App {
    if response.double_clicked(){self.range=None;}
    if response.drag_started()&&self.integrate{self.start=response.interact_pointer_pos().map(|p|ppm(p.x));}
    if response.dragged()&&!self.integrate{let dx=ctx.input(|i|i.pointer.delta().x)as f64/rect.width()as f64*width;self.range=Some([range[0]+dx,range[1]+dx]);}
-   if response.drag_stopped()&&self.integrate&& let (Some(a),Some(p),Some(t))=(self.start.take(),response.interact_pointer_pos(),self.traces.get(self.selected)){let b=ppm(p.x);self.regions.push((self.selected,a,b,t.data.integral(a,b,t.settings.p0,t.settings.p1)));}
+   if response.drag_stopped()&&self.integrate&& let (Some(a),Some(p))=(self.start.take(),response.interact_pointer_pos()){self.measure_region(a,ppm(p.x));}
+
    if self.traces.is_empty(){painter.text(rect.center(),egui::Align2::CENTER_CENTER,"Open a Bruker dataset folder to begin\nAdd several spectra for overlay or stacked comparison",egui::FontId::proportional(20.),COLORS[0]);}
   });
         if self.first_frame {

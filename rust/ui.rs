@@ -68,11 +68,9 @@ impl App {
                             }
                             ui.separator();
                             if ui.button("Peak picking").clicked()
-                                && let Some(t) = self.traces.get(self.selected)
+                                && let Some(t) = self.traces.get_mut(self.selected)
                             {
-                                self.peaks =
-                                    t.data
-                                        .peaks(self.peak_threshold, t.settings.p0, t.settings.p1);
+                                self.peaks = t.pick_peaks(self.peak_threshold);
                             }
                             ui.separator();
                             if ui
@@ -128,13 +126,7 @@ impl App {
                                 ui.label("Preview only");
                             });
                             ui.separator();
-                            if ui
-                                .button("Baseline ↗")
-                                .on_hover_text("Baseline corrections in the retained viewer")
-                                .clicked()
-                            {
-                                self.legacy();
-                            }
+                            if ui.button("Baseline").on_hover_text("Native manual polynomial correction with preview, apply and cancel").clicked(){self.begin_baseline();}
                             ui.separator();
                             if ui.button("Calib. Axis ↗").clicked() {
                                 self.legacy();
@@ -209,6 +201,7 @@ impl App {
                         ".multi" => self.stacked = !self.stacked,
                         ".csv" => self.export(ctx.clone()),
                         "efp" | ".cal" => self.legacy(),
+                        ".basl" => self.begin_baseline(),
                         _ => {
                             self.status = "Commands: .all, .ph, int, .multi, .csv, efp, .cal".into()
                         }

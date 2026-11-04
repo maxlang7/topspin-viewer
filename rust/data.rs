@@ -12,6 +12,8 @@ pub struct Spectrum {
     pub imag: Vec<f64>,
     pub max_amplitude: f64,
     pub ft_size: usize,
+    pub integral_scale: f64,
+    pub saved_regions: Vec<[f64; 4]>,
     pub left: f64,
     pub right: f64,
 }
@@ -19,38 +21,8 @@ impl Spectrum {
     pub fn ppm(&self, i: usize) -> f64 {
         self.left + (self.right - self.left) / self.real.len() as f64 * i as f64
     }
-    pub fn phased(&self, i: usize, p0: f64, p1: f64) -> f64 {
-        let angle = (p0 + p1 * i as f64 / self.ft_size as f64).to_radians();
-        self.real[i] * angle.cos() - self.imag.get(i).copied().unwrap_or(0.) * angle.sin()
-    }
-    pub fn peaks(&self, threshold: f64, p0: f64, p1: f64) -> Vec<(f64, f64)> {
-        let cutoff = self.max_amplitude * threshold;
-        let mut peaks = Vec::new();
-        for i in 1..self.real.len().saturating_sub(1) {
-            let v = self.phased(i, p0, p1);
-            if v > cutoff && v > self.phased(i - 1, p0, p1) && v >= self.phased(i + 1, p0, p1) {
-                peaks.push((self.ppm(i), v));
-            }
-        }
-        peaks.sort_by(|a, b| b.1.total_cmp(&a.1));
-        peaks.truncate(128);
-        peaks.sort_by(|a, b| b.0.total_cmp(&a.0));
-        peaks
-    }
-    pub fn integral(&self, a: f64, b: f64, p0: f64, p1: f64) -> f64 {
-        let lo = a.min(b);
-        let hi = a.max(b);
-        (0..self.real.len())
-            .filter(|&i| {
-                let x = self.ppm(i);
-                x >= lo && x <= hi
-            })
-            .map(|i| self.phased(i, p0, p1))
-            .sum::<f64>()
-            * (self.left - self.right).abs()
-            / self.real.len() as f64
-    }
 }
+
 pub fn parameters(path: &Path) -> Result<BTreeMap<String, String>, String> {
     let raw = fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?;
     let text: String = raw.iter().map(|&b| b as char).collect();
@@ -166,6 +138,43 @@ pub fn load(path: &Path) -> Result<Spectrum, String> {
         .chain(imag.iter())
         .fold(0f64, |m, v| m.max(v.abs()))
         .max(f64::MIN_POSITIVE);
+    let integral_scale = number("INTSCL", Some(1.))? / 2f64.powi(exponent as i32);
+    if !integral_scale.is_finite() {
+        return Err("Invalid saved integral normalization".into());
+    }
+    let mut saved_regions = Vec::new();
+    if path.join("intrng").is_file() {
+        let text = fs::read_to_string(path.join("intrng")).map_err(|e| e.to_string())?;
+        if !text.lines().next().is_some_and(|l| l.starts_with("A 1.0")) {
+            return Err("Unsupported integral-region format".into());
+        }
+        for line in text.lines().skip(1) {
+            let line = line.split('#').next().unwrap_or("").trim();
+            if line.is_empty() {
+                continue;
+            }
+            let v: Vec<f64> = line
+                .split_whitespace()
+                .take(4)
+                .map(|s| {
+                    s.parse::<f64>()
+                        .map_err(|_| "Invalid integral region".to_owned())
+                })
+                .collect::<Result<_, _>>()?;
+            if v.len() != 4 || v.iter().any(|v| !v.is_finite()) || v[0] < v[1] {
+                return Err("Invalid integral region".into());
+            }
+            saved_regions.push([
+                v[0],
+                v[1],
+                -2f64.powi(exponent as i32) * v[2],
+                -2f64.powi(exponent as i32) * v[3],
+            ]);
+        }
+    }
+    if saved_regions.iter().flatten().any(|v| !v.is_finite()) {
+        return Err("Integral corrections overflowed saved units".into());
+    }
     Ok(Spectrum {
         path,
         title,
@@ -175,6 +184,8 @@ pub fn load(path: &Path) -> Result<Spectrum, String> {
         right,
         max_amplitude,
         ft_size,
+        integral_scale,
+        saved_regions,
     })
 }
 // Iterative scan, no symlink traversal, bounded to avoid runaway filesystem walks.
@@ -314,34 +325,27 @@ mod tests {
         assert!(discover(&root).unwrap().is_empty());
     }
     #[test]
-    fn peaks_reject_noise_and_keep_positions() {
-        let s = Spectrum {
-            path: PathBuf::new(),
-            title: String::new(),
-            real: vec![0., 1., 0., 4., 0., 0.1, 0.],
-            imag: vec![],
-            max_amplitude: 4.,
-            ft_size: 7,
-            left: 7.,
-            right: 0.,
-        };
-        assert_eq!(s.peaks(0.2, 0., 0.), vec![(6., 1.), (4., 4.)]);
-    }
-    #[test]
     fn phase_and_integral() {
         let s = Spectrum {
             path: PathBuf::new(),
             title: String::new(),
             max_amplitude: 4.,
             ft_size: 4,
+            integral_scale: 1.,
+            saved_regions: vec![],
             real: vec![1., 2., 3., 4.],
             imag: vec![2.; 4],
             left: 4.,
             right: 0.,
         };
         assert_eq!(s.ppm(3), 1.);
-        assert_eq!(s.integral(1., 4., 0., 0.), 10.);
-        assert!((s.phased(0, 90., 0.) + 2.).abs() < 1e-12);
+        assert_eq!(
+            crate::processing::region(&s.real, [4., 0.], [4., 1.], 0., 0., false, 1)
+                .unwrap()
+                .value(),
+            6.
+        );
+        assert!((crate::processing::phase(&s.real, &s.imag, 90., 0., 4)[0] + 2.).abs() < 1e-12);
     }
     #[test]
     fn endian_scaling_and_rejection() {

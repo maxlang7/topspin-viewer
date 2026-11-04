@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Deliberately exits 1 while the production Rust integrator differs from TopSpin.
+# Exits 1 if the production Rust integrator differs from TopSpin.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 if ! command -v javac >/dev/null; then exec nix-shell shell.nix --run 'bash tests/parity-audit/run-current.sh'; fi
