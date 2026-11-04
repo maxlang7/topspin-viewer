@@ -1,4 +1,5 @@
 mod data;
+mod integral_plot;
 mod native_ui;
 mod processing;
 mod ui;
@@ -627,11 +628,13 @@ impl eframe::App for App {
    painter.rect_filled(response.rect,0.,Color32::from_rgb(29,32,33));let range=self.range.unwrap_or_else(||self.full_range());let width=range[0]-range[1];let ppm=|x:f32|range[0]-(x-rect.left())as f64/rect.width()as f64*width;
    let ticks=(rect.width()/75.).floor().clamp(2.,10.)as usize;
    for j in 0..=ticks{let x=rect.left()+rect.width()*j as f32/ticks as f32;painter.line_segment([Pos2::new(x,rect.top()),Pos2::new(x,rect.bottom())],Stroke::new(1.,Color32::from_rgb(50,48,47)));painter.text(Pos2::new(x,rect.bottom()+8.),egui::Align2::CENTER_TOP,format!("{:.2}",ppm(x)),egui::FontId::monospace(12.),Color32::from_rgb(189,174,147));}
+   let have_integrals=self.has_visible_integrals();
+   let selected=self.selected;
    let count=self.traces.iter().filter(|t|t.settings.visible).count().max(1);let common=self.traces.iter().filter(|t|t.settings.visible).fold(f64::MIN_POSITIVE,|m,t|m.max(t.processed_max));
-   for (lane,(idx,t)) in self.traces.iter_mut().enumerate().filter(|(_,t)|t.settings.visible).enumerate(){let d=&t.data;let s=&t.settings;if t.processed.is_empty(){continue;}let scale=if self.normalize{t.processed_max}else{common};let lane_h=if self.stacked{rect.height()/count as f32}else{rect.height()};let base=if self.stacked{rect.top()+lane_h*(lane as f32+0.85)}else{rect.bottom()-lane_h*0.12};let amp=lane_h*0.7;
-    let y=|v:f64|base-((v/scale*s.gain+s.offset)as f32*amp).clamp(-1e6,1e6);
+   for (lane,(idx,t)) in self.traces.iter_mut().enumerate().filter(|(_,t)|t.settings.visible).enumerate(){let d=&t.data;let s=&t.settings;if t.processed.is_empty(){continue;}let scale=if self.normalize{t.processed_max}else{common};let lane_h=if self.stacked{rect.height()/count as f32}else{rect.height()};let geometry=integral_plot::lane_layout(rect,self.stacked,count,lane,s.offset,have_integrals&&(!self.stacked||idx==selected));let amp=geometry.amplitude;
+    let y=|v:f64|geometry.baseline-((v/scale*s.gain)as f32*amp).clamp(-1e6,1e6);
     // Min/max per physical column retains narrow peaks at all zoom levels.
-    let key=format!("{rect:?}/{range:?}/{:?}/{common}/{}",(s.gain,s.offset,s.p0,s.p1,self.normalize,self.stacked,lane,count,idx,t.revision),ctx.pixels_per_point());
+    let key=format!("{rect:?}/{range:?}/{:?}/{common}/{}",(s.gain,s.offset,s.p0,s.p1,self.normalize,self.stacked,lane,count,idx,t.revision,have_integrals,selected),ctx.pixels_per_point());
     if t.cache_key!=key {
     t.cache.clear();
     let columns=(rect.width()*ctx.pixels_per_point()).ceil()as usize;let mut previous=None;
@@ -641,19 +644,16 @@ impl eframe::App for App {
     painter.with_clip_rect(rect).extend(t.cache.iter().cloned());
     painter.text(Pos2::new(rect.left()+8.,if self.stacked{rect.top()+lane_h*lane as f32+4.}else{rect.top()+idx as f32*18.}),egui::Align2::LEFT_TOP,format!("{} {}",idx+1,d.title),egui::FontId::proportional(12.),COLORS[idx%6]);
    }
-   for r in self.regions.iter().filter(|r|r.trace==self.selected&&r.error.is_none()){let px=|p:f64|rect.left()+((range[0]-p)/width)as f32*rect.width();let region=egui::Rect::from_x_y_ranges(px(r.left.max(r.right))..=px(r.left.min(r.right)),rect.top()..=rect.bottom());painter.with_clip_rect(rect).rect_filled(region,0.,Color32::from_rgba_unmultiplied(250,189,47,22));
-        if let Some(t)=self.traces.get(r.trace){let peak=r.curve.iter().fold(f64::MIN_POSITIVE,|m,v|m.max(v.abs()));let start=((((r.left-t.data.left)/(t.data.right-t.data.left))*t.data.real.len()as f64+0.5)as isize).clamp(0,t.data.real.len()as isize)as usize;let step=(r.curve.len()/(rect.width()as usize).max(1)).max(1);let mut previous=None;
-            for i in (0..r.curve.len()).step_by(step){let p=Pos2::new(px(t.data.ppm(start+i)),rect.bottom()-rect.height()*0.18-(r.curve[i]/peak)as f32*rect.height()*0.18);if let Some(before)=previous{painter.with_clip_rect(rect).line_segment([before,p],Stroke::new(1.,COLORS[1]));}previous=Some(p);}
-            painter.with_clip_rect(rect).text(Pos2::new(px(r.right),rect.bottom()-rect.height()*0.39),egui::Align2::RIGHT_TOP,format!("{:.5}",r.value*t.settings.integral_scale),egui::FontId::monospace(12.),COLORS[1]);
-        }
-   }
+   self.paint_integrals(rect,range,&painter,&response);
 
    if let Some(pos)=response.hover_pos(){let x=ppm(pos.x);painter.line_segment([Pos2::new(pos.x,rect.top()),Pos2::new(pos.x,rect.bottom())],Stroke::new(1.,Color32::from_gray(130)));painter.text(rect.right_top(),egui::Align2::RIGHT_TOP,format!("{x:.5} ppm"),egui::FontId::monospace(12.),COLORS[0]);let scroll=ctx.input(|i|i.smooth_scroll_delta);
     let lane_h=if self.stacked{rect.height()/count as f32}else{rect.height()};
-    let lane=if self.stacked{((pos.y-rect.top())/lane_h).floor().clamp(0.,count.saturating_sub(1)as f32)}else{0.};
-    let baseline=if self.stacked{rect.top()+lane_h*(lane+0.85)}else{rect.bottom()-lane_h*0.12};
-    let offset=if self.stacked{self.traces.iter().filter(|t|t.settings.visible).nth(lane as usize).map(|t|t.settings.offset).unwrap_or(0.)}else{self.traces.get(self.selected).filter(|t|t.settings.visible).or_else(||self.traces.iter().find(|t|t.settings.visible)).map(|t|t.settings.offset).unwrap_or(0.)};
-    let below=pos.y>baseline-offset as f32*lane_h*0.7;
+    let lane=if self.stacked{((pos.y-rect.top())/lane_h).floor().clamp(0.,count.saturating_sub(1)as f32)as usize}else{0};
+    let hovered=if self.stacked{self.traces.iter().enumerate().filter(|(_,t)|t.settings.visible).nth(lane)}else{self.traces.get(selected).filter(|t|t.settings.visible).map(|t|(selected,t)).or_else(||self.traces.iter().enumerate().find(|(_,t)|t.settings.visible))};
+    let offset=hovered.map_or(0.,|(_,t)|t.settings.offset);
+    let integrals=have_integrals&&(!self.stacked||hovered.is_some_and(|(idx,_)|idx==selected));
+    let geometry=integral_plot::lane_layout(rect,self.stacked,count,lane,offset,integrals);
+    let below=pos.y>geometry.baseline;
     let horizontal=scroll.x;
     if horizontal!=0.{let shift=horizontal as f64/rect.width()as f64*width;self.range=Some([range[0]+shift,range[1]+shift]);}
     if below && scroll.y!=0.{
