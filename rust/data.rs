@@ -42,6 +42,10 @@ pub fn load(path: &Path) -> Result<Spectrum, String> {
         path
     };
     let path = fs::canonicalize(path).map_err(|e| e.to_string())?;
+    #[cfg(feature = "native-raw")]
+    if !path.join("1r").is_file() {
+        return crate::raw::load(&path);
+    }
     let p = parameters(&path.join("procs"))?;
     let number = |key: &str, default: Option<f64>| -> Result<f64, String> {
         let n = match p.get(key) {

@@ -16,3 +16,16 @@ serde_json = {version="1",features=["float_roundtrip"]}
 lto = "thin"
 codegen-units = 1
 strip = true
+
+[features]
+default = ["native-raw"]
+native-raw = []
+parity-tools = ["native-raw"]
+
+[build-dependencies]
+cc = "1"
+
+[[bin]]
+name = "raw-parity-check"
+path = "tests/parity-audit/raw_check.rs"
+required-features = ["parity-tools"]

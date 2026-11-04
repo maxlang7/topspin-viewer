@@ -4,9 +4,6 @@ impl App {
         let path = self.traces.get(self.selected).map(|t| t.data.path.clone());
         self.launch_legacy(path.as_deref());
     }
-    pub fn legacy_dataset(&mut self, path: &std::path::Path) {
-        self.launch_legacy(Some(path));
-    }
     fn launch_legacy(&mut self, path: Option<&std::path::Path>) {
         let mut c = std::process::Command::new("bash");
         c.arg(concat!(env!("CARGO_MANIFEST_DIR"), "/run-legacy.sh"));
@@ -248,10 +245,7 @@ impl App {
                 });
             });
             if let Some(i) = close {
-                self.traces.remove(i);
-                self.regions.clear();
-                self.peaks.clear();
-                self.selected = self.selected.min(self.traces.len().saturating_sub(1));
+                self.close_trace(i);
             }
         });
         egui::TopBottomPanel::bottom("data-tabs").show(ctx, |ui| {

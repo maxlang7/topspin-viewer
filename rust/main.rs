@@ -2,6 +2,9 @@ mod data;
 mod integral_plot;
 mod native_ui;
 mod processing;
+#[cfg(feature = "native-raw")]
+mod raw;
+mod stack;
 mod ui;
 use data::Spectrum;
 use eframe::egui::{self, Color32, Pos2, Stroke};
@@ -81,12 +84,27 @@ struct Session {
     #[serde(default)]
     integration_regions: Vec<Region>,
 }
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum ViewAction {
+    Append,
+    Solo,
+    Stack,
+    Restore,
+}
+#[derive(Clone, Copy)]
+struct LoadView {
+    action: ViewAction,
+    epoch: u64,
+}
 enum Message {
     Exported(Result<String, String>),
-    Loaded(Result<Box<Spectrum>, String>, Option<Settings>),
+    Loaded(Result<Box<Spectrum>, String>, Option<Settings>, LoadView),
     Found(Result<Vec<PathBuf>, String>),
 }
 struct App {
+    view_epoch: u64,
+    restoring: bool,
+    hovered_sidebar: Option<(PathBuf, egui::Rect)>,
     show_inspector: bool,
     nav: String,
     data_tab: usize,
@@ -167,7 +185,7 @@ impl App {
                         "Found {} spectra. Select rows to add to comparison.",
                         paths.len()
                     );
-                    if paths.len() == 1 && paths[0].join("1r").is_file() {
+                    if paths.len() == 1 {
                         self.load(paths[0].clone(), None, ctx.clone());
                     }
                     for p in paths {
@@ -178,7 +196,8 @@ impl App {
                     data::sort_datasets(&mut self.found, self.natural_sort);
                 }
             }
-            Message::Loaded(Ok(s), settings) => {
+            Message::Loaded(Ok(s), settings, view) => {
+                let path = s.path.clone();
                 if !self.traces.iter().any(|t| t.data.path == s.path) {
                     let import_saved = settings.is_none();
                     let settings = settings.unwrap_or(Settings {
@@ -220,19 +239,33 @@ impl App {
                         processed_max: 1.,
                         baseline_undo: None,
                     });
-                    self.selected = self.traces.len() - 1;
+                    if view.epoch == self.view_epoch {
+                        self.selected = self.traces.len() - 1;
+                    }
+                    if view.epoch != self.view_epoch {
+                        self.traces.last_mut().unwrap().settings.visible = false;
+                    }
                     self.status = format!("{} spectra loaded", self.traces.len());
                 }
+                self.apply_view(&path, view);
             }
-            Message::Loaded(Err(e), _) | Message::Found(Err(e)) => {
+            Message::Loaded(Err(e), _, _) | Message::Found(Err(e)) => {
                 self.status = e;
-                self.regions.clear();
+                if self.restoring {
+                    self.regions.clear();
+                }
             }
+        }
+        if self.pending == 0 {
+            self.restoring = false;
         }
     }
     fn state(started: Instant, smoke: bool) -> Self {
         let (tx, rx) = mpsc::channel();
         Self {
+            view_epoch: 0,
+            restoring: false,
+            hovered_sidebar: None,
             show_inspector: false,
             nav: "Process".into(),
             data_tab: 0,
@@ -273,14 +306,38 @@ impl App {
         }
     }
     fn load(&mut self, p: PathBuf, settings: Option<Settings>, ctx: egui::Context) {
+        self.load_view(
+            p,
+            settings,
+            ctx,
+            LoadView {
+                action: ViewAction::Append,
+                epoch: self.view_epoch,
+            },
+        );
+    }
+    fn load_view(
+        &mut self,
+        p: PathBuf,
+        settings: Option<Settings>,
+        ctx: egui::Context,
+        view: LoadView,
+    ) {
+        let p = std::fs::canonicalize(&p).unwrap_or(p);
+        let p = if p.is_file() {
+            p.parent().unwrap_or(&p).to_owned()
+        } else {
+            p
+        };
         if self.traces.iter().any(|t| t.data.path == p) {
+            self.apply_view(&p, view);
             return;
         }
         self.pending += 1;
         let tx = self.tx.clone();
         std::thread::spawn(move || {
             let result = data::load(&p);
-            let _ = tx.send(Message::Loaded(result.map(Box::new), settings));
+            let _ = tx.send(Message::Loaded(result.map(Box::new), settings, view));
             ctx.request_repaint();
         });
     }
@@ -435,11 +492,21 @@ impl App {
         self.regions = restored_regions;
         self.traces.clear();
         self.selected = 0;
+        self.view_epoch += 1;
+        self.restoring = !s.traces.is_empty();
+        let view = LoadView {
+            action: ViewAction::Restore,
+            epoch: self.view_epoch,
+        };
         let tx = self.tx.clone();
         self.pending += s.traces.len();
         std::thread::spawn(move || {
             for t in s.traces {
-                let _ = tx.send(Message::Loaded(data::load(&t.path).map(Box::new), Some(t)));
+                let _ = tx.send(Message::Loaded(
+                    data::load(&t.path).map(Box::new),
+                    Some(t),
+                    view,
+                ));
                 ctx.request_repaint();
             }
         });
@@ -456,7 +523,9 @@ impl eframe::App for App {
                 self.open(p, ctx.clone());
             }
         }
+        self.handle_sidebar_shortcut(ctx);
         self.topspin_chrome(ctx);
+        self.hovered_sidebar = None;
         egui::SidePanel::left("browser")
             .default_width(245.)
             .min_width(180.)
@@ -508,12 +577,11 @@ impl eframe::App for App {
                                 .to_lowercase()
                                 .contains(&self.filter.to_lowercase())
                         })
-                        .filter(|p| p.join("1r").is_file())
                         .take(32)
                         .cloned()
                         .collect();
                     for p in matches {
-                        self.load(p, None, ctx.clone());
+                        self.sidebar_open(p, true, ctx.clone());
                     }
                 }
                 let filter = self.filter.to_lowercase();
@@ -541,25 +609,27 @@ impl eframe::App for App {
                                 p.file_name().unwrap_or_default().to_string_lossy(),
                                 if raw { " (FID)" } else { "" }
                             );
-                            if ui
+                            let row_response = ui
                                 .add_sized(
                                     [ui.available_width(), row_height],
                                     egui::Button::selectable(false, name)
                                         .wrap_mode(egui::TextWrapMode::Truncate),
                                 )
-                                .on_hover_text(p.display().to_string())
-                                .clicked()
-                            {
-                                add = Some((p.clone(), raw));
+                                .on_hover_text(format!(
+                                    "{}\nClick: open · Hover + S: add to stack",
+                                    p.display()
+                                ));
+                            if row_response.hovered() {
+                                self.hovered_sidebar = Some((p.clone(), row_response.rect));
+                            }
+                            let stack = stack::stack_shortcut(&row_response, ctx);
+                            if row_response.clicked() || stack {
+                                add = Some((p.clone(), stack));
                             }
                         }
                     });
-                if let Some((p, raw)) = add {
-                    if raw {
-                        self.legacy_dataset(&p);
-                    } else {
-                        self.load(p, None, ctx.clone());
-                    }
+                if let Some((p, stack)) = add {
+                    self.sidebar_open(p, stack, ctx.clone());
                 }
             });
         if self.show_inspector {
@@ -642,14 +712,15 @@ impl eframe::App for App {
     t.cache_key=key;
     }
     painter.with_clip_rect(rect).extend(t.cache.iter().cloned());
-    painter.text(Pos2::new(rect.left()+8.,if self.stacked{rect.top()+lane_h*lane as f32+4.}else{rect.top()+idx as f32*18.}),egui::Align2::LEFT_TOP,format!("{} {}",idx+1,d.title),egui::FontId::proportional(12.),COLORS[idx%6]);
+    painter.text(Pos2::new(rect.left()+8.,if self.stacked{rect.top()+lane_h*lane as f32+4.}else{rect.top()+lane as f32*18.}),egui::Align2::LEFT_TOP,format!("{} {}",idx+1,d.title),egui::FontId::proportional(12.),COLORS[idx%6]);
    }
    self.paint_integrals(rect,range,&painter,&response);
 
    if let Some(pos)=response.hover_pos(){let x=ppm(pos.x);painter.line_segment([Pos2::new(pos.x,rect.top()),Pos2::new(pos.x,rect.bottom())],Stroke::new(1.,Color32::from_gray(130)));painter.text(rect.right_top(),egui::Align2::RIGHT_TOP,format!("{x:.5} ppm"),egui::FontId::monospace(12.),COLORS[0]);let scroll=ctx.input(|i|i.smooth_scroll_delta);
     let lane_h=if self.stacked{rect.height()/count as f32}else{rect.height()};
     let lane=if self.stacked{((pos.y-rect.top())/lane_h).floor().clamp(0.,count.saturating_sub(1)as f32)as usize}else{0};
-    let hovered=if self.stacked{self.traces.iter().enumerate().filter(|(_,t)|t.settings.visible).nth(lane)}else{self.traces.get(selected).filter(|t|t.settings.visible).map(|t|(selected,t)).or_else(||self.traces.iter().enumerate().find(|(_,t)|t.settings.visible))};
+    let hit=self.spectrum_under_pointer(rect,range,pos,have_integrals);
+    let hovered=hit.and_then(|idx|self.traces.get(idx).map(|t|(idx,t)));
     let offset=hovered.map_or(0.,|(_,t)|t.settings.offset);
     let integrals=have_integrals&&(!self.stacked||hovered.is_some_and(|(idx,_)|idx==selected));
     let geometry=integral_plot::lane_layout(rect,self.stacked,count,lane,offset,integrals);
@@ -663,7 +734,7 @@ impl eframe::App for App {
         let zoomed=[anchor+(r[0]-anchor)*factor,anchor+(r[1]-anchor)*factor];
         if zoomed[0]-zoomed[1]>1e-8 && zoomed[0]-zoomed[1]<1e6 {self.range=Some(zoomed);}
     }
-    if !below && scroll.y!=0.{let factor=(scroll.y as f64*0.003).exp().clamp(0.5,2.);for t in self.traces.iter_mut().filter(|t|t.settings.visible){t.settings.gain=(t.settings.gain*factor).clamp(0.001,100.);}}
+    if !below && scroll.y!=0. && let Some(idx)=hit{self.zoom_trace(idx,scroll.y);}
    }
 
    if response.double_clicked(){self.range=None;}
@@ -673,6 +744,7 @@ impl eframe::App for App {
 
    if self.traces.is_empty(){painter.text(rect.center(),egui::Align2::CENTER_CENTER,"Open a Bruker dataset folder to begin\nAdd several spectra for overlay or stacked comparison",egui::FontId::proportional(20.),COLORS[0]);}
   });
+        self.stack_window(ctx);
         if self.first_frame {
             self.first_frame = false;
             eprintln!(

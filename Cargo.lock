@@ -1263,6 +1263,7 @@ dependencies = [
 name = "nmr-viewer"
 version = "0.1.0"
 dependencies = [
+ "cc",
  "eframe",
  "serde",
  "serde_json",
