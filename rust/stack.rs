@@ -213,13 +213,21 @@ impl App {
             .map(|(i, _)| i)
     }
     pub(super) fn stack_window(&mut self, ctx: &egui::Context) {
-        if self.traces.is_empty() {
+        if self
+            .traces
+            .iter()
+            .filter(|t| t.settings.visible)
+            .take(2)
+            .count()
+            < 2
+        {
             return;
         }
         let mut reorder = None;
         egui::Window::new("Stack")
             .id(egui::Id::new("stack-manager"))
-            .default_pos(Pos2::new((ctx.content_rect().right() - 275.).max(0.), 150.))
+            .anchor(egui::Align2::RIGHT_TOP, egui::vec2(-12., 12.))
+            .movable(false)
             .default_width(250.)
             .min_width(170.)
             .resizable(true)
@@ -488,8 +496,10 @@ mod tests {
             };
             ctx.run(input, |ctx| a.stack_window(ctx))
         };
-        let _ = frame(&mut a, vec![]);
-        let _ = frame(&mut a, vec![]);
+        // Anchored windows settle their measured size before pointer coordinates are read.
+        for _ in 0..5 {
+            let _ = frame(&mut a, vec![]);
+        }
         let source_id = egui::Id::new(("stack-row", &a.traces[0].data.path));
         let target_id = egui::Id::new(("stack-row", &a.traces[2].data.path));
         let source = ctx.read_response(source_id).unwrap().rect.center();

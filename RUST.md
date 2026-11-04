@@ -27,7 +27,7 @@ Spectrum baseline correction modifies the samples used by integrations. Per-regi
 
 CSV export writes `spectrum.csv` inside the selected processing folder, in a worker thread, containing ppm, original real/imaginary values and the corrected processed preview. Values use round-trip scientific precision. It refuses to overwrite an existing file. Comparison files save paths, phase/polynomial settings, region correction options, normalization, layout and view range as JSON, also refusing overwrites. Version 2 comparisons reload and recompute corrected values; old version 1 measurement snapshots are migrated and recalculated rather than trusted. Data remains external to comparison files. Original Bruker components and processing parameters remain unchanged; native Bruker write parity is not claimed.
 
-The floating **Stack** window starts in the top right. Drag its rows to change order, click a row to select a spectrum, or uncheck it to hide it. The window can be moved, resized and collapsed. Stack order is saved with comparison files. Reordering and closing individual tabs preserve the other spectra's integral ownership and processing settings.
+The **Stack** window appears only when at least two spectra are visible and stays anchored at the top-right corner. Drag its rows to change order, click a row to select a spectrum, or uncheck it to hide it. The window can be resized and collapsed; its position stays anchored. Stack order is saved with comparison files. Reordering and closing individual tabs preserve the other spectra's integral ownership and processing settings.
 
 ## Performance
 
