@@ -532,8 +532,15 @@ impl eframe::App for App {
     let baseline=if self.stacked{rect.top()+lane_h*(lane+0.85)}else{rect.bottom()-lane_h*0.12};
     let offset=if self.stacked{self.traces.iter().filter(|t|t.settings.visible).nth(lane as usize).map(|t|t.settings.offset).unwrap_or(0.)}else{self.traces.get(self.selected).filter(|t|t.settings.visible).or_else(||self.traces.iter().find(|t|t.settings.visible)).map(|t|t.settings.offset).unwrap_or(0.)};
     let below=pos.y>baseline-offset as f32*lane_h*0.7;
-    let horizontal=scroll.x+if below{scroll.y}else{0.};
+    let horizontal=scroll.x;
     if horizontal!=0.{let shift=horizontal as f64/rect.width()as f64*width;self.range=Some([range[0]+shift,range[1]+shift]);}
+    if below && scroll.y!=0.{
+        let r=self.range.unwrap_or(range);
+        let anchor=r[0]-(pos.x-rect.left())as f64/rect.width()as f64*(r[0]-r[1]);
+        let factor=(-scroll.y as f64*0.003).exp().clamp(0.5,2.);
+        let zoomed=[anchor+(r[0]-anchor)*factor,anchor+(r[1]-anchor)*factor];
+        if zoomed[0]-zoomed[1]>1e-8 && zoomed[0]-zoomed[1]<1e6 {self.range=Some(zoomed);}
+    }
     if !below && scroll.y!=0.{let factor=(scroll.y as f64*0.003).exp().clamp(0.5,2.);for t in self.traces.iter_mut().filter(|t|t.settings.visible){t.settings.gain=(t.settings.gain*factor).clamp(0.001,100.);}}
    }
 
