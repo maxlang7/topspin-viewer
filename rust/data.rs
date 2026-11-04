@@ -179,12 +179,42 @@ pub fn load(path: &Path) -> Result<Spectrum, String> {
 }
 // Iterative scan, no symlink traversal, bounded to avoid runaway filesystem walks.
 pub fn discover(root: &Path) -> Result<Vec<PathBuf>, String> {
+    discover_impl(root, false)
+}
+pub fn discover_browser(root: &Path) -> Result<Vec<PathBuf>, String> {
+    discover_impl(root, true)
+}
+pub fn dataset_name(path: &Path) -> String {
+    path.ancestors()
+        .nth(3)
+        .and_then(|p| p.file_name())
+        .unwrap_or_default()
+        .to_string_lossy()
+        .into_owned()
+}
+pub fn sort_datasets(paths: &mut [PathBuf], natural: bool) {
+    paths.sort_by_cached_key(|p| (dataset_name(p).to_lowercase(), p.clone()));
+    if natural {
+        paths.sort_by(|a, b| {
+            natural_cmp(&dataset_name(a), &dataset_name(b))
+                .then_with(|| natural_cmp(&a.to_string_lossy(), &b.to_string_lossy()))
+        });
+    }
+}
+fn discover_impl(root: &Path, include_raw: bool) -> Result<Vec<PathBuf>, String> {
+    let is_dataset = |p: &Path| {
+        (p.join("procs").is_file() && p.join("1r").is_file())
+            || (include_raw
+                && p.parent()
+                    .is_some_and(|parent| parent.file_name().is_some_and(|n| n == "pdata"))
+                && (p.join("procs").is_file() || p.join("proc").is_file()))
+    };
     let root = if root.is_file() {
         root.parent().ok_or("No parent")?
     } else {
         root
     };
-    if root.join("procs").is_file() && root.join("1r").is_file() {
+    if is_dataset(root) {
         return Ok(vec![root.to_owned()]);
     }
     let mut stack = vec![(root.to_owned(), 0)];
@@ -201,7 +231,7 @@ pub fn discover(root: &Path) -> Result<Vec<PathBuf>, String> {
             let ty = e.file_type().map_err(|e| e.to_string())?;
             if ty.is_dir() && !e.file_name().to_string_lossy().starts_with('.') {
                 let p = e.path();
-                if p.join("procs").is_file() && p.join("1r").is_file() {
+                if is_dataset(&p) {
                     found.push(p)
                 } else if depth < 12 {
                     stack.push((p, depth + 1))
@@ -213,7 +243,7 @@ pub fn discover(root: &Path) -> Result<Vec<PathBuf>, String> {
     Ok(found)
 }
 
-fn natural_cmp(a: &str, b: &str) -> std::cmp::Ordering {
+pub fn natural_cmp(a: &str, b: &str) -> std::cmp::Ordering {
     use std::cmp::Ordering;
     let (mut a, mut b) = (a.as_bytes(), b.as_bytes());
     while !a.is_empty() && !b.is_empty() {
@@ -265,6 +295,23 @@ mod tests {
             Less
         );
         assert_eq!(natural_cmp("a002", "a2"), Equal);
+        let mut paths = vec![
+            PathBuf::from("/data/MLN1P115/10/pdata/1"),
+            PathBuf::from("/data/MLN1P85/10/pdata/1"),
+        ];
+        sort_datasets(&mut paths, true);
+        assert_eq!(dataset_name(&paths[0]), "MLN1P85");
+        sort_datasets(&mut paths, false);
+        assert_eq!(dataset_name(&paths[0]), "MLN1P115");
+    }
+    #[test]
+    fn browser_includes_raw_only_processing_numbers() {
+        let root = std::env::temp_dir().join(format!("nmr-browser-{}", std::process::id()));
+        let raw = root.join("MLN1P85/10/pdata/1");
+        fs::create_dir_all(&raw).unwrap();
+        fs::write(raw.join("proc"), "##$SI= 65536").unwrap();
+        assert_eq!(discover_browser(&root).unwrap(), vec![raw]);
+        assert!(discover(&root).unwrap().is_empty());
     }
     #[test]
     fn peaks_reject_noise_and_keep_positions() {

@@ -56,6 +56,7 @@ struct App {
     selected: usize,
     path: String,
     filter: String,
+    natural_sort: bool,
     status: String,
     stacked: bool,
     normalize: bool,
@@ -100,6 +101,7 @@ impl App {
             selected: 0,
             path: String::new(),
             filter: String::new(),
+            natural_sort: true,
             status: "Open a Bruker folder or drop folders here. Ctrl+O opens the path field."
                 .into(),
             stacked: false,
@@ -120,6 +122,15 @@ impl App {
             first_frame: true,
             smoke,
         };
+        if paths.is_empty()
+            && let Some(home) = std::env::var_os("HOME")
+        {
+            let root = PathBuf::from(home).join("Documents/IGB Lab/NMRs");
+            if root.is_dir() {
+                s.path = root.display().to_string();
+                s.open(root, cc.egui_ctx.clone());
+            }
+        }
         for p in paths {
             s.open(p, cc.egui_ctx.clone());
         }
@@ -141,7 +152,7 @@ impl App {
         self.pending += 1;
         let tx = self.tx.clone();
         std::thread::spawn(move || {
-            let _ = tx.send(Message::Found(data::discover(&p)));
+            let _ = tx.send(Message::Found(data::discover_browser(&p)));
             ctx.request_repaint();
         });
     }
@@ -261,10 +272,15 @@ impl eframe::App for App {
                             "Found {} spectra. Select rows to add to comparison.",
                             paths.len()
                         );
-                        if paths.len() == 1 {
+                        if paths.len() == 1 && paths[0].join("1r").is_file() {
                             self.load(paths[0].clone(), None, ctx.clone());
                         }
-                        self.found = paths;
+                        for p in paths {
+                            if !self.found.contains(&p) {
+                                self.found.push(p);
+                            }
+                        }
+                        data::sort_datasets(&mut self.found, self.natural_sort);
                     }
                 }
                 Message::Loaded(Ok(s), settings) => {
@@ -325,7 +341,22 @@ impl eframe::App for App {
                 }
                 ui.separator();
                 ui.label("Dataset browser");
-                ui.text_edit_singleline(&mut self.filter);
+                ui.add(egui::TextEdit::singleline(&mut self.filter).hint_text("Filter datasets…"));
+                let previous = self.natural_sort;
+                egui::ComboBox::from_id_salt("dataset-sort")
+                    .selected_text(if self.natural_sort {
+                        "Alphabetical (natural)"
+                    } else {
+                        "Alphabetical (A-Z)"
+                    })
+                    .show_ui(ui, |ui| {
+                        ui.selectable_value(&mut self.natural_sort, true, "Alphabetical (natural)")
+                            .on_hover_text("Compare numbers numerically: MLN1P85 before MLN1P115");
+                        ui.selectable_value(&mut self.natural_sort, false, "Alphabetical (A-Z)");
+                    });
+                if previous != self.natural_sort {
+                    data::sort_datasets(&mut self.found, self.natural_sort);
+                }
                 if ui.button("Add matching spectra, up to 32").clicked() {
                     let matches: Vec<_> = self
                         .found
@@ -335,6 +366,7 @@ impl eframe::App for App {
                                 .to_lowercase()
                                 .contains(&self.filter.to_lowercase())
                         })
+                        .filter(|p| p.join("1r").is_file())
                         .take(32)
                         .cloned()
                         .collect();
@@ -343,31 +375,49 @@ impl eframe::App for App {
                     }
                 }
                 let filter = self.filter.to_lowercase();
+                let matches: Vec<_> = self
+                    .found
+                    .iter()
+                    .filter(|p| p.to_string_lossy().to_lowercase().contains(&filter))
+                    .collect();
+                ui.label(format!("{} / {} datasets", matches.len(), self.found.len()));
                 let mut add = None;
-                egui::ScrollArea::vertical().show(ui, |ui| {
-                    for p in &self.found {
-                        let label = p.display().to_string();
-                        let short = format!(
-                            "{} / {}",
-                            p.ancestors()
-                                .nth(3)
-                                .and_then(|p| p.file_name())
-                                .unwrap_or_default()
-                                .to_string_lossy(),
-                            p.file_name().unwrap_or_default().to_string_lossy()
-                        );
-                        if label.to_lowercase().contains(&filter)
-                            && ui
-                                .selectable_label(false, &short)
-                                .on_hover_text(&label)
+                let row_height = ui
+                    .text_style_height(&egui::TextStyle::Body)
+                    .max(ui.spacing().interact_size.y);
+                egui::ScrollArea::vertical()
+                    .id_salt("dataset-list")
+                    .auto_shrink([false, false])
+                    .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
+                    .show_rows(ui, row_height, matches.len(), |ui, rows| {
+                        for row in rows {
+                            let p = matches[row];
+                            let raw = !p.join("1r").is_file();
+                            let name = format!(
+                                "{} / {}{}",
+                                data::dataset_name(p),
+                                p.file_name().unwrap_or_default().to_string_lossy(),
+                                if raw { " (FID)" } else { "" }
+                            );
+                            if ui
+                                .add_sized(
+                                    [ui.available_width(), row_height],
+                                    egui::Button::selectable(false, name)
+                                        .wrap_mode(egui::TextWrapMode::Truncate),
+                                )
+                                .on_hover_text(p.display().to_string())
                                 .clicked()
-                        {
-                            add = Some(p.clone());
+                            {
+                                add = Some((p.clone(), raw));
+                            }
                         }
+                    });
+                if let Some((p, raw)) = add {
+                    if raw {
+                        self.legacy_dataset(&p);
+                    } else {
+                        self.load(p, None, ctx.clone());
                     }
-                });
-                if let Some(p) = add {
-                    self.load(p, None, ctx.clone());
                 }
             });
         if self.show_inspector {
@@ -381,7 +431,7 @@ impl eframe::App for App {
                     ui.label(&t.data.title);
                     ui.label(format!("{} samples", t.data.real.len()));
                     ui.add(
-                        egui::Slider::new(&mut t.settings.gain, 0.01..=10.)
+                        egui::Slider::new(&mut t.settings.gain, 0.001..=100.)
                             .logarithmic(true)
                             .text("Gain"),
                     );
@@ -476,7 +526,17 @@ impl eframe::App for App {
     painter.text(Pos2::new(rect.left()+8.,if self.stacked{rect.top()+lane_h*lane as f32+4.}else{rect.top()+idx as f32*18.}),egui::Align2::LEFT_TOP,format!("{} {}",idx+1,d.title),egui::FontId::proportional(12.),COLORS[idx%6]);
    }
    for (_,a,b,_) in self.regions.iter().filter(|(i,_,_,_)|*i==self.selected){let px=|p:f64|rect.left()+((range[0]-p)/width)as f32*rect.width();let r=egui::Rect::from_x_y_ranges(px(a.max(*b))..=px(a.min(*b)),rect.top()..=rect.bottom());painter.with_clip_rect(rect).rect_filled(r,0.,Color32::from_rgba_unmultiplied(250,189,47,22));}
-   if let Some(pos)=response.hover_pos(){let x=ppm(pos.x);painter.line_segment([Pos2::new(pos.x,rect.top()),Pos2::new(pos.x,rect.bottom())],Stroke::new(1.,Color32::from_gray(130)));painter.text(rect.right_top(),egui::Align2::RIGHT_TOP,format!("{x:.5} ppm"),egui::FontId::monospace(12.),COLORS[0]);let scroll=ctx.input(|i|i.smooth_scroll_delta.y);if scroll!=0.{let f=(-scroll as f64*0.002).exp().clamp(0.5,2.);let r=[x+(range[0]-x)*f,x+(range[1]-x)*f];if r[0]-r[1]>1e-8 && r[0]-r[1]<1e6{self.range=Some(r);}}}
+   if let Some(pos)=response.hover_pos(){let x=ppm(pos.x);painter.line_segment([Pos2::new(pos.x,rect.top()),Pos2::new(pos.x,rect.bottom())],Stroke::new(1.,Color32::from_gray(130)));painter.text(rect.right_top(),egui::Align2::RIGHT_TOP,format!("{x:.5} ppm"),egui::FontId::monospace(12.),COLORS[0]);let scroll=ctx.input(|i|i.smooth_scroll_delta);
+    let lane_h=if self.stacked{rect.height()/count as f32}else{rect.height()};
+    let lane=if self.stacked{((pos.y-rect.top())/lane_h).floor().clamp(0.,count.saturating_sub(1)as f32)}else{0.};
+    let baseline=if self.stacked{rect.top()+lane_h*(lane+0.85)}else{rect.bottom()-lane_h*0.12};
+    let offset=if self.stacked{self.traces.iter().filter(|t|t.settings.visible).nth(lane as usize).map(|t|t.settings.offset).unwrap_or(0.)}else{self.traces.get(self.selected).filter(|t|t.settings.visible).or_else(||self.traces.iter().find(|t|t.settings.visible)).map(|t|t.settings.offset).unwrap_or(0.)};
+    let below=pos.y>baseline-offset as f32*lane_h*0.7;
+    let horizontal=scroll.x+if below{scroll.y}else{0.};
+    if horizontal!=0.{let shift=horizontal as f64/rect.width()as f64*width;self.range=Some([range[0]+shift,range[1]+shift]);}
+    if !below && scroll.y!=0.{let factor=(scroll.y as f64*0.003).exp().clamp(0.5,2.);for t in self.traces.iter_mut().filter(|t|t.settings.visible){t.settings.gain=(t.settings.gain*factor).clamp(0.001,100.);}}
+   }
+
    if response.double_clicked(){self.range=None;}
    if response.drag_started()&&self.integrate{self.start=response.interact_pointer_pos().map(|p|ppm(p.x));}
    if response.dragged()&&!self.integrate{let dx=ctx.input(|i|i.pointer.delta().x)as f64/rect.width()as f64*width;self.range=Some([range[0]+dx,range[1]+dx]);}

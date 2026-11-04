@@ -1,10 +1,17 @@
 use super::*;
 impl App {
     fn legacy(&mut self) {
+        let path = self.traces.get(self.selected).map(|t| t.data.path.clone());
+        self.launch_legacy(path.as_deref());
+    }
+    pub fn legacy_dataset(&mut self, path: &std::path::Path) {
+        self.launch_legacy(Some(path));
+    }
+    fn launch_legacy(&mut self, path: Option<&std::path::Path>) {
         let mut c = std::process::Command::new("bash");
         c.arg(concat!(env!("CARGO_MANIFEST_DIR"), "/run-legacy.sh"));
-        if let Some(t) = self.traces.get(self.selected) {
-            c.arg(&t.data.path);
+        if let Some(path) = path {
+            c.arg(path);
         }
         self.status = match c.spawn() {
             Ok(_) => "Opening advanced processing in the retained viewer".into(),
