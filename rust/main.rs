@@ -47,6 +47,7 @@ enum Message {
     Found(Result<Vec<PathBuf>, String>),
 }
 struct App {
+    show_inspector: bool,
     nav: String,
     data_tab: usize,
     command: String,
@@ -90,6 +91,7 @@ impl App {
         cc.egui_ctx.set_visuals(v);
         let (tx, rx) = mpsc::channel();
         let mut s = Self {
+            show_inspector: false,
             nav: "Process".into(),
             data_tab: 0,
             command: String::new(),
@@ -303,7 +305,7 @@ impl eframe::App for App {
             .resizable(true)
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
-                    ui.selectable_label(true, "☷  Data")
+                    ui.selectable_label(true, "Data")
                         .on_hover_text("Bruker datasets");
                     ui.label("NMR Viewer");
                 });
@@ -346,7 +348,7 @@ impl eframe::App for App {
                     for p in &self.found {
                         let label = p.display().to_string();
                         let short = format!(
-                            "▸ {} / {}",
+                            "{} / {}",
                             p.ancestors()
                                 .nth(3)
                                 .and_then(|p| p.file_name())
@@ -368,7 +370,8 @@ impl eframe::App for App {
                     self.load(p, None, ctx.clone());
                 }
             });
-        egui::SidePanel::right("inspector").default_width(235.).min_width(180.).resizable(true).show(ctx,|ui|{
+        if self.show_inspector {
+            egui::SidePanel::right("inspector").default_width(235.).min_width(180.).resizable(true).show(ctx,|ui|{
             ui.heading("Display / analysis");
             ui.horizontal(|ui|{ui.selectable_value(&mut self.stacked,false,"Overlay");ui.selectable_value(&mut self.stacked,true,"Stacked");});
             ui.checkbox(&mut self.normalize,"Normalize spectra");
@@ -449,13 +452,15 @@ impl eframe::App for App {
 
             });
         });
+        }
         self.spectrum_tabs(ctx);
         egui::CentralPanel::default().show(ctx,|ui|{
    if self.data_tab==1 {ui.heading("INTEGRALS");egui::Grid::new("integral-table").striped(true).show(ui,|ui|{for h in ["Spectrum","From / ppm","To / ppm","Measured area"]{ui.strong(h);}ui.end_row();for(i,a,b,v)in &self.regions{ui.label(format!("{}",i+1));ui.label(format!("{a:.5}"));ui.label(format!("{b:.5}"));ui.label(format!("{v:.6}"));ui.end_row();}});return;}
 
    let (response,painter)=ui.allocate_painter(ui.available_size(),egui::Sense::click_and_drag());let rect=response.rect.shrink2(egui::vec2(14.,28.));if rect.width()<10.||rect.height()<10.{return}
    painter.rect_filled(response.rect,0.,Color32::from_rgb(29,32,33));let range=self.range.unwrap_or_else(||self.full_range());let width=range[0]-range[1];let ppm=|x:f32|range[0]-(x-rect.left())as f64/rect.width()as f64*width;
-   for j in 0..=10{let x=rect.left()+rect.width()*j as f32/10.;painter.line_segment([Pos2::new(x,rect.top()),Pos2::new(x,rect.bottom())],Stroke::new(1.,Color32::from_rgb(50,48,47)));painter.text(Pos2::new(x,rect.bottom()+8.),egui::Align2::CENTER_TOP,format!("{:.2}",ppm(x)),egui::FontId::monospace(12.),Color32::from_rgb(189,174,147));}
+   let ticks=(rect.width()/75.).floor().clamp(2.,10.)as usize;
+   for j in 0..=ticks{let x=rect.left()+rect.width()*j as f32/ticks as f32;painter.line_segment([Pos2::new(x,rect.top()),Pos2::new(x,rect.bottom())],Stroke::new(1.,Color32::from_rgb(50,48,47)));painter.text(Pos2::new(x,rect.bottom()+8.),egui::Align2::CENTER_TOP,format!("{:.2}",ppm(x)),egui::FontId::monospace(12.),Color32::from_rgb(189,174,147));}
    let count=self.traces.iter().filter(|t|t.settings.visible).count().max(1);let common=self.traces.iter().filter(|t|t.settings.visible).fold(f64::MIN_POSITIVE,|m,t|m.max(t.data.max_amplitude));
    for (lane,(idx,t)) in self.traces.iter_mut().enumerate().filter(|(_,t)|t.settings.visible).enumerate(){let d=&t.data;let s=&t.settings;let scale=if self.normalize{d.max_amplitude}else{common};let lane_h=if self.stacked{rect.height()/count as f32}else{rect.height()};let base=if self.stacked{rect.top()+lane_h*(lane as f32+0.85)}else{rect.bottom()-lane_h*0.12};let amp=lane_h*0.7;
     let y=|v:f64|base-((v/scale*s.gain+s.offset)as f32*amp).clamp(-1e6,1e6);

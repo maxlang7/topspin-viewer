@@ -20,7 +20,7 @@ impl App {
             )
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
-                    ui.menu_button("☰", |ui| {
+                    ui.menu_button("Menu", |ui| {
                         if ui.button("Export selected CSV").clicked() {
                             self.export(ctx.clone());
                             ui.close();
@@ -92,14 +92,14 @@ impl App {
                         }
                         _ => {
                             if ui
-                                .button("∿  Proc. Spectrum ↗")
+                                .button("Proc. Spectrum ↗")
                                 .on_hover_text("Raw processing in the retained viewer")
                                 .clicked()
                             {
                                 self.legacy();
                             }
                             ui.separator();
-                            ui.menu_button("Adjust Phase ▾", |ui| {
+                            ui.menu_button("Adjust Phase", |ui| {
                                 if let Some(t) = self.traces.get_mut(self.selected) {
                                     if t.data.imag.is_empty() {
                                         ui.label("No imaginary component");
@@ -159,7 +159,7 @@ impl App {
                     t.settings.gain = (t.settings.gain / 2.).max(0.001);
                 }
                 ui.separator();
-                if ui.button("＋").on_hover_text("Zoom in").clicked() {
+                if ui.button("+").on_hover_text("Zoom in").clicked() {
                     let r = self.range.unwrap_or_else(|| self.full_range());
                     let m = (r[0] + r[1]) / 2.;
                     self.range = Some([m + (r[0] - m) * 0.5, m + (r[1] - m) * 0.5]);
@@ -177,6 +177,9 @@ impl App {
                     self.range = None;
                 }
                 ui.separator();
+                ui.toggle_value(&mut self.show_inspector, "Display");
+                ui.selectable_value(&mut self.stacked, false, "Overlay");
+                ui.selectable_value(&mut self.stacked, true, "Stacked");
                 ui.selectable_value(&mut self.integrate, false, "Navigate");
                 ui.selectable_value(&mut self.integrate, true, "∫  Select region");
             });
