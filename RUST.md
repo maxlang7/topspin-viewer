@@ -1,0 +1,50 @@
+# Native Rust viewer
+
+Build once with `bash build-rust.sh`, then launch with `bash run.sh`.
+The launcher executes the release binary directly, with library paths recorded during the build. It does not compile or evaluate Nix during startup. Rebuild explicitly after changing source. `Cargo.lock` pins dependencies. Build outputs are ignored and must be rebuilt after cloning. The desktop entry uses this launcher.
+
+The Java/C viewer remains available with `bash run.sh --legacy` or `bash run-legacy.sh`. Its original source, scientific regression suite, reference captures and Git history are retained.
+
+## Comparison workflow
+
+Enter a Bruker folder in Data path, then Open / scan, or pass paths on the command line. A single processed dataset opens directly. A larger folder is scanned in a worker thread and listed in Dataset browser. Click rows to add spectra, or use Add matching spectra to load up to 32 filtered results. Drop folders onto the window as an alternative.
+
+Overlay shares the ppm axis. Stacked separates visible spectra vertically while retaining the shared axis. Each spectrum has a color, visibility toggle, gain and vertical offset. Normalize scales each spectrum separately. Disable it to compare source amplitudes. Scroll over the plot to zoom around the cursor; drag to pan; double-click or Full range resets the axis. These operations apply to all displayed spectra.
+
+Phase preview supports PH0 and PH1 where a `1i` component is present. It uses FTSIZE for first-order phase, with direct trigonometric evaluation. It has not been certified bitwise equivalent to TopSpin's recurrence arithmetic. It never writes processed components.
+
+Enable Measure integral and drag over a ppm interval, or enter its endpoints in Integral measurements. Measurements are signed sample sums multiplied by the ppm step, with no baseline correction or TopSpin normalization. Results are snapshots at the phase settings used to measure them. Highlighted intervals belong to the selected trace. Peak picking lists up to 128 strongest positive local maxima above the selected relative threshold.
+
+CSV export writes `spectrum.csv` inside the selected processing folder, in a worker thread, containing ppm, original real/imaginary values and the phase preview. It refuses to overwrite an existing file. Comparison files save paths, per-spectrum settings, layout, view range and measurement snapshots as JSON, also refusing overwrites. Load a comparison when other loads have finished. Data remains external to comparison files.
+
+## Performance
+
+Folder scans, file reads and CSV writes run off the UI thread. Traces use min/max envelopes per physical screen column to preserve narrow peaks; cached geometry is reused until the viewport or spectrum settings change. Idle operation uses egui's event-driven repainting. Opening very many spectra can still consume substantial memory, and initial envelope generation is on the UI thread.
+
+`bash run.sh --smoke [dataset paths...]` logs time to the first UI update and time until requested datasets have loaded and generated plot geometry, then exits. These are application instrumentation points, not compositor presentation timestamps or cold disk-cache benchmarks.
+
+## Parity status
+
+| Capability | Rust | Retained Java/C |
+|---|---|---|
+| Processed int32 1D reader, endian and NC_proc scaling | Implemented, differential check available | Validated |
+| Multiple spectra, overlay / stacked, linked navigation | Implemented | Single dataset |
+| Gruvbox theme | Implemented | Implemented |
+| Phase preview | Direct trig preview; not bitwise certified | Validated |
+| Integration | Signed measurements, snapshot regions | Validated correction, normalization and saving |
+| Peak picking | Positive local maxima | Not implemented |
+| Comparison files, CSV | Implemented | Not implemented |
+| Raw FID viewing / processing, ZIP opening | Pending | Supported within documented limits |
+| Bruker phase / integration / calibration writes | Pending | Validated, recoverable saves |
+| Browser filesystem watching and remembered roots | Pending | Implemented |
+| Multidimensional spectra, acquisition control | Pending | Not implemented |
+
+Full TopSpin parity is not achieved by either version. The historical README's numerical validation claims apply to the retained Java/C implementation only.
+
+## Validation
+
+`nix-shell rust-shell.nix --run 'cargo test && cargo clippy -- -D warnings'`
+
+`nix-shell shell.nix --run 'python tests/verify_rust_reader.py "/path/to/NMRs"'`
+
+The latter compares every decoded real/imaginary sample via ordered 64-bit rolling digests and compares exact axis endpoint bits against the independently compiled Java reader. It reads original acquisitions without modifying them. `--audit` provides machine-readable JSON for each processed dataset.

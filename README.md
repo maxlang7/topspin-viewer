@@ -1,8 +1,12 @@
 # NMR Viewer
 
+The native Rust viewer is now the default launcher. Build once with `bash build-rust.sh`, then run `bash run.sh`. It adds multi-spectrum overlay and stacked views while retaining Gruvbox. See [RUST.md](RUST.md) for usage, performance and the explicit parity table. The Java/C app described below is preserved with `bash run.sh --legacy`. The validation claims below apply to that implementation.
+
+## Retained Java/C viewer
+
 Standalone viewer for Bruker 1D data, spectrum viewing, manual integration, manual phase correction and manual frequency-axis calibration. The target is the installed Windows TopSpin Processing 5.0.0. Exact numerical comparisons are required; tolerance matches do not pass.
 
-Run `bash run.sh /path/to/experiment` or `bash run.sh /path/to/pdata/1`. The launcher enters the project Nix shell, compiles Java and the independent C processing library, and opens the viewer. It currently uses the laptop's 2x display scale. The desktop launcher is named **NMR Viewer** and uses an independent spectrum icon.
+Run `bash run-legacy.sh /path/to/experiment` or `bash run.sh /path/to/pdata/1`. The launcher enters the project Nix shell, compiles Java and the independent C processing library, and opens the viewer. It currently uses the laptop's 2x display scale. The desktop launcher is named **NMR Viewer** and uses an independent spectrum icon.
 
 The data browser shows folders, experiments (including their pulse program), then processing numbers without file icons. Double-click a processing number or press Enter to open it. Search filters names and spectrum titles as you type. New and changed datasets refresh automatically after a brief pause in filesystem activity, including while searching. Expanded folders and selection are restored after refresh.
 
