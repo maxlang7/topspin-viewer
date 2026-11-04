@@ -5,6 +5,7 @@ pub(super) struct Lane {
     pub baseline: f32,
     pub amplitude: f32,
     pub band: egui::Rect,
+    pub curve_band: egui::Rect,
 }
 pub(super) fn lane_layout(
     rect: egui::Rect,
@@ -22,22 +23,31 @@ pub(super) fn lane_layout(
     let top = rect.top() + if stacked { h * lane as f32 } else { 0. };
     let bottom = top + h;
     let fraction = if integrals {
-        0.72
+        0.82
     } else if stacked {
         0.85
     } else {
         0.88
     };
-    let amplitude = h * if integrals { 0.62 } else { 0.7 };
+    let amplitude = h * 0.7;
     let mut baseline = top + h * fraction - offset as f32 * amplitude;
     if integrals {
-        baseline = baseline.clamp(top + h * 0.12, bottom - h * 0.24);
+        baseline = baseline.clamp(top + h * 0.12, bottom - h * 0.16);
     }
     let band = egui::Rect::from_min_max(
         Pos2::new(rect.left(), baseline + 6.),
         Pos2::new(rect.right(), bottom - 6.),
     );
+    let curve_bottom = baseline - (h * 0.025).min(8.);
+    let curve_band = egui::Rect::from_min_max(
+        Pos2::new(
+            rect.left(),
+            (curve_bottom - (h * 0.22).min(90.)).max(top + h * 0.01),
+        ),
+        Pos2::new(rect.right(), curve_bottom),
+    );
     Lane {
+        curve_band,
         baseline,
         amplitude,
         band,
@@ -187,14 +197,9 @@ impl App {
             .map(|r| ((r.3 + r.4) / 2., r.5.size().x + 8.))
             .collect();
         let labels = label_layout(&desired, rect.left() + 2., rect.right() - 2., 8.);
-        let rows = labels.last().map_or(1, |p| p.1 + 1);
-        let max_rows = ((band.height() * 0.5 / line_h).floor() as usize).clamp(1, 4);
-        let shown_rows = rows.min(max_rows);
-        let curve_h = (band.height() - shown_rows as f32 * line_h - 8.).clamp(4., 80.);
-        let curve_rect = egui::Rect::from_min_max(
-            band.left_top(),
-            Pos2::new(band.right(), band.top() + curve_h),
-        );
+        let max_rows = ((band.height() - 2.) / line_h).floor().clamp(1., 4.) as usize;
+        let curve_rect = geometry.curve_band;
+        let curve_h = curve_rect.height();
         let plot = painter.with_clip_rect(band.intersect(rect));
         painter.with_clip_rect(rect).line_segment(
             [
@@ -253,19 +258,20 @@ impl App {
                     previous = Some(p);
                 }
             }
-            let bracket_y = curve_rect.bottom() + 3.;
+            let bracket_y = geometry.baseline - 3.;
+            let bracket_painter = painter.with_clip_rect(rect);
             for x in [*left, *right] {
-                plot.line_segment(
+                bracket_painter.line_segment(
                     [Pos2::new(x, bracket_y - 3.), Pos2::new(x, bracket_y + 3.)],
                     Stroke::new(1., COLORS[1]),
                 );
             }
-            plot.line_segment(
+            bracket_painter.line_segment(
                 [Pos2::new(*left, bracket_y), Pos2::new(*right, bracket_y)],
                 Stroke::new(1., COLORS[1]),
             );
             if row < max_rows {
-                let y = curve_rect.bottom() + 8. + row as f32 * line_h;
+                let y = band.top() + 2. + row as f32 * line_h;
                 let label_rect = egui::Rect::from_min_size(
                     Pos2::new(label_x, y),
                     egui::vec2(text.size().x + 8., line_h),
@@ -312,12 +318,14 @@ impl App {
 mod tests {
     use super::*;
     #[test]
-    fn band_stays_below_baseline_in_overlay_and_stacked_views() {
+    fn labels_stay_below_baseline_and_curves_above_in_all_views() {
         let rect = egui::Rect::from_min_size(Pos2::ZERO, egui::vec2(1000., 800.));
         for stacked in [false, true] {
             for offset in [-2., 0., 2.] {
                 let lane = lane_layout(rect, stacked, 3, 1, offset, true);
                 assert!(lane.band.top() > lane.baseline);
+                assert!(lane.curve_band.bottom() < lane.baseline);
+                assert!(lane.curve_band.height() > 0.);
                 assert!(lane.band.bottom() <= if stacked { 800. * 2. / 3. } else { 800. });
                 assert!(lane.band.height() > 0.);
             }
