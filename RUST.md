@@ -1,5 +1,7 @@
 # Native Rust viewer
 
+The [integration parity audit](INTEGRATION-PARITY-AUDIT.md) fails for native Rust. Its integration measurements and baseline workflow are not certified TopSpin equivalents. The retained Java/C checks do not certify the Rust implementation.
+
 Build once with `bash build-rust.sh`, then launch with `bash run.sh`.
 The launcher executes the release binary directly, with library paths recorded during the build. It does not compile or evaluate Nix during startup. Rebuild explicitly after changing source. `Cargo.lock` pins dependencies. Build outputs are ignored and must be rebuilt after cloning. The desktop entry uses this launcher.
 
