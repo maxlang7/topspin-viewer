@@ -1,6 +1,6 @@
 # Native Rust viewer
 
-The [integration parity audit](INTEGRATION-PARITY-AUDIT.md) fails for native Rust. Its integration measurements and baseline workflow are not certified TopSpin equivalents. The retained Java/C checks do not certify the Rust implementation.
+The earlier integration regression is fixed. Native integration, phase preview, and the manual polynomial baseline now pass the scoped [native processing validation](NATIVE-PROCESSING-VALIDATION.md), including direct comparisons to installed TopSpin classes. The [original failing audit](INTEGRATION-PARITY-AUDIT.md) is retained as history. This validates the documented kernels and workflows, not every TopSpin command.
 
 Build once with `bash build-rust.sh`, then launch with `bash run.sh`.
 The launcher executes the release binary directly, with library paths recorded during the build. It does not compile or evaluate Nix during startup. Rebuild explicitly after changing source. `Cargo.lock` pins dependencies. Build outputs are ignored and must be rebuilt after cloning. The desktop entry uses this launcher.
@@ -9,7 +9,7 @@ The Java/C viewer remains available with `bash run.sh --legacy` or `bash run-leg
 
 ## TopSpin-style layout
 
-The Rust UI follows the retained TopSpin reference layout: Process/Analyze/Manage navigation, a processing ribbon, a separate view toolbar, left data browser, open-spectrum tabs, optional right display/analysis controls through the Display button, and bottom SPECTRUM/INTEGRALS/FID tabs. The INTEGRALS tab shows measurements as a table. Commands marked ↗ open the retained application for validated processing; FID opens there too. The command bar supports `.all`, `.ph`, `int`, `.multi`, `.csv`, `efp`, and `.cal`. Gruvbox colors remain in use.
+The Rust UI follows the retained TopSpin reference layout: Process/Analyze/Manage navigation, a processing ribbon, a separate view toolbar, left data browser, open-spectrum tabs, optional right display/analysis controls through the Display button, and bottom SPECTRUM/INTEGRALS/FID tabs. The INTEGRALS tab shows measurements as a table. Commands marked ↗ open the retained application for validated processing; FID opens there too. The command bar supports `.all`, `.ph`, `int`, `.multi`, `.csv`, `efp`, `.cal`, and `.basl`. Gruvbox colors remain in use.
 
 ## Comparison workflow
 
@@ -17,11 +17,15 @@ Enter a Bruker folder in Data path, then Open / scan, or pass paths on the comma
 
 Overlay shares the ppm axis. Stacked separates visible spectra vertically while retaining the shared axis. Each spectrum has a color, visibility toggle, gain and vertical offset. Normalize scales each spectrum separately. Disable it to compare source amplitudes. Scroll above the spectrum baseline to zoom intensity for all visible spectra. Scroll below the baseline to zoom the ppm axis around the cursor; horizontal wheel gestures pan anywhere over the plot. The baseline hit area follows vertical offsets and stacked lanes. Use the + and − toolbar controls to zoom the ppm axis; drag to pan; double-click or Full range resets the axis. These operations apply to all displayed spectra.
 
-Phase preview supports PH0 and PH1 where a `1i` component is present. It uses FTSIZE for first-order phase, with direct trigonometric evaluation. It has not been certified bitwise equivalent to TopSpin's recurrence arithmetic. It never writes processed components.
+Phase preview supports PH0 and PH1 where a `1i` component is present. It uses the original recurrence arithmetic and FTSIZE. Processed samples are cached and shared by the plot, peak picker, integrator, and CSV exporter. It never writes source components.
 
-Enable Measure integral and drag over a ppm interval, or enter its endpoints in Integral measurements. Measurements are signed sample sums multiplied by the ppm step, with no baseline correction or TopSpin normalization. Results are snapshots at the phase settings used to measure them. Highlighted intervals belong to the selected trace. Peak picking lists up to 128 strongest positive local maxima above the selected relative threshold.
+Choose **Analyze → Integrate** or **Select region**, then drag over a ppm interval. **Display → Integrate** also accepts exact ppm bounds. Integrals use TopSpin's rounded inclusive bounds, final-point exclusion, full-right zero padding and accumulation order. The first region defaults to a normalized value of one. Existing Bruker `intrng` bias/slope and `INTSCL` normalization are imported. Reference calibration freezes the resulting normalization scale. Each region has editable bounds, bias, slope, optional endpoint-averaged baseline adjustment, and baseline point count. The plot shows cumulative curves and normalized labels; INTEGRALS shows raw and normalized values. Display gain and offset do not change measured values.
 
-CSV export writes `spectrum.csv` inside the selected processing folder, in a worker thread, containing ppm, original real/imaginary values and the phase preview. It refuses to overwrite an existing file. Comparison files save paths, per-spectrum settings, layout, view range and measurement snapshots as JSON, also refusing overwrites. Load a comparison when other loads have finished. Data remains external to comparison files.
+Choose **Process → Baseline**, or enter `.basl`, for a native manual polynomial correction. Edit a0–a4, preview the corrected spectrum, then Apply or Cancel. Closing the window cancels its preview. Undo last applied correction is available inside the editor. Coefficients use local sample coordinates across the full spectrum, matching the original polynomial model at unit scaling. An endpoint-line estimate provides starting coefficients; this helper is not the automatic TopSpin `abs` algorithm. Applied phase and polynomial settings form a non-destructive pipeline, phase first, baseline second.
+
+Spectrum baseline correction modifies the samples used by integrations. Per-region integral baseline correction adjusts the integral only. Both are distinct from the vertical display offset. Changes trigger recalculation of affected integral curves; they are no longer fixed measurement snapshots.
+
+CSV export writes `spectrum.csv` inside the selected processing folder, in a worker thread, containing ppm, original real/imaginary values and the corrected processed preview. Values use round-trip scientific precision. It refuses to overwrite an existing file. Comparison files save paths, phase/polynomial settings, region correction options, normalization, layout and view range as JSON, also refusing overwrites. Version 2 comparisons reload and recompute corrected values; old version 1 measurement snapshots are migrated and recalculated rather than trusted. Data remains external to comparison files. Original Bruker components and processing parameters remain unchanged; native Bruker write parity is not claimed.
 
 ## Performance
 
@@ -36,9 +40,11 @@ Folder scans, file reads and CSV writes run off the UI thread. Traces use min/ma
 | Processed int32 1D reader, endian and NC_proc scaling | Implemented, differential check available | Validated |
 | Multiple spectra, overlay / stacked, linked navigation | Implemented | Single dataset |
 | Gruvbox theme | Implemented | Implemented |
-| Phase preview | Direct trig preview; not bitwise certified | Validated |
-| Integration | Signed measurements, snapshot regions | Validated correction, normalization and saving |
-| Peak picking | Positive local maxima | Not implemented |
+| Phase preview | Original recurrence; differential and captured checks pass | Validated |
+| Integration | Native curves, bias/slope, endpoint correction, normalization and saved-region import; exact checks pass | Validated correction, normalization and saving |
+| Manual polynomial baseline | Native degree 0–4, preview/apply/cancel/undo; exact model checks pass | Not implemented |
+| Automatic baseline commands | Pending | Not implemented |
+| Peak picking | Positive local maxima of processed preview | Not implemented |
 | Comparison files, CSV | Implemented | Not implemented |
 | Raw FID viewing / processing, ZIP opening | Pending | Supported within documented limits |
 | Bruker phase / integration / calibration writes | Pending | Validated, recoverable saves |
@@ -57,4 +63,4 @@ The latter compares every decoded real/imaginary sample via ordered 64-bit rolli
 
 ## Checked on November 4, 2026
 
-Five native unit tests and Clippy with warnings denied pass. The lab-folder differential check matches 10 valid spectra, 655,360 real samples, all imaginary sample digests and both axis endpoint bits. One existing truncated `1r` in MLN1P93 is rejected by both implementations. This validates processed reading, not all processing operations.
+Native scientific validation is recorded in [NATIVE-PROCESSING-VALIDATION.md](NATIVE-PROCESSING-VALIDATION.md). Run `bash tests/parity-audit/run-native.sh` for original-class polynomial/integration/phase checks, saved-region import checks, and captured Windows JVM cases. Run `bash tests/parity-audit/run-current.sh` for the 33 region comparisons that previously failed. Run `nix-shell rust-shell.nix --run 'cargo test && cargo clippy -- -D warnings'` for application workflow checks.

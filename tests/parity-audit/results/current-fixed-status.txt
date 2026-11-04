@@ -1,0 +1,3 @@
+SKIP invalid /home/maxlang/Documents/IGB Lab/NMRs/MLN1P93/10/pdata/1: Truncated 1r
+REFERENCE_JAR=file:/home/maxlang/.wine-topspin-5/drive_c/Bruker/TopSpinProcessing5.0.0/classes/lib/top_base.jar
+CURRENT_RUST cases=33 exact_matches=33 mismatches=0

@@ -1,0 +1,5 @@
+PASS 6000 original normalization transitions, 24004 bitwise comparisons
+Generated 547 original-TopSpin/native normalization cases
+Saved-region cases=3
+NATIVE_ORACLE cases=631 raw_bit_comparisons=9013844 mismatches=0
+SAVED_REGION_ORACLE cases=3 raw_bit_comparisons=3791 mismatches=0

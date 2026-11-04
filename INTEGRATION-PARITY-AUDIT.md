@@ -1,5 +1,7 @@
 # Integration and baseline parity audit
 
+Historical audit of `be0355f`. The native integration regression and missing manual polynomial model have since been addressed. See [native processing validation](NATIVE-PROCESSING-VALIDATION.md) for the current supported scope and passing checks. The original failed evidence below is retained.
+
 Date: November 4, 2026. Production source audited at commit `be0355f`.
 
 **Verdict: FAIL. The default Rust application does not produce bit-for-bit TopSpin-equivalent integrals. Native spectrum baseline correction is not implemented. The requested guarantee cannot be made.**

@@ -1,0 +1,15 @@
+running 11 tests
+test data::tests::phase_and_integral ... ok
+test data::tests::natural_order_handles_long_numbers ... ok
+test native_ui::tests::baseline_preview_cancel_apply_and_undo_preserve_source ... ok
+test data::tests::browser_includes_raw_only_processing_numbers ... ok
+test data::tests::endian_scaling_and_rejection ... ok
+test native_ui::tests::invalid_baseline_preview_cannot_replace_processed_samples ... ok
+test processing::tests::correction_and_polynomial ... ok
+test processing::tests::endpoint_and_padding ... ok
+test native_ui::tests::session_roundtrip_keeps_corrected_values_and_normalization_bits ... ok
+test native_ui::tests::corrected_export_and_session_reload_use_production_pipeline ... ok
+test native_ui::tests::native_baseline_window_renders_without_legacy_application ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
