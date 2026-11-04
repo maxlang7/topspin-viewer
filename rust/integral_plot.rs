@@ -148,9 +148,6 @@ impl App {
             .count();
         let geometry = lane_layout(rect, self.stacked, count, lane, t.settings.offset, true);
         let band = geometry.band;
-        if band.height() < 12. {
-            return;
-        }
         let width = range[0] - range[1];
         let px = |ppm: f64| rect.left() + ((range[0] - ppm) / width) as f32 * rect.width();
         let font = egui::FontId::monospace(12.);
@@ -190,6 +187,41 @@ impl App {
             .collect();
         regions.sort_by(|a, b| a.3.total_cmp(&b.3));
         if regions.is_empty() {
+            return;
+        }
+        // Overview markers stay pinned to the plot top while following ppm zoom/pan.
+        // Separate overlapping intervals without moving their horizontal endpoints.
+        let mut row_ends: Vec<f32> = Vec::new();
+        let top = painter.with_clip_rect(response.rect);
+        for (id, r, _, left, right, _) in &regions {
+            let x0 = (*left).min(rect.right() - 2.).max(rect.left());
+            let x1 = (*right).max(x0 + 2.).min(rect.right());
+            let row = row_ends
+                .iter()
+                .position(|end| x0 > *end + 3.)
+                .unwrap_or(row_ends.len());
+            if row == row_ends.len() {
+                row_ends.push(x1);
+            } else {
+                row_ends[row] = x1;
+            }
+            let y = response.rect.top() + 6. + row as f32 * 6.;
+            let marker = egui::Rect::from_min_max(Pos2::new(x0, y), Pos2::new(x1, y + 3.));
+            top.rect_filled(marker, 1., COLORS[1]);
+            if response
+                .hover_pos()
+                .is_some_and(|p| marker.expand(3.).contains(p))
+            {
+                response.clone().on_hover_text_at_pointer(format!(
+                    "Integral #{} · {:.5}–{:.5} ppm\n{:.8}",
+                    id + 1,
+                    r.left,
+                    r.right,
+                    r.value * t.settings.integral_scale
+                ));
+            }
+        }
+        if band.height() < 12. {
             return;
         }
         let desired: Vec<_> = regions
