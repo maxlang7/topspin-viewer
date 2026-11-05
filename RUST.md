@@ -11,7 +11,7 @@ The earlier Java/C source and scientific regression references remain in the rep
 
 One compact command row contains the desktop spectrum logo, File/View/Tools menus, Phase, Baseline, Integrate, intensity and ppm zoom controls, Settings and autosave/loading status. It scrolls horizontally in smaller windows. Open-spectrum tabs remain below it. The bottom row holds command entry and a compact status message with the full text on hover; SPECTRUM and INTEGRALS remain accessible.
 
-File contains working projects, Bruker/CSV export and path-based comparisons. View contains overlay/stack selection and Display. Tools contains peak picking, with thresholds and results in Display. The Phase button and `.ph` command open the same phase window, including saved PHC0/PHC1, additional adjustments and Reset. Other existing commands remain `.all`, `int`, `.multi`, `.csv` and `.basl`.
+File contains working projects, Bruker/CSV export and path-based comparisons. View contains overlay/stack selection and Display. Tools contains peak picking, with thresholds and results in Display. The Phase button and `.ph` command open the same docked phase controls, including saved PHC0/PHC1, additional adjustments and Reset. Other existing commands remain `.all`, `int`, `.multi`, `.csv` and `.basl`.
 
 Settings offers Gruvbox Dark by default, neutral Dark and conventional Light. Light uses a white plot, gray panels, dark text and blue selection accents. Plot/grid/axis/series/integral/error colors all follow the theme. Theme changes invalidate cached plot geometry and are remembered under `$XDG_CONFIG_HOME/nmr-viewer/settings.json`, falling back to `~/.config/nmr-viewer/settings.json`. Scientific settings stay in dataset projects; appearance is an application preference.
 
@@ -26,7 +26,7 @@ Keyboard and wheel shortcuts defer to text entry:
 | Ctrl+Home | Reset selected spectrum gain and offset |
 | Ctrl+, | Open Settings |
 | Ctrl+E | Open export options; exporting still requires choosing an action |
-| Ctrl+P | Open Phase |
+| Ctrl+P | Open docked phase controls |
 | Ctrl+B | Open Baseline |
 | Escape | Cancel the active interaction, then close the innermost popup or editor |
 

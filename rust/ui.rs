@@ -37,8 +37,8 @@ impl App {
                                 self.show_inspector = true;
                             }
                         });
-                        if ui.button("Phase").clicked() {
-                            self.show_phase = true;
+                        if ui.selectable_label(self.show_phase, "Phase").clicked() {
+                            self.show_phase = !self.show_phase;
                         }
                         if ui
                             .button("Baseline")
@@ -132,24 +132,30 @@ impl App {
             });
         });
     }
-    pub(super) fn phase_window(&mut self, ctx: &egui::Context) {
+    pub(super) fn phase_panel(&mut self, ctx: &egui::Context) {
         if !self.show_phase {
             return;
         }
         let mut open = true;
-        egui::Window::new("Phase correction")
-            .open(&mut open)
-            .default_width(340.)
-            .show(ctx, |ui| {
-                if let Some(t) = self.traces.get_mut(self.selected) {
+        egui::TopBottomPanel::top("phase-controls").show(ctx, |ui| {
+            ui.horizontal(|ui| {
+                ui.strong("Phase correction");
+                if ui.small_button("Close").clicked() {
+                    open = false;
+                }
+            });
+            if let Some(t) = self.traces.get_mut(self.selected) {
+                ui.horizontal_wrapped(|ui| {
                     ui.label(data::dataset_name(&t.data.path));
-                    ui.label(format!(
+                    ui.weak(format!(
                         "Saved phase: PH0 {:.3}° · PH1 {:.3}°",
                         t.data.phc0, t.data.phc1
                     ));
-                    if t.data.imag.is_empty() {
-                        ui.label("No imaginary component");
-                    } else {
+                });
+                if t.data.imag.is_empty() {
+                    ui.label("No imaginary component");
+                } else {
+                    ui.horizontal_wrapped(|ui| {
                         ui.add(
                             egui::Slider::new(&mut t.settings.p0, -180. ..=180.)
                                 .text("PH0 adjustment"),
@@ -162,12 +168,13 @@ impl App {
                             t.settings.p0 = 0.;
                             t.settings.p1 = 0.;
                         }
-                    }
-                } else {
-                    ui.label("Open a spectrum to adjust its phase");
+                    });
                 }
-                ui.weak("Edits autosave. Export Bruker to share with TopSpin.");
-            });
+            } else {
+                ui.label("Open a spectrum to adjust its phase");
+            }
+            ui.weak("Edits autosave. Export Bruker to share with TopSpin.");
+        });
         self.show_phase = open;
     }
     pub fn spectrum_tabs(&mut self, ctx: &egui::Context) {
@@ -244,7 +251,7 @@ mod tests {
                         top = ctx.available_rect().top();
                         app.spectrum_tabs(ctx);
                         app.settings_window(ctx);
-                        app.phase_window(ctx);
+                        app.phase_panel(ctx);
                     },
                 );
                 assert!(

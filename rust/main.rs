@@ -609,7 +609,7 @@ impl eframe::App for App {
         self.handle_sidebar_shortcut(ctx);
         self.topspin_chrome(ctx);
         self.settings_window(ctx);
-        self.phase_window(ctx);
+        self.phase_panel(ctx);
         self.export_window(ctx);
         self.hovered_sidebar = None;
         egui::SidePanel::left("browser")
