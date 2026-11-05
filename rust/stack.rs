@@ -222,6 +222,7 @@ impl App {
             .map(|(i, _)| i)
     }
     pub(super) fn stack_window(&mut self, ctx: &egui::Context) {
+        let colors = self.colors();
         if self
             .traces
             .iter()
@@ -262,7 +263,7 @@ impl App {
                         {
                             let path = t.data.path.clone();
                             let selected = self.selected == i;
-                            let color = COLORS[i % 6];
+                            let color = colors[i % 6];
                             let (row, payload) = ui.dnd_drop_zone::<PathBuf, _>(
                                 egui::Frame::new().inner_margin(4.),
                                 |ui| {

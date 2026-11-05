@@ -151,6 +151,7 @@ impl App {
         }
     }
     pub(super) fn integral_controls(&mut self, ui: &mut egui::Ui) {
+        let error_color = self.palette().error;
         ui.collapsing("Integrate", |ui| {
             ui.horizontal(|ui| {
                 ui.label("From / to ppm");
@@ -225,7 +226,7 @@ impl App {
                             r.value * scale
                         ));
                         if let Some(e) = &r.error {
-                            ui.colored_label(Color32::LIGHT_RED, e);
+                            ui.colored_label(error_color, e);
                         }
                         if ui.button("Set as reference").clicked() {
                             normalize = Some(i);
@@ -303,6 +304,7 @@ impl App {
         }
     }
     pub(super) fn baseline_controls(&mut self, ctx: &egui::Context) {
+        let error_color = self.palette().error;
         if !self.baseline_open {
             return;
         }
@@ -328,7 +330,7 @@ impl App {
             }
             if ui.button("Reset coefficients").clicked(){t.settings.baseline=[0.;5];}
             if let Some(previous)=t.baseline_undo&&ui.button("Undo last applied correction").clicked(){t.settings.baseline=previous;}
-            let valid=t.refresh();if let Err(e)=&valid{ui.colored_label(Color32::LIGHT_RED,e);}
+            let valid=t.refresh();if let Err(e)=&valid{ui.colored_label(error_color,e);}
             ui.horizontal(|ui|{if ui.add_enabled(valid.is_ok(),egui::Button::new("Apply")).clicked(){action=1;}
             if ui.button("Cancel").clicked(){action=2;}});
         });

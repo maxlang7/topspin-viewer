@@ -4,7 +4,7 @@ Opening an NMR automatically creates or reopens a working project with the datas
 
 Phase, applied baseline, integration bounds/corrections, normalization and per-spectrum display settings autosave independently for each stacked spectrum after one second without edits. CSV and metadata writes run on a worker. Normal exit and closing a spectrum flush the latest edits. The top bar reports autosave status and its tooltip gives the project location. Reopening the original source restores the working project rather than replacing saved edits with a fresh import.
 
-Automatic projects use the existing portable directory format and can also be opened directly. Manage → Working project retains optional comparison-project save/open controls. Existing path-only comparison JSON files remain supported.
+Automatic projects use the existing portable directory format and can also be opened directly. File → Working project retains optional comparison-project save/open controls. Existing path-only comparison JSON files remain supported.
 
 ## Storage
 

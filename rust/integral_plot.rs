@@ -175,7 +175,7 @@ impl App {
                 } else {
                     format!("{value:.5}")
                 };
-                let text = painter.layout_no_wrap(text, font.clone(), COLORS[1]);
+                let text = painter.layout_no_wrap(text, font.clone(), self.palette().accent);
                 Some((
                     id,
                     r,
@@ -208,7 +208,7 @@ impl App {
             }
             let y = response.rect.top() + 6. + row as f32 * 9.;
             let marker = egui::Rect::from_min_max(Pos2::new(x0, y), Pos2::new(x1, y + 6.));
-            top.rect_filled(marker, 1., COLORS[1]);
+            top.rect_filled(marker, 1., self.palette().accent);
             if response
                 .hover_pos()
                 .is_some_and(|p| marker.expand(3.).contains(p))
@@ -239,7 +239,7 @@ impl App {
                 Pos2::new(rect.left(), geometry.baseline),
                 Pos2::new(rect.right(), geometry.baseline),
             ],
-            Stroke::new(1., Color32::from_rgb(80, 73, 69)),
+            Stroke::new(1., self.palette().border),
         );
         let mut hidden = 0;
         for ((id, r, start, left, right, text), (label_x, row)) in regions.iter().zip(labels) {
@@ -286,7 +286,8 @@ impl App {
                 for i in indices {
                     let p = point(i);
                     if let Some(before) = previous {
-                        curve_painter.line_segment([before, p], Stroke::new(1.4, COLORS[1]));
+                        curve_painter
+                            .line_segment([before, p], Stroke::new(1.4, self.palette().accent));
                     }
                     previous = Some(p);
                 }
@@ -296,12 +297,12 @@ impl App {
             for x in [*left, *right] {
                 bracket_painter.line_segment(
                     [Pos2::new(x, bracket_y - 3.), Pos2::new(x, bracket_y + 3.)],
-                    Stroke::new(1., COLORS[1]),
+                    Stroke::new(1., self.palette().accent),
                 );
             }
             bracket_painter.line_segment(
                 [Pos2::new(*left, bracket_y), Pos2::new(*right, bracket_y)],
-                Stroke::new(1., COLORS[1]),
+                Stroke::new(1., self.palette().accent),
             );
             if row < max_rows {
                 let y = band.top() + 2. + row as f32 * line_h;
@@ -314,19 +315,23 @@ impl App {
                         Pos2::new((left + right) / 2., bracket_y + 3.),
                         Pos2::new(label_rect.center().x, y),
                     ],
-                    Stroke::new(0.7, Color32::from_rgb(122, 105, 55)),
+                    Stroke::new(0.7, self.palette().muted),
                 );
                 hits.push((*id, label_rect.intersect(band).intersect(rect)));
-                plot.rect_filled(label_rect, 2., Color32::from_rgb(40, 40, 40));
+                plot.rect_filled(label_rect, 2., self.palette().panel);
                 if self.selected_integral == Some(*id) {
                     plot.rect_stroke(
                         label_rect,
                         2.,
-                        Stroke::new(1., COLORS[1]),
+                        Stroke::new(1., self.palette().accent),
                         egui::StrokeKind::Inside,
                     );
                 }
-                plot.galley(Pos2::new(label_x + 4., y + 1.), text.clone(), COLORS[1]);
+                plot.galley(
+                    Pos2::new(label_x + 4., y + 1.),
+                    text.clone(),
+                    self.palette().accent,
+                );
             } else {
                 hidden += 1;
             }
@@ -351,7 +356,7 @@ impl App {
                 egui::Align2::RIGHT_BOTTOM,
                 format!("+{hidden} labels · INTEGRALS table"),
                 font,
-                COLORS[1],
+                self.palette().accent,
             );
         }
         hits

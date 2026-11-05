@@ -1,4 +1,6 @@
+mod appearance;
 mod automatic;
+mod branding;
 mod bruker_export;
 mod data;
 mod integral_actions;
@@ -129,7 +131,9 @@ struct App {
     restoring: bool,
     hovered_sidebar: Option<(PathBuf, egui::Rect)>,
     show_inspector: bool,
-    nav: String,
+    theme: appearance::Theme,
+    show_settings: bool,
+    show_phase: bool,
     data_tab: usize,
     command: String,
     traces: Vec<Trace>,
@@ -185,14 +189,12 @@ impl App {
         paths: Vec<PathBuf>,
         smoke: bool,
     ) -> Self {
-        let mut v = egui::Visuals::dark();
-        v.panel_fill = Color32::from_rgb(40, 40, 40);
-        v.window_fill = v.panel_fill;
-        v.extreme_bg_color = Color32::from_rgb(29, 32, 33);
-        v.override_text_color = Some(Color32::from_rgb(235, 219, 178));
-        v.selection.bg_fill = Color32::from_rgb(80, 73, 69);
-        cc.egui_ctx.set_visuals(v);
         let mut s = Self::state(started, smoke);
+        match appearance::load() {
+            Ok(theme) => s.theme = theme,
+            Err(e) => s.status = format!("Appearance settings: {e}"),
+        }
+        s.theme.apply(&cc.egui_ctx);
         s.automatic_root = Some(PathBuf::from(project::default_path("NMR Projects", "")));
         if paths.is_empty()
             && let Some(home) = std::env::var_os("HOME")
@@ -331,7 +333,9 @@ impl App {
             restoring: false,
             hovered_sidebar: None,
             show_inspector: false,
-            nav: "Process".into(),
+            theme: appearance::Theme::default(),
+            show_settings: false,
+            show_phase: false,
             data_tab: 0,
             command: String::new(),
             traces: vec![],
@@ -598,6 +602,8 @@ impl eframe::App for App {
         self.handle_integral_delete_shortcut(ctx);
         self.handle_sidebar_shortcut(ctx);
         self.topspin_chrome(ctx);
+        self.settings_window(ctx);
+        self.phase_window(ctx);
         self.hovered_sidebar = None;
         egui::SidePanel::left("browser")
             .default_width(245.)
@@ -721,24 +727,6 @@ impl eframe::App for App {
                             .text("Gain"),
                     );
                     ui.add(egui::Slider::new(&mut t.settings.offset, -2. ..=2.).text("Offset"));
-                    ui.collapsing("Phase", |ui| {
-                        ui.label(format!("Saved phase: PH0 {:.3}° · PH1 {:.3}°",t.data.phc0,t.data.phc1));
-                        if t.data.imag.is_empty() {
-                            ui.label("No 1i component. Phase unavailable.");
-                        } else {
-                            ui.add(
-                                egui::Slider::new(&mut t.settings.p0, -180. ..=180.).text("PH0 adjustment"),
-                            );
-                            ui.add(
-                                egui::Slider::new(&mut t.settings.p1, -720. ..=720.).text("PH1 adjustment"),
-                            );
-                            if ui.button("Reset phase").clicked() {
-                                t.settings.p0 = 0.;
-                                t.settings.p1 = 0.;
-                            }
-                            ui.label("Edits autosave. Export Bruker to share with TopSpin.");
-                        }
-                    });
                 }
                 self.integral_controls(ui);
                 ui.collapsing("Peak picking",|ui|{
@@ -771,9 +759,10 @@ impl eframe::App for App {
    if self.data_tab==1 {self.integral_table(ui);return;}
 
    let (response,painter)=ui.allocate_painter(ui.available_size(),egui::Sense::click_and_drag());let rect=response.rect.shrink2(egui::vec2(14.,28.));if rect.width()<10.||rect.height()<10.{return}
-   painter.rect_filled(response.rect,0.,Color32::from_rgb(29,32,33));let range=self.range.unwrap_or_else(||self.full_range());let width=range[0]-range[1];let ppm=|x:f32|range[0]-(x-rect.left())as f64/rect.width()as f64*width;
+   let palette=self.palette();let colors=self.colors();
+   painter.rect_filled(response.rect,0.,palette.plot);let range=self.range.unwrap_or_else(||self.full_range());let width=range[0]-range[1];let ppm=|x:f32|range[0]-(x-rect.left())as f64/rect.width()as f64*width;
    let ticks=(rect.width()/75.).floor().clamp(2.,10.)as usize;
-   for j in 0..=ticks{let x=rect.left()+rect.width()*j as f32/ticks as f32;painter.line_segment([Pos2::new(x,rect.top()),Pos2::new(x,rect.bottom())],Stroke::new(1.,Color32::from_rgb(50,48,47)));painter.text(Pos2::new(x,rect.bottom()+8.),egui::Align2::CENTER_TOP,format!("{:.2}",ppm(x)),egui::FontId::monospace(12.),Color32::from_rgb(189,174,147));}
+   for j in 0..=ticks{let x=rect.left()+rect.width()*j as f32/ticks as f32;painter.line_segment([Pos2::new(x,rect.top()),Pos2::new(x,rect.bottom())],Stroke::new(1.,palette.grid));painter.text(Pos2::new(x,rect.bottom()+8.),egui::Align2::CENTER_TOP,format!("{:.2}",ppm(x)),egui::FontId::monospace(12.),palette.muted);}
    let have_integrals=self.has_visible_integrals();
    let selected=self.selected;
    let count=self.traces.iter().filter(|t|t.settings.visible).count().max(1);let common=self.traces.iter().filter(|t|t.settings.visible).fold(f64::MIN_POSITIVE,|m,t|m.max(t.processed_max));
@@ -784,11 +773,11 @@ impl eframe::App for App {
     if t.cache_key!=key {
     t.cache.clear();
     let columns=(rect.width()*ctx.pixels_per_point()).ceil()as usize;let mut previous=None;
-    for column in 0..columns{let x0=rect.left()+column as f32/columns as f32*rect.width();let x1=rect.left()+(column+1)as f32/columns as f32*rect.width();let index=|p:f64|((d.left-p)/(d.left-d.right)*d.real.len()as f64).floor()as isize;let lo=index(ppm(x0)).max(0)as usize;let hi=index(ppm(x1)).max(0)as usize;if lo>=d.real.len()||ppm(x1)>d.left||ppm(x0)<d.right{previous=None;continue}let hi=hi.max(lo+1).min(d.real.len());let(mut low,mut high)=(f64::INFINITY,f64::NEG_INFINITY);for i in lo..hi{let v=t.processed[i];low=low.min(v);high=high.max(v);}let a=Pos2::new(x0,y(low));let b=Pos2::new(x0,y(high));let stroke=Stroke::new(1.,COLORS[idx%6]);t.cache.push(egui::Shape::line_segment([a,b],stroke));if let Some(p)=previous{t.cache.push(egui::Shape::line_segment([p,a],stroke));}previous=Some(b);}
+    for column in 0..columns{let x0=rect.left()+column as f32/columns as f32*rect.width();let x1=rect.left()+(column+1)as f32/columns as f32*rect.width();let index=|p:f64|((d.left-p)/(d.left-d.right)*d.real.len()as f64).floor()as isize;let lo=index(ppm(x0)).max(0)as usize;let hi=index(ppm(x1)).max(0)as usize;if lo>=d.real.len()||ppm(x1)>d.left||ppm(x0)<d.right{previous=None;continue}let hi=hi.max(lo+1).min(d.real.len());let(mut low,mut high)=(f64::INFINITY,f64::NEG_INFINITY);for i in lo..hi{let v=t.processed[i];low=low.min(v);high=high.max(v);}let a=Pos2::new(x0,y(low));let b=Pos2::new(x0,y(high));let stroke=Stroke::new(1.,colors[idx%6]);t.cache.push(egui::Shape::line_segment([a,b],stroke));if let Some(p)=previous{t.cache.push(egui::Shape::line_segment([p,a],stroke));}previous=Some(b);}
     t.cache_key=key;
     }
     painter.with_clip_rect(rect).extend(t.cache.iter().cloned());
-    painter.text(Pos2::new(rect.left()+8.,if self.stacked{rect.top()+lane_h*lane as f32+4.}else{rect.top()+lane as f32*18.}),egui::Align2::LEFT_TOP,format!("{} {}",idx+1,d.title),egui::FontId::proportional(12.),COLORS[idx%6]);
+    painter.text(Pos2::new(rect.left()+8.,if self.stacked{rect.top()+lane_h*lane as f32+4.}else{rect.top()+lane as f32*18.}),egui::Align2::LEFT_TOP,format!("{} {}",idx+1,d.title),egui::FontId::proportional(12.),colors[idx%6]);
    }
    let hits=self.paint_integrals(rect,range,&painter,&response);
    let label_blocked=self.integral_interactions(ui,&hits);
@@ -799,7 +788,7 @@ impl eframe::App for App {
    self.handle_plot_navigation(ctx,&response,rect,range,have_integrals,label_blocked,integrating,&painter);
 
 
-   if self.traces.is_empty(){painter.text(rect.center(),egui::Align2::CENTER_CENTER,"Open a Bruker dataset folder to begin\nAdd several spectra for overlay or stacked comparison",egui::FontId::proportional(20.),COLORS[0]);}
+   if self.traces.is_empty(){painter.text(rect.center(),egui::Align2::CENTER_CENTER,"Open a Bruker dataset folder to begin\nAdd several spectra for overlay or stacked comparison",egui::FontId::proportional(20.),colors[0]);}
   });
         self.stack_window(ctx);
         if self.first_frame {

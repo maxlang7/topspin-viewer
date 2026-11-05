@@ -60,14 +60,14 @@ impl App {
                     Pos2::new(pos.x, rect.top()),
                     Pos2::new(pos.x, rect.bottom()),
                 ],
-                Stroke::new(1., Color32::from_gray(130)),
+                Stroke::new(1., self.palette().muted),
             );
             painter.text(
                 rect.right_top(),
                 egui::Align2::RIGHT_TOP,
                 format!("{x:.5} ppm"),
                 egui::FontId::monospace(12.),
-                COLORS[0],
+                self.colors()[0],
             );
             let scroll = ctx.input(|i| {
                 integral_actions::plot_scroll(
@@ -345,20 +345,20 @@ impl App {
         let galley = ui.painter().layout(
             text.into(),
             egui::FontId::proportional(14.),
-            Color32::from_rgb(29, 32, 33),
+            self.palette().badge_text,
             (rect.width() - 24.).max(20.),
         );
         let badge = egui::Rect::from_center_size(
             Pos2::new(rect.center().x, rect.top() + galley.size().y / 2. + 8.),
             galley.size() + egui::vec2(20., 12.),
         );
-        ui.painter().rect_filled(badge, 5., COLORS[1]);
+        ui.painter().rect_filled(badge, 5., self.palette().accent);
         ui.painter().galley(
             badge.min + egui::vec2(10., 6.),
             galley,
-            Color32::from_rgb(29, 32, 33),
+            self.palette().badge_text,
         );
-        ui.painter().text(Pos2::new(rect.left()+8.,rect.bottom()-8.),egui::Align2::LEFT_BOTTOM,"Drag a range to integrate · Shift+scroll disabled\nHover number + D deletes · Double-click number calibrates",egui::FontId::proportional(12.),COLORS[1]);
+        ui.painter().text(Pos2::new(rect.left()+8.,rect.bottom()-8.),egui::Align2::LEFT_BOTTOM,"Drag a range to integrate · Shift+scroll disabled\nHover number + D deletes · Double-click number calibrates",egui::FontId::proportional(12.),self.palette().accent);
     }
     pub(super) fn paint_integration_preview(
         &self,
@@ -385,20 +385,20 @@ impl App {
             Pos2::new(x0, rect.top() - 25.),
             Pos2::new(x1.max(x0 + 2.), rect.top() - 16.),
         );
-        painter.rect_filled(bar, 2., COLORS[1]);
+        painter.rect_filled(bar, 2., self.palette().accent);
         let shade =
             egui::Rect::from_min_max(Pos2::new(x0, rect.top()), Pos2::new(x1, rect.bottom()));
         painter.with_clip_rect(rect).rect_filled(
             shade,
             0.,
-            Color32::from_rgba_unmultiplied(250, 189, 47, 22),
+            self.palette().accent.gamma_multiply(0.12),
         );
         painter.text(
             Pos2::new(bar.center().x, bar.bottom() + 2.),
             egui::Align2::CENTER_TOP,
             format!("{left:.4} → {right:.4} ppm"),
             egui::FontId::monospace(12.),
-            COLORS[1],
+            self.palette().accent,
         );
     }
 }
