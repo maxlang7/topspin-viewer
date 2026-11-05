@@ -12,7 +12,7 @@ The app supports phase adjustment, manual polynomial baseline correction, integr
 
 See [RUST.md](RUST.md) for controls and performance, [PROJECT-FORMAT.md](PROJECT-FORMAT.md) for storage/export details, and [NATIVE-PROCESSING-VALIDATION.md](NATIVE-PROCESSING-VALIDATION.md) for the numerical validation boundary. Full TopSpin parity and indistinguishable processing provenance are not claimed. Earlier source and reference tests remain in Git.
 
-Run native tests with `nix-shell rust-shell.nix --run 'cargo test && cargo clippy -- -D warnings'`. The repository and laboratory captures remain local; no remote is configured.
+Run native tests with `nix-shell rust-shell.nix --run 'cargo test && cargo clippy -- -D warnings'`. The full source history is backed up to the private GitHub repository `maxlang7/topspin-viewer`. Generated files under `artifacts/`, build outputs and local environments remain ignored.
 
 Phase, Baseline, Integrals, Peaks, Display and History share one collapsible right-hand tool panel. Switching tools replaces its contents; scientific editors no longer open floating windows. The single command row groups File/View/Tools menus beside Phase, Baseline, Integrate, Undo/Redo and zoom controls. The desktop spectrum logo sits at its upper left. Settings remembers the selected theme. Showing integrals keeps the spectrum baseline and intensity scale fixed. Labels use bounded rows below baseline; a +N integrals menu exposes crowded values without moving the spectrum.
 
