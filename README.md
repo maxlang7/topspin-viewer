@@ -14,4 +14,6 @@ See [RUST.md](RUST.md) for controls and performance, [PROJECT-FORMAT.md](PROJECT
 
 Run native tests with `nix-shell rust-shell.nix --run 'cargo test && cargo clippy -- -D warnings'`. The repository and laboratory captures remain local; no remote is configured.
 
-The single command row groups File/View/Tools menus beside Phase, Baseline, Integrate and zoom controls. The desktop spectrum logo sits at its upper left. Settings remembers the selected theme. Proposed baseline layouts and additional keyboard shortcuts are design recommendations only; current baseline geometry and bindings remain unchanged.
+The single command row groups File/View/Tools menus beside Phase, Baseline, Integrate and zoom controls. The desktop spectrum logo sits at its upper left. Settings remembers the selected theme. Showing integrals keeps the spectrum baseline and intensity scale fixed. Labels use bounded rows below baseline; a +N integrals menu exposes crowded values without moving the spectrum.
+
+Ctrl+Alt+scroll adjusts zero-order phase on the spectrum under the pointer; Ctrl+scroll also adjusts zero-order phase. There is no first-order phase shortcut. Home restores the full ppm range, Ctrl+Home resets the selected spectrum’s gain and offset, Ctrl+, opens Settings, Ctrl+E opens export options, Ctrl+P opens Phase, and Ctrl+B opens Baseline. Escape cancels the active interaction or closes a popup or editor. Shortcuts defer to text entry.

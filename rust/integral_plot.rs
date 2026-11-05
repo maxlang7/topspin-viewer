@@ -1,6 +1,12 @@
 //! Display-only integral layout. Numerical curves and normalization are never modified here.
 use super::*;
 
+#[derive(Default)]
+pub(super) struct IntegralOverlay {
+    pub labels: Vec<(usize, egui::Rect)>,
+    pub hidden: Vec<usize>,
+    pub overflow_rect: Option<egui::Rect>,
+}
 pub(super) struct Lane {
     pub baseline: f32,
     pub amplitude: f32,
@@ -13,7 +19,7 @@ pub(super) fn lane_layout(
     count: usize,
     lane: usize,
     offset: f64,
-    integrals: bool,
+    _integrals: bool,
 ) -> Lane {
     let h = if stacked {
         rect.height() / count.max(1) as f32
@@ -22,27 +28,21 @@ pub(super) fn lane_layout(
     };
     let top = rect.top() + if stacked { h * lane as f32 } else { 0. };
     let bottom = top + h;
-    let fraction = if integrals {
-        0.82
-    } else if stacked {
-        0.85
-    } else {
-        0.88
-    };
+    // Spectrum geometry never depends on integral visibility.
+    let fraction = if stacked { 0.85 } else { 0.88 };
     let amplitude = h * 0.7;
-    let mut baseline = top + h * fraction - offset as f32 * amplitude;
-    if integrals {
-        baseline = baseline.clamp(top + h * 0.12, bottom - h * 0.16);
-    }
+    let baseline = top + h * fraction - offset as f32 * amplitude;
     let band = egui::Rect::from_min_max(
-        Pos2::new(rect.left(), baseline + 6.),
-        Pos2::new(rect.right(), bottom - 6.),
+        Pos2::new(rect.left(), (baseline + 3.).clamp(top, bottom - 1.)),
+        Pos2::new(rect.right(), bottom - 1.),
     );
-    let curve_bottom = baseline - (h * 0.025).min(8.);
+    let curve_bottom = (baseline - (h * 0.025).min(8.)).clamp(top, bottom);
     let curve_band = egui::Rect::from_min_max(
         Pos2::new(
             rect.left(),
-            (curve_bottom - (h * 0.22).min(90.)).max(top + h * 0.01),
+            (curve_bottom - (h * 0.22).min(90.))
+                .max(top + h * 0.01)
+                .min(curve_bottom),
         ),
         Pos2::new(rect.right(), curve_bottom),
     );
@@ -114,6 +114,37 @@ fn curve_fraction(value: f64, low: f64, high: f64) -> f32 {
     f.clamp(0., 1.) as f32
 }
 impl App {
+    pub(super) fn integral_overflow_menu(&mut self, ui: &mut egui::Ui, overlay: &IntegralOverlay) {
+        let Some(rect) = overlay.overflow_rect else {
+            return;
+        };
+        ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
+            ui.menu_button(format!("+{} integrals", overlay.hidden.len()), |ui| {
+                ui.label("Additional integral values");
+                egui::ScrollArea::vertical()
+                    .max_height(240.)
+                    .show(ui, |ui| {
+                        for &index in &overlay.hidden {
+                            if let Some(r) = self.regions.get(index)
+                                && let Some(t) = self.traces.get(r.trace)
+                            {
+                                ui.monospace(format!(
+                                    "#{}  {:.4}–{:.4} ppm  {:.5}",
+                                    index + 1,
+                                    r.left,
+                                    r.right,
+                                    r.value * t.settings.integral_scale
+                                ));
+                            }
+                        }
+                    });
+                if ui.button("Open integration table").clicked() {
+                    self.data_tab = 1;
+                    ui.close();
+                }
+            });
+        });
+    }
     pub(super) fn has_visible_integrals(&self) -> bool {
         self.traces
             .get(self.selected)
@@ -129,10 +160,10 @@ impl App {
         range: [f64; 2],
         painter: &egui::Painter,
         response: &egui::Response,
-    ) -> Vec<(usize, egui::Rect)> {
-        let mut hits = Vec::new();
+    ) -> IntegralOverlay {
+        let mut overlay = IntegralOverlay::default();
         if !self.has_visible_integrals() {
-            return hits;
+            return overlay;
         }
         let t = &self.traces[self.selected];
         let count = self
@@ -188,7 +219,7 @@ impl App {
             .collect();
         regions.sort_by(|a, b| a.3.total_cmp(&b.3));
         if regions.is_empty() {
-            return hits;
+            return overlay;
         }
         // Overview markers stay pinned to the plot top while following ppm zoom/pan.
         // Separate overlapping intervals without moving their horizontal endpoints.
@@ -222,15 +253,34 @@ impl App {
                 ));
             }
         }
-        if band.height() < 12. {
-            return hits;
-        }
-        let desired: Vec<_> = regions
+        // Give the selected label first choice of a bounded row, without moving traces.
+        let mut order = (0..regions.len()).collect::<Vec<_>>();
+        order.sort_by_key(|&i| self.selected_integral != Some(regions[i].0));
+        let desired = order
             .iter()
-            .map(|r| ((r.3 + r.4) / 2., r.5.size().x + 8.))
-            .collect();
-        let labels = label_layout(&desired, rect.left() + 2., rect.right() - 2., 8.);
-        let max_rows = ((band.height() - 2.) / line_h).floor().clamp(1., 4.) as usize;
+            .map(|&i| {
+                (
+                    (regions[i].3 + regions[i].4) / 2.,
+                    regions[i].5.size().x + 8.,
+                )
+            })
+            .collect::<Vec<_>>();
+        let max_rows = ((band.height() - 2.) / line_h).floor().clamp(0., 4.) as usize;
+        let mut placed = label_layout(&desired, rect.left() + 2., rect.right() - 2., 8.);
+        let overflow_needed = placed.iter().any(|(_, row)| *row >= max_rows)
+            || desired.iter().any(|(_, w)| *w > rect.width() - 4.);
+        let label_right = if overflow_needed {
+            (rect.right() - 148.).max(rect.left() + 2.)
+        } else {
+            rect.right() - 2.
+        };
+        if overflow_needed {
+            placed = label_layout(&desired, rect.left() + 2., label_right, 8.);
+        }
+        let mut labels = vec![(0., 0); regions.len()];
+        for (i, pos) in order.into_iter().zip(placed) {
+            labels[i] = pos;
+        }
         let curve_rect = geometry.curve_band;
         let curve_h = curve_rect.height();
         let plot = painter.with_clip_rect(band.intersect(rect));
@@ -241,7 +291,7 @@ impl App {
             ],
             Stroke::new(1., self.palette().border),
         );
-        let mut hidden = 0;
+
         for ((id, r, start, left, right, text), (label_x, row)) in regions.iter().zip(labels) {
             let (first, last) = visible_indices(
                 r.curve.len(),
@@ -304,7 +354,7 @@ impl App {
                 [Pos2::new(*left, bracket_y), Pos2::new(*right, bracket_y)],
                 Stroke::new(1., self.palette().accent),
             );
-            if row < max_rows {
+            if row < max_rows && text.size().x + 8. <= label_right - rect.left() - 2. {
                 let y = band.top() + 2. + row as f32 * line_h;
                 let label_rect = egui::Rect::from_min_size(
                     Pos2::new(label_x, y),
@@ -317,7 +367,9 @@ impl App {
                     ],
                     Stroke::new(0.7, self.palette().muted),
                 );
-                hits.push((*id, label_rect.intersect(band).intersect(rect)));
+                overlay
+                    .labels
+                    .push((*id, label_rect.intersect(band).intersect(rect)));
                 plot.rect_filled(label_rect, 2., self.palette().panel);
                 if self.selected_integral == Some(*id) {
                     plot.rect_stroke(
@@ -333,7 +385,7 @@ impl App {
                     self.palette().accent,
                 );
             } else {
-                hidden += 1;
+                overlay.hidden.push(*id);
             }
             if let Some(pos) = response.hover_pos()
                 && band.contains(pos)
@@ -350,32 +402,37 @@ impl App {
                 ));
             }
         }
-        if hidden > 0 {
-            plot.text(
-                band.right_bottom(),
-                egui::Align2::RIGHT_BOTTOM,
-                format!("+{hidden} labels · INTEGRALS table"),
-                font,
-                self.palette().accent,
-            );
+        if !overlay.hidden.is_empty() {
+            let bottom = band.bottom().max(rect.top() + 24.);
+            overlay.overflow_rect = Some(egui::Rect::from_min_size(
+                Pos2::new(rect.right() - 142., bottom - 23.),
+                egui::vec2(140., 23.),
+            ));
         }
-        hits
+        overlay
     }
 }
 #[cfg(test)]
 mod tests {
     use super::*;
     #[test]
-    fn labels_stay_below_baseline_and_curves_above_in_all_views() {
+    fn integral_visibility_never_changes_baseline_or_amplitude() {
         let rect = egui::Rect::from_min_size(Pos2::ZERO, egui::vec2(1000., 800.));
         for stacked in [false, true] {
-            for offset in [-2., 0., 2.] {
-                let lane = lane_layout(rect, stacked, 3, 1, offset, true);
-                assert!(lane.band.top() > lane.baseline);
-                assert!(lane.curve_band.bottom() < lane.baseline);
-                assert!(lane.curve_band.height() > 0.);
-                assert!(lane.band.bottom() <= if stacked { 800. * 2. / 3. } else { 800. });
-                assert!(lane.band.height() > 0.);
+            for count in [1, 3, 12] {
+                for offset in [-2., -0.2, 0., 0.2, 2.] {
+                    let a = lane_layout(rect, stacked, count, 0, offset, false);
+                    let b = lane_layout(rect, stacked, count, 0, offset, true);
+                    assert_eq!(a.baseline.to_bits(), b.baseline.to_bits());
+                    assert_eq!(a.amplitude.to_bits(), b.amplitude.to_bits());
+                    assert!(b.band.height() >= 0. && b.curve_band.height() >= 0.);
+                    if b.band.height() >= 21. {
+                        assert!(b.band.top() > b.baseline);
+                    }
+                    if b.curve_band.height() > 0. {
+                        assert!(b.curve_band.bottom() < b.baseline);
+                    }
+                }
             }
         }
     }

@@ -69,13 +69,35 @@ impl App {
                 egui::FontId::monospace(12.),
                 self.colors()[0],
             );
+            let hit = self.spectrum_under_pointer(rect, range, pos, have_integrals);
+            let typing = ctx.wants_keyboard_input();
             let scroll = ctx.input(|i| {
-                integral_actions::plot_scroll(
-                    i.modifiers.shift,
-                    i.raw_scroll_delta,
-                    i.smooth_scroll_delta,
-                    &mut self.suppress_scroll_tail,
-                )
+                let phase = i.modifiers.ctrl && !i.modifiers.shift;
+                if phase {
+                    if let Some(idx) = hit
+                        && !typing
+                        && i.raw_scroll_delta.y != 0.
+                        && !self.traces[idx].data.imag.is_empty()
+                    {
+                        self.traces[idx].settings.p0 = (self.traces[idx].settings.p0
+                            + i.raw_scroll_delta.y as f64 * 0.025)
+                            .clamp(-180., 180.);
+                        self.status = format!(
+                            "{} · PH0 adjustment {:.3}° · autosaving",
+                            data::dataset_name(&self.traces[idx].data.path),
+                            self.traces[idx].settings.p0
+                        );
+                    }
+                    self.suppress_scroll_tail = true;
+                    egui::Vec2::ZERO
+                } else {
+                    integral_actions::plot_scroll(
+                        i.modifiers.shift,
+                        i.raw_scroll_delta,
+                        i.smooth_scroll_delta,
+                        &mut self.suppress_scroll_tail,
+                    )
+                }
             });
             let lane_h = if self.stacked {
                 rect.height() / count as f32
@@ -89,7 +111,6 @@ impl App {
             } else {
                 0
             };
-            let hit = self.spectrum_under_pointer(rect, range, pos, have_integrals);
             let hovered = hit.and_then(|idx| self.traces.get(idx).map(|t| (idx, t)));
             let offset = hovered.map_or(0., |(_, t)| t.settings.offset);
             let integrals = have_integrals
@@ -123,6 +144,12 @@ impl App {
             }
         }
 
+        if self.cancel_plot_drag {
+            if !ctx.input(|i| i.pointer.primary_down()) {
+                self.cancel_plot_drag = false;
+            }
+            return;
+        }
         if response.double_clicked() && !label_blocked {
             self.range = None;
         }
@@ -485,13 +512,16 @@ mod tests {
                 ..Default::default()
             },
             |ctx| {
+                a.handle_shortcuts(ctx);
                 a.handle_integral_delete_shortcut(ctx);
                 a.refresh_processing();
                 egui::CentralPanel::default().show(ctx, |ui| {
                     let (response, painter) =
                         ui.allocate_painter(ui.available_size(), egui::Sense::click_and_drag());
                     let rect = response.rect.shrink2(egui::vec2(14., 28.));
-                    hits = a.paint_integrals(rect, [8., 0.], &painter, &response);
+                    let overlay = a.paint_integrals(rect, [8., 0.], &painter, &response);
+                    a.integral_overflow_menu(ui, &overlay);
+                    hits = overlay.labels;
                     let blocked = a.integral_interactions(ui, &hits);
                     let integrate = a.integrate
                         || ctx.input(|i| i.modifiers.shift) && a.integral_edit.is_none();
@@ -682,6 +712,123 @@ mod tests {
             egui::Modifiers::NONE,
         );
         assert!(a.range.is_some());
+    }
+    #[test]
+    fn modified_wheel_only_changes_zero_order_phase_and_escape_cancels_integral_drag() {
+        let mut a = app();
+        let ctx = egui::Context::default();
+        let p = Pos2::new(200., 550.);
+        frame(
+            &mut a,
+            &ctx,
+            0.,
+            vec![egui::Event::PointerMoved(p)],
+            egui::Modifiers::NONE,
+        );
+        let mods = egui::Modifiers {
+            ctrl: true,
+            alt: true,
+            ..Default::default()
+        };
+        let wheel = |mods| egui::Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Point,
+            delta: egui::vec2(0., 60.),
+            modifiers: mods,
+        };
+        let gain = a.traces[0].settings.gain;
+        let phase1 = a.traces[0].settings.p1;
+        frame(&mut a, &ctx, 0.1, vec![wheel(mods)], mods);
+        assert_eq!(a.traces[0].settings.p0, 1.5);
+        assert_eq!(a.traces[0].settings.p1, phase1);
+        assert_eq!(a.traces[0].settings.gain, gain);
+        assert!(a.range.is_none());
+        frame(&mut a, &ctx, 0.11, vec![], egui::Modifiers::NONE);
+        assert!(a.range.is_none());
+        frame(
+            &mut a,
+            &ctx,
+            0.2,
+            vec![wheel(egui::Modifiers::CTRL)],
+            egui::Modifiers::CTRL,
+        );
+        assert_eq!(a.traces[0].settings.p0, 3.);
+        assert_eq!(a.traces[0].settings.p1, phase1);
+        let shift = egui::Modifiers {
+            shift: true,
+            ..Default::default()
+        };
+        let q = Pos2::new(400., 300.);
+        frame(
+            &mut a,
+            &ctx,
+            0.3,
+            vec![egui::Event::PointerMoved(p), button(p, true, shift)],
+            shift,
+        );
+        frame(&mut a, &ctx, 0.4, vec![egui::Event::PointerMoved(q)], shift);
+        assert!(a.start.is_some());
+        frame(&mut a, &ctx, 0.5, vec![key(egui::Key::Escape)], shift);
+        assert!(a.start.is_none());
+        frame(
+            &mut a,
+            &ctx,
+            0.6,
+            vec![button(q, false, egui::Modifiers::NONE)],
+            egui::Modifiers::NONE,
+        );
+        assert!(a.regions.is_empty());
+        assert!(a.range.is_none());
+    }
+    #[test]
+    fn crowded_overlay_exposes_hidden_values_without_moving_the_baseline() {
+        let mut a = app();
+        for _ in 0..30 {
+            a.measure_region(7., 5.);
+        }
+        a.refresh_processing();
+        a.selected_integral = Some(29);
+        let ctx = egui::Context::default();
+        let mut hidden = vec![];
+        let mut labels = vec![];
+        let mut anchor = None;
+        let _ = ctx.run(
+            egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    Pos2::ZERO,
+                    egui::vec2(500., 300.),
+                )),
+                ..Default::default()
+            },
+            |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    let (response, painter) =
+                        ui.allocate_painter(ui.available_size(), egui::Sense::click_and_drag());
+                    let rect = response.rect.shrink2(egui::vec2(14., 28.));
+                    let overlay = a.paint_integrals(rect, [8., 0.], &painter, &response);
+                    assert_eq!(
+                        integral_plot::lane_layout(rect, false, 1, 0, 0., false)
+                            .baseline
+                            .to_bits(),
+                        integral_plot::lane_layout(rect, false, 1, 0, 0., true)
+                            .baseline
+                            .to_bits()
+                    );
+                    a.integral_overflow_menu(ui, &overlay);
+                    hidden = overlay.hidden;
+                    labels = overlay.labels;
+                    anchor = overlay.overflow_rect;
+                });
+            },
+        );
+        assert!(anchor.is_some() && !hidden.is_empty());
+        assert_eq!(hidden.len() + labels.len(), 30);
+        assert!(labels.iter().any(|(id, _)| *id == 29));
+        for (_, rect) in &labels {
+            assert!(
+                !rect.intersects(anchor.unwrap()),
+                "Overflow menu must not cover a value or its click target"
+            );
+        }
     }
     #[test]
     fn invalid_reference_cannot_change_normalization() {

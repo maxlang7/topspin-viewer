@@ -201,17 +201,37 @@ impl App {
             ui.label("Self-contained spectra, acquisition snapshots and edit history.");
         });
         ui.menu_button("Export", |ui| {
-            ui.label("New destination folder");
-            ui.text_edit_singleline(&mut self.export_path);
-            if ui.button("Bruker / TopSpin").clicked() {
-                self.export_selected(ctx.clone(), true);
-                ui.close();
-            }
-            if ui.button("Spectrum and integrals CSV").clicked() {
-                self.export(ctx.clone());
-                ui.close();
-            }
+            self.export_controls(ui, ctx);
         });
+    }
+    fn export_controls(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) -> bool {
+        ui.label("New destination folder");
+        ui.text_edit_singleline(&mut self.export_path);
+        if ui.button("Bruker / TopSpin").clicked() {
+            self.export_selected(ctx.clone(), true);
+            ui.close();
+            return true;
+        }
+        if ui.button("Spectrum and integrals CSV").clicked() {
+            self.export(ctx.clone());
+            ui.close();
+            return true;
+        }
+        false
+    }
+    pub(super) fn export_window(&mut self, ctx: &egui::Context) {
+        if !self.show_export {
+            return;
+        }
+        let mut open = true;
+        let mut started = false;
+        egui::Window::new("Export selected spectrum")
+            .open(&mut open)
+            .default_width(400.)
+            .show(ctx, |ui| {
+                started = self.export_controls(ui, ctx);
+            });
+        self.show_export = open && !started;
     }
     pub(super) fn export_selected(&mut self, ctx: egui::Context, bruker: bool) {
         if self.baseline_open {

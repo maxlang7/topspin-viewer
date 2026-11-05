@@ -10,6 +10,7 @@ mod processing;
 mod project;
 #[cfg(feature = "native-raw")]
 mod raw;
+mod shortcuts;
 mod stack;
 mod storage;
 mod ui;
@@ -134,6 +135,8 @@ struct App {
     theme: appearance::Theme,
     show_settings: bool,
     show_phase: bool,
+    show_export: bool,
+    cancel_plot_drag: bool,
     data_tab: usize,
     command: String,
     traces: Vec<Trace>,
@@ -336,6 +339,8 @@ impl App {
             theme: appearance::Theme::default(),
             show_settings: false,
             show_phase: false,
+            show_export: false,
+            cancel_plot_drag: false,
             data_tab: 0,
             command: String::new(),
             traces: vec![],
@@ -599,11 +604,13 @@ impl eframe::App for App {
                 self.open(p, ctx.clone());
             }
         }
+        self.handle_shortcuts(ctx);
         self.handle_integral_delete_shortcut(ctx);
         self.handle_sidebar_shortcut(ctx);
         self.topspin_chrome(ctx);
         self.settings_window(ctx);
         self.phase_window(ctx);
+        self.export_window(ctx);
         self.hovered_sidebar = None;
         egui::SidePanel::left("browser")
             .default_width(245.)
@@ -779,8 +786,9 @@ impl eframe::App for App {
     painter.with_clip_rect(rect).extend(t.cache.iter().cloned());
     painter.text(Pos2::new(rect.left()+8.,if self.stacked{rect.top()+lane_h*lane as f32+4.}else{rect.top()+lane as f32*18.}),egui::Align2::LEFT_TOP,format!("{} {}",idx+1,d.title),egui::FontId::proportional(12.),colors[idx%6]);
    }
-   let hits=self.paint_integrals(rect,range,&painter,&response);
-   let label_blocked=self.integral_interactions(ui,&hits);
+   let overlay=self.paint_integrals(rect,range,&painter,&response);
+   self.integral_overflow_menu(ui,&overlay);
+   let label_blocked=self.integral_interactions(ui,&overlay.labels) || overlay.overflow_rect.is_some_and(|r|ctx.pointer_hover_pos().is_some_and(|p|r.contains(p)));
    let integrating=self.integrate || ctx.input(|i|i.modifiers.shift) && self.integral_edit.is_none();
    self.integration_indicator(ui,rect,integrating);
 
