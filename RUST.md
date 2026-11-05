@@ -5,11 +5,11 @@ The earlier integration regression is fixed. Native integration, phase preview, 
 Build once with `bash build-rust.sh`, then launch with `bash run.sh`.
 The launcher executes the release binary directly, with library paths recorded during the build. It does not compile or evaluate Nix during startup. Rebuild explicitly after changing source. `Cargo.lock` pins dependencies. Build outputs are ignored and must be rebuilt after cloning. The desktop entry uses this launcher.
 
-The Java/C viewer remains available with `bash run.sh --legacy` or `bash run-legacy.sh`. Its original source, scientific regression suite, reference captures and Git history are retained.
+The earlier Java/C source and scientific regression references remain in the repository. The native UI and default launcher do not launch that application.
 
 ## TopSpin-style layout
 
-The Rust UI follows the retained TopSpin reference layout: Process/Analyze/Manage navigation, a processing ribbon, a separate view toolbar, left data browser, open-spectrum tabs, optional right display/analysis controls through the Display button, and bottom SPECTRUM/INTEGRALS/FID tabs. The INTEGRALS tab shows measurements as a table. Commands marked ↗ open the retained application for validated processing; FID opens there too. The command bar supports `.all`, `.ph`, `int`, `.multi`, `.csv`, `efp`, `.cal`, and `.basl`. Gruvbox colors remain in use.
+The Rust UI follows the retained TopSpin reference layout: Process/Analyze/Manage navigation, a processing ribbon, a separate view toolbar, left data browser, open-spectrum tabs, optional right display/analysis controls through the Display button, and bottom SPECTRUM/INTEGRALS tabs. The INTEGRALS tab shows measurements as a table. The command bar supports `.all`, `.ph`, `int`, `.multi`, `.csv`, and `.basl`. Gruvbox colors remain in use.
 
 ## Comparison workflow
 
@@ -25,7 +25,11 @@ Choose **Process → Baseline**, or enter `.basl`, for a native manual polynomia
 
 Spectrum baseline correction modifies the samples used by integrations. Per-region integral baseline correction adjusts the integral only. Both are distinct from the vertical display offset. Changes trigger recalculation of affected integral curves; they are no longer fixed measurement snapshots.
 
-CSV export writes `spectrum.csv` inside the selected processing folder, in a worker thread, containing ppm, original real/imaginary values and the corrected processed preview. Values use round-trip scientific precision. It refuses to overwrite an existing file. Comparison files save paths, phase/polynomial settings, region correction options, normalization, layout and view range as JSON, also refusing overwrites. Version 2 comparisons reload and recompute corrected values; old version 1 measurement snapshots are migrated and recalculated rather than trusted. Data remains external to comparison files. Original Bruker components and processing parameters remain unchanged; native Bruker write parity is not claimed.
+Use **Manage → Working project** to save a new `.nmrproj` directory. It contains exact float64 source components, a full acquisition snapshot for each selected processing number, SHA256 checksums, and versioned JSON edit recipes. Once saved, the app uses those native components and autosaves edits to new revisions. Closing the app flushes an active project's applied edits. Preview-only baseline edits are excluded until Apply. Projects use relative paths and reopen even after the original acquisition has moved. Drop a project folder onto the app, enter its path, or use **Open project**. Saving to a different new directory creates another portable project.
+
+Use **Manage → Export** and choose a fresh destination outside acquisition directories. **Bruker / TopSpin** exports the selected spectrum as a normal dataset/experiment/pdata tree, including raw acquisition files, corrected `1r`/`1i`, `proc`/`procs`, `intrng` and `integrals.txt`. Phase uses the validated native save kernel; baseline results are quantized to the existing Bruker NC_proc. Saved integrals are recalculated from the final integer spectrum. Normalization and effective region bias/slope are preserved. Export keeps genuine source headers and audit files, without generating fake TopSpin processing history or adding application branding. No claim of forensic indistinguishability is made. See [PROJECT-FORMAT.md](PROJECT-FORMAT.md) for the format and validation scope.
+
+**Spectrum and integrals CSV** writes two files in a new export directory. Spectrum columns are index, ppm, source real/imaginary and corrected real/imaginary. Missing imaginary components are empty fields. Integration columns include bounds, raw/normalized areas, effective bias/slope and normalization factor. Floating values use round-trip scientific precision. These CSVs describe the floating preview, before Bruker integer quantization. Neither CSV nor project/Bruker export writes into an original acquisition. Existing `.nmr.json` comparisons still work as lightweight path-based sessions; they do not include the underlying data.
 
 The **Stack** window appears only when at least two spectra are visible and stays anchored at the top-right corner. Drag its rows to change order, click a row to select a spectrum, or uncheck it to hide it. The window can be resized and collapsed; its position stays anchored. Stack order is saved with comparison files. Reordering and closing individual tabs preserve the other spectra's integral ownership and processing settings.
 
@@ -35,26 +39,9 @@ Folder scans, file reads and CSV writes run off the UI thread. Traces use min/ma
 
 `bash run.sh --smoke [dataset paths...]` logs time to the first UI update and time until requested datasets have loaded and generated plot geometry, then exits. These are application instrumentation points, not compositor presentation timestamps or cold disk-cache benchmarks.
 
-## Parity status
+## Implemented native features
 
-| Capability | Rust | Retained Java/C |
-|---|---|---|
-| Processed int32 1D reader, endian and NC_proc scaling | Implemented, differential check available | Validated |
-| Multiple spectra, overlay / stacked, linked navigation | Implemented | Single dataset |
-| Gruvbox theme | Implemented | Implemented |
-| Phase preview | Original recurrence; differential and captured checks pass | Validated |
-| Integration | Native curves, bias/slope, endpoint correction, normalization and saved-region import; exact checks pass | Validated correction, normalization and saving |
-| Manual polynomial baseline | Native degree 0–4, preview/apply/cancel/undo; exact model checks pass | Not implemented |
-| Automatic baseline commands | Pending | Not implemented |
-| Peak picking | Positive local maxima of processed preview | Not implemented |
-| Comparison files, CSV | Implemented | Not implemented |
-| Raw 1D acquisition opening and processing | Native Rust reader + validated C FFT, within existing format/cache limits | Supported within documented limits |
-| FID time-domain tab, ZIP opening | Retained app | Supported |
-| Bruker phase / integration / calibration writes | Pending | Validated, recoverable saves |
-| Browser filesystem watching and remembered roots | Pending | Implemented |
-| Multidimensional spectra, acquisition control | Pending | Not implemented |
-
-Full TopSpin parity is not achieved by either version. The historical README's numerical validation claims apply to the retained Java/C implementation only.
+The app includes processed and supported raw 1D opening, natural-sort dataset browsing, overlay/stack comparisons, phase adjustment, manual degree 0–4 polynomial baseline correction, integration with region corrections and normalization, positive local-maximum peak picking, portable working projects, Bruker export and CSV export. The UI lists these native actions only. Full TopSpin feature parity remains outside the current implementation.
 
 ## Validation
 

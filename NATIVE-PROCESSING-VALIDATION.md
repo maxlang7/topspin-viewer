@@ -56,7 +56,7 @@ The native release is also launched with a saved integration dataset to exercise
 
 The original Rust integration failure is fixed for the tested supported inputs. These checks establish scoped numerical equivalence; they do not establish equivalence of every possible TopSpin action.
 
-Automatic TopSpin `abs` modes, exponential/sinusoidal manual baseline functions, native Bruker processing-file writes, and complete original-controller interaction/save sequencing are outside this certification. The processing model is a non-destructive phase-then-polynomial pipeline. Native comparisons/CSV preserve that model; source Bruker files are not overwritten. Use the retained application or licensed TopSpin for unsupported commands and Bruker saves. An in-memory polynomial preview is not a claim of bit-identical persisted `1r` after TopSpin's quantization and save commands.
+Automatic TopSpin `abs` modes, exponential/sinusoidal manual baseline functions, and complete original-controller interaction/save sequencing are outside this certification. The processing model is a non-destructive phase-then-polynomial pipeline. Native projects/comparisons/CSV preserve that model; source Bruker files are not overwritten. Native Bruker export has the separate scoped checks recorded in [PROJECT-FORMAT.md](PROJECT-FORMAT.md). An in-memory polynomial preview is not a claim of bit-identical persisted `1r` after TopSpin's quantization and save commands.
 
 ## Native raw opening and stack interactions
 
