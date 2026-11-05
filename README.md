@@ -23,3 +23,5 @@ Undo scientific edits with Ctrl+Z; redo with Ctrl+Shift+Z or Ctrl+Y. History fol
 Use **Process** to preview automatic phase, automatic baseline, or both. Calculations run in the background. Compare **Before / After**, then **Accept processing** or **Cancel**. Only accepted processing autosaves and enters undo history. These independent algorithms target routine positive 1D spectra; broad or inverted signals need review. Automatic baseline is a robust degree-four polynomial fit, not TopSpin's automatic `abs` algorithm.
 
 **Process → Reference chemical shifts** lets you pick a peak, enter its known ppm, and apply the reference. Matching nucleus/solvent suggestions currently cover 1H and 13C in CDCl3 and DMSO-d6. Referencing is undoable and persists in projects, CSV and Bruker exports. It leaves source samples and existing integration sample intervals unchanged.
+
+**Ctrl+Alt+P** starts a combined automatic phase/baseline preview. **Enter** accepts the ready preview; **Escape** cancels it. Enter continues to belong to text fields while typing and does not accept processing behind another dialog or popup.

@@ -38,6 +38,40 @@ impl App {
             return;
         }
         let modifiers = ctx.input(|i| i.modifiers);
+        if modifiers.ctrl
+            && modifiers.alt
+            && !modifiers.shift
+            && ctx.input_mut(|i| i.consume_key(modifiers, egui::Key::P))
+        {
+            if !self.has_processing_preview() && self.auto_job.is_none() {
+                self.select_tool(workspace::Tool::Process);
+            }
+            self.start_auto_process(auto_process::Kind::Both, ctx);
+            return;
+        }
+        if modifiers == egui::Modifiers::NONE
+            && self.auto_preview.is_some()
+            && !egui::Popup::is_any_open(ctx)
+            && !self.show_settings
+            && !self.show_export
+            && ctx.input(|i| {
+                i.events.iter().any(|e| {
+                    matches!(
+                        e,
+                        egui::Event::Key {
+                            key: egui::Key::Enter,
+                            pressed: true,
+                            repeat: false,
+                            ..
+                        }
+                    )
+                })
+            })
+        {
+            ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Enter));
+            self.finish_auto_process(true);
+            return;
+        }
         if modifiers.ctrl && !modifiers.alt {
             let undo = ctx.input_mut(|i| i.consume_key(modifiers, egui::Key::Z));
             let redo = ctx.input_mut(|i| i.consume_key(modifiers, egui::Key::Y));
@@ -140,5 +174,85 @@ mod tests {
         });
         key(&ctx, &mut a, egui::Key::E, egui::Modifiers::CTRL);
         assert!(!a.show_export);
+    }
+}
+
+#[cfg(test)]
+mod auto_shortcut_tests {
+    use super::*;
+    fn press(a: &mut App, ctx: &egui::Context, key: egui::Key, modifiers: egui::Modifiers) {
+        let _ = ctx.run(
+            egui::RawInput {
+                modifiers,
+                events: vec![egui::Event::Key {
+                    key,
+                    physical_key: None,
+                    pressed: true,
+                    repeat: false,
+                    modifiers,
+                }],
+                ..Default::default()
+            },
+            |ctx| a.handle_shortcuts(ctx),
+        );
+    }
+    #[test]
+    fn automatic_preview_shortcut_and_enter_accept_one_undoable_edit() {
+        let mut a = auto_process::tests::app();
+        let ctx = egui::Context::default();
+        let before = a.traces[0].settings.baseline;
+        press(
+            &mut a,
+            &ctx,
+            egui::Key::P,
+            egui::Modifiers {
+                ctrl: true,
+                alt: true,
+                ..Default::default()
+            },
+        );
+        assert!(a.auto_job.is_some());
+        assert_eq!(a.active_tool, workspace::Tool::Process);
+        let deadline = Instant::now() + std::time::Duration::from_secs(5);
+        while a.auto_job.is_some() {
+            a.poll_auto_process(&ctx);
+            assert!(Instant::now() < deadline);
+            std::thread::sleep(std::time::Duration::from_millis(2));
+        }
+        assert!(a.auto_preview.is_some());
+        let mut text = String::new();
+        let _ = ctx.run(Default::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                ui.text_edit_singleline(&mut text).request_focus();
+            });
+        });
+        press(&mut a, &ctx, egui::Key::Enter, egui::Modifiers::NONE);
+        assert!(
+            a.auto_preview.is_some(),
+            "Enter in a text field must not accept processing"
+        );
+        let _ = ctx.run(
+            egui::RawInput {
+                events: vec![egui::Event::Key {
+                    key: egui::Key::Enter,
+                    physical_key: None,
+                    pressed: false,
+                    repeat: false,
+                    modifiers: egui::Modifiers::NONE,
+                }],
+                ..Default::default()
+            },
+            |_| {},
+        );
+        ctx.memory_mut(|m| {
+            if let Some(id) = m.focused() {
+                m.surrender_focus(id);
+            }
+        });
+        press(&mut a, &ctx, egui::Key::Enter, egui::Modifiers::NONE);
+        assert!(a.auto_preview.is_none());
+        assert_ne!(a.traces[0].settings.baseline, before);
+        a.undo_redo(false);
+        assert_eq!(a.traces[0].settings.baseline, before);
     }
 }

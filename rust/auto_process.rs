@@ -170,7 +170,10 @@ impl App {
             return;
         }
         if self.auto_preview.is_some() {
-            ui.colored_label(self.palette().accent, "Preview only · not saved");
+            ui.colored_label(
+                self.palette().accent,
+                "Preview only · not saved · Enter accepts, Escape cancels",
+            );
             let mut apply = None;
             let error_color = self.palette().error;
             let p = self.auto_preview.as_mut().unwrap();
@@ -211,7 +214,7 @@ impl App {
             if ui
                 .add_enabled(
                     phase_available,
-                    egui::Button::new("Preview automatic phase + baseline"),
+                    egui::Button::new("Preview automatic phase + baseline · Ctrl+Alt+P"),
                 )
                 .clicked()
             {
