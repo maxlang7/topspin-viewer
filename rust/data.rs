@@ -210,6 +210,23 @@ pub fn discover_browser(root: &Path) -> Result<Vec<PathBuf>, String> {
     discover_impl(root, true)
 }
 pub fn dataset_name(path: &Path) -> String {
+    // Labels are immutable for an opened dataset. Avoid filesystem reads on every repaint
+    // and in each natural-sort comparison, especially on mounted acquisition folders.
+    static NAMES: std::sync::OnceLock<
+        std::sync::Mutex<std::collections::HashMap<PathBuf, String>>,
+    > = std::sync::OnceLock::new();
+    let cache = NAMES.get_or_init(Default::default);
+    if let Some(name) = cache.lock().unwrap().get(path).cloned() {
+        return name;
+    }
+    let name = read_dataset_name(path);
+    cache
+        .lock()
+        .unwrap()
+        .insert(path.to_path_buf(), name.clone());
+    name
+}
+fn read_dataset_name(path: &Path) -> String {
     if path.join("spectrum.json").is_file() {
         return fs::read_to_string(path.join("label.txt"))
             .unwrap_or_else(|_| "Spectrum".into())

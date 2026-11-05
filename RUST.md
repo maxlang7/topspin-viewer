@@ -125,3 +125,11 @@ CSV writes referenced ppm and referenced integral bounds. Bruker exports update 
 Nucleus and solvent are read from the saved acquisition parameters when available and remain editable for choosing a suggestion. Suggestions are intentionally limited to 1H/13C CDCl3 and DMSO-d6. The values used are 7.26/77.16 ppm and 2.50/39.52 ppm respectively, as reported in this [primary experimental source](https://pubs.acs.org/doi/pdf/10.1021/acs.organomet.5b00097). They are suggestions, not automatic signal assignments, and sample conditions can change shifts. Unsupported nucleus/solvent combinations require a manually entered reference.
 
 **Ctrl+Alt+P** starts a combined automatic phase/baseline preview. **Enter** accepts the ready preview; **Escape** cancels it. Enter continues to belong to text fields while typing and does not accept processing behind another dialog or popup.
+
+## Idle responsiveness diagnostics
+
+The launcher now prefers the per-application XWayland backend when DISPLAY is available, following reports of idle “not responding” dialogs under native Wayland. This is a compatibility workaround; the intermittent native-Wayland stall was not reproduced during investigation. No compositor configuration or global ANR setting is changed. Use `NMR_VIEWER_BACKEND=wayland bash run.sh` to explicitly test native Wayland, or `NMR_VIEWER_BACKEND=x11 bash run.sh` to request X11.
+
+Each launch preserves stderr in a new timestamped log under `$XDG_STATE_HOME/nmr-viewer`, falling back to `~/.local/state/nmr-viewer`. The launch line records the chosen backend. Slow application stages exceeding 250 ms produce NMR_SLOW entries. A background heartbeat requests repaint every two seconds and reports an overdue UI heartbeat, with the last stage, after six seconds. An overdue heartbeat can also occur when a compositor suppresses drawing for an occluded window; it is a diagnostic clue rather than proof of a deadlock.
+
+Dataset labels are cached instead of repeatedly reading filesystem metadata during drawing and natural-sort comparisons. The application's remaining synchronous processing and explicit portable-project saving can still take time for unusually large inputs. If a warning returns, the log can distinguish observed slow application work from a gap outside the update callback. The current session is not replaced automatically after rebuilding.

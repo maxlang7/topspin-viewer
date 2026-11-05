@@ -5,6 +5,7 @@ mod automatic;
 mod branding;
 mod bruker_export;
 mod data;
+mod diagnostics;
 mod history;
 mod integral_actions;
 mod integral_plot;
@@ -215,6 +216,7 @@ impl App {
             Err(e) => s.status = format!("Appearance settings: {e}"),
         }
         s.theme.apply(&cc.egui_ctx);
+        diagnostics::start(cc.egui_ctx.clone());
         s.automatic_root = Some(PathBuf::from(project::default_path("NMR Projects", "")));
         if paths.is_empty()
             && let Some(home) = std::env::var_os("HOME")
@@ -624,6 +626,7 @@ impl App {
 }
 impl eframe::App for App {
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
+        diagnostics::stop();
         self.finish_auto_process(false);
         if self.baseline_open {
             self.finish_baseline(false);
@@ -632,6 +635,7 @@ impl eframe::App for App {
         self.flush_project();
     }
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        let _frame_timer = diagnostics::stage(1);
         while let Ok(m) = self.rx.try_recv() {
             self.handle_message(m, ctx);
         }
@@ -758,9 +762,16 @@ impl eframe::App for App {
                     self.sidebar_open(p, stack, ctx.clone());
                 }
             });
-        self.tool_panel(ctx);
+        {
+            let _timer = diagnostics::stage(5);
+            self.tool_panel(ctx);
+        }
         self.spectrum_tabs(ctx);
-        self.refresh_processing();
+        {
+            let _timer = diagnostics::stage(2);
+            self.refresh_processing();
+        }
+        let plot_timer = diagnostics::stage(3);
         egui::CentralPanel::default().show(ctx,|ui|{
    if self.data_tab==1 {self.integral_table(ui);return;}
 
@@ -797,10 +808,14 @@ impl eframe::App for App {
 
    if self.traces.is_empty(){painter.text(rect.center(),egui::Align2::CENTER_CENTER,"Open a Bruker dataset folder to begin\nAdd several spectra for overlay or stacked comparison",egui::FontId::proportional(20.),colors[0]);}
   });
+        drop(plot_timer);
         self.stack_window(ctx);
         self.track_history(ctx);
-        self.autosave_automatic(ctx);
-        self.autosave_project(ctx);
+        {
+            let _timer = diagnostics::stage(4);
+            self.autosave_automatic(ctx);
+            self.autosave_project(ctx);
+        }
         if self.first_frame {
             self.first_frame = false;
             eprintln!(
