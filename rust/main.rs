@@ -3,6 +3,7 @@ mod automatic;
 mod branding;
 mod bruker_export;
 mod data;
+mod history;
 mod integral_actions;
 mod integral_plot;
 mod native_ui;
@@ -14,6 +15,7 @@ mod shortcuts;
 mod stack;
 mod storage;
 mod ui;
+mod workspace;
 use data::Spectrum;
 use eframe::egui::{self, Color32, Pos2, Stroke};
 use serde::{Deserialize, Serialize};
@@ -44,6 +46,8 @@ struct Settings {
     integral_scale: f64,
     #[serde(default = "frozen")]
     normalization_frozen: bool,
+    #[serde(default)]
+    checkpoints: Vec<history::Checkpoint>,
 }
 fn frozen() -> bool {
     true
@@ -96,6 +100,7 @@ struct Trace {
     revision: u64,
     processed_max: f64,
     baseline_undo: Option<[f64; 5]>,
+    history: history::History,
 }
 #[derive(Serialize, Deserialize)]
 struct Session {
@@ -134,7 +139,9 @@ struct App {
     show_inspector: bool,
     theme: appearance::Theme,
     show_settings: bool,
-    show_phase: bool,
+    active_tool: workspace::Tool,
+    checkpoint_name: String,
+    history_wheel_at: Option<Instant>,
     show_export: bool,
     cancel_plot_drag: bool,
     data_tab: usize,
@@ -279,6 +286,7 @@ impl App {
                         baseline: [0.; 5],
                         integral_scale: s.integral_scale,
                         normalization_frozen: !s.saved_regions.is_empty(),
+                        checkpoints: vec![],
                     });
                     if import_saved {
                         for row in &s.saved_regions {
@@ -307,6 +315,7 @@ impl App {
                         revision: 0,
                         processed_max: 1.,
                         baseline_undo: None,
+                        history: history::History::default(),
                     });
                     if view.epoch == self.view_epoch {
                         self.selected = self.traces.len() - 1;
@@ -338,7 +347,9 @@ impl App {
             show_inspector: false,
             theme: appearance::Theme::default(),
             show_settings: false,
-            show_phase: false,
+            active_tool: workspace::Tool::Display,
+            checkpoint_name: String::new(),
+            history_wheel_at: None,
             show_export: false,
             cancel_plot_drag: false,
             data_tab: 0,
@@ -517,10 +528,11 @@ impl App {
             || s.range
                 .is_some_and(|r| !r[0].is_finite() || !r[1].is_finite() || r[0] <= r[1])
             || s.traces.iter().any(|t| {
-                ![t.gain, t.offset, t.p0, t.p1, t.integral_scale]
-                    .iter()
-                    .chain(t.baseline.iter())
-                    .all(|n| n.is_finite())
+                t.checkpoints.iter().any(|c| !c.valid())
+                    || ![t.gain, t.offset, t.p0, t.p1, t.integral_scale]
+                        .iter()
+                        .chain(t.baseline.iter())
+                        .all(|n| n.is_finite())
             })
         {
             return Err("Invalid comparison session".into());
@@ -604,12 +616,12 @@ impl eframe::App for App {
                 self.open(p, ctx.clone());
             }
         }
+        self.sync_history(false);
         self.handle_shortcuts(ctx);
         self.handle_integral_delete_shortcut(ctx);
         self.handle_sidebar_shortcut(ctx);
         self.topspin_chrome(ctx);
         self.settings_window(ctx);
-        self.phase_panel(ctx);
         self.export_window(ctx);
         self.hovered_sidebar = None;
         egui::SidePanel::left("browser")
@@ -718,50 +730,9 @@ impl eframe::App for App {
                     self.sidebar_open(p, stack, ctx.clone());
                 }
             });
-        if self.show_inspector {
-            egui::SidePanel::right("inspector").default_width(235.).min_width(180.).resizable(true).show(ctx,|ui|{
-            ui.heading("Display / analysis");
-            ui.horizontal(|ui|{ui.selectable_value(&mut self.stacked,false,"Overlay");ui.selectable_value(&mut self.stacked,true,"Stacked");});
-            ui.checkbox(&mut self.normalize,"Normalize spectra");
-            egui::ScrollArea::vertical().id_salt("inspector-scroll").show(ui,|ui|{
-                ui.separator();
-                if let Some(t) = self.traces.get_mut(self.selected) {
-                    ui.label(&t.data.title);
-                    ui.label(format!("{} samples", t.data.real.len()));
-                    ui.add(
-                        egui::Slider::new(&mut t.settings.gain, 0.001..=100.)
-                            .logarithmic(true)
-                            .text("Gain"),
-                    );
-                    ui.add(egui::Slider::new(&mut t.settings.offset, -2. ..=2.).text("Offset"));
-                }
-                self.integral_controls(ui);
-                ui.collapsing("Peak picking",|ui|{
-                ui.add(egui::Slider::new(&mut self.peak_threshold,0.001..=1.).logarithmic(true).text("Threshold"));
-                if ui.button("Pick selected spectrum").clicked() && let Some(t)=self.traces.get_mut(self.selected) {self.peaks=t.pick_peaks(self.peak_threshold);}
-                ui.label("Positive local maxima, up to 128 strongest. Threshold relative to source maximum.");
-                egui::ScrollArea::vertical().max_height(150.).show(ui,|ui|{for (ppm,value) in &self.peaks{ui.monospace(format!("{ppm:.5} ppm   {value:.3}"));}});
-            });
-            ui.collapsing("Comparison files", |ui| {
-                    ui.text_edit_singleline(&mut self.session_path);
-                    ui.horizontal(|ui| {
-                        if ui.button("Save new").clicked() {
-                            self.status = self.save_session().unwrap_or_else(|e| e);
-                        }
-                        if ui.button("Load").clicked() {
-                            self.status = self.restore(ctx.clone()).unwrap_or_else(|e| e);
-                        }
-                    });
-                });
-
-            });
-        });
-        }
-        self.baseline_controls(ctx);
+        self.tool_panel(ctx);
         self.spectrum_tabs(ctx);
         self.refresh_processing();
-        self.autosave_automatic(ctx);
-        self.autosave_project(ctx);
         egui::CentralPanel::default().show(ctx,|ui|{
    if self.data_tab==1 {self.integral_table(ui);return;}
 
@@ -799,6 +770,9 @@ impl eframe::App for App {
    if self.traces.is_empty(){painter.text(rect.center(),egui::Align2::CENTER_CENTER,"Open a Bruker dataset folder to begin\nAdd several spectra for overlay or stacked comparison",egui::FontId::proportional(20.),colors[0]);}
   });
         self.stack_window(ctx);
+        self.track_history(ctx);
+        self.autosave_automatic(ctx);
+        self.autosave_project(ctx);
         if self.first_frame {
             self.first_frame = false;
             eprintln!(

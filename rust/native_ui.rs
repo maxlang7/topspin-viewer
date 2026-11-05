@@ -152,109 +152,111 @@ impl App {
     }
     pub(super) fn integral_controls(&mut self, ui: &mut egui::Ui) {
         let error_color = self.palette().error;
-        ui.collapsing("Integrate", |ui| {
-            ui.horizontal(|ui| {
-                ui.label("From / to ppm");
-                ui.add(egui::DragValue::new(&mut self.region_a).speed(0.01));
-                ui.add(egui::DragValue::new(&mut self.region_b).speed(0.01));
-            });
-            ui.checkbox(
-                &mut self.region_baseline,
-                "Correct integral baseline from endpoints",
-            );
-            ui.add(
-                egui::DragValue::new(&mut self.region_points)
-                    .range(1..=65536)
-                    .prefix("Endpoint points "),
-            );
-            ui.add(
-                egui::DragValue::new(&mut self.region_bias)
-                    .speed(1.)
-                    .prefix("Bias "),
-            );
-            ui.add(
-                egui::DragValue::new(&mut self.region_slope)
-                    .speed(0.01)
-                    .prefix("Slope / point "),
-            );
-            if ui.button("Integrate ppm range").clicked() {
-                self.measure_region(self.region_a, self.region_b);
-            }
-            ui.separator();
-            ui.add(
-                egui::DragValue::new(&mut self.calibration_value)
-                    .speed(0.1)
-                    .prefix("Reference integral "),
-            );
-            let mut normalize = None;
-            let mut delete = None;
-            for (i, r) in self
-                .regions
-                .iter_mut()
-                .enumerate()
-                .filter(|(_, r)| r.trace == self.selected)
-            {
-                ui.collapsing(
-                    format!("#{} {:.3} – {:.3}", i + 1, r.left, r.right),
-                    |ui| {
-                        ui.add(
-                            egui::DragValue::new(&mut r.left)
-                                .speed(0.01)
-                                .prefix("From "),
-                        );
-                        ui.add(egui::DragValue::new(&mut r.right).speed(0.01).prefix("To "));
-                        ui.checkbox(&mut r.baseline, "Endpoint baseline correction");
-                        ui.add(
-                            egui::DragValue::new(&mut r.points)
-                                .range(1..=65536)
-                                .prefix("Endpoint points "),
-                        );
-                        ui.add(egui::DragValue::new(&mut r.bias).speed(1.).prefix("Bias "));
-                        ui.add(
-                            egui::DragValue::new(&mut r.slope)
-                                .speed(0.01)
-                                .prefix("Slope / point "),
-                        );
-                        let scale = self
-                            .traces
-                            .get(r.trace)
-                            .map(|t| t.settings.integral_scale)
-                            .unwrap_or(1.);
-                        ui.label(format!(
-                            "Raw {:.8} · normalized {:.8}",
-                            r.value,
-                            r.value * scale
-                        ));
-                        if let Some(e) = &r.error {
-                            ui.colored_label(error_color, e);
-                        }
-                        if ui.button("Set as reference").clicked() {
-                            normalize = Some(i);
-                        }
-                        if ui.button("Remove region").clicked() {
-                            delete = Some(i);
-                        }
-                    },
+        egui::CollapsingHeader::new("Integrate")
+            .default_open(true)
+            .show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    ui.label("From / to ppm");
+                    ui.add(egui::DragValue::new(&mut self.region_a).speed(0.01));
+                    ui.add(egui::DragValue::new(&mut self.region_b).speed(0.01));
+                });
+                ui.checkbox(
+                    &mut self.region_baseline,
+                    "Correct integral baseline from endpoints",
                 );
-            }
-            if let Some(i) = delete {
-                self.delete_integral(i);
-            }
-            if let Some(i) = normalize
-                && let Err(e) = self.calibrate_integral(i, self.calibration_value)
-            {
-                self.status = e;
-            }
-            if ui.button("Clear selected spectrum's regions").clicked() {
-                self.regions.retain(|r| r.trace != self.selected);
-                self.integral_edit = None;
-                self.selected_integral = None;
-                self.hovered_integral = None;
-                if let Some(t) = self.traces.get_mut(self.selected) {
-                    t.settings.normalization_frozen = false;
+                ui.add(
+                    egui::DragValue::new(&mut self.region_points)
+                        .range(1..=65536)
+                        .prefix("Endpoint points "),
+                );
+                ui.add(
+                    egui::DragValue::new(&mut self.region_bias)
+                        .speed(1.)
+                        .prefix("Bias "),
+                );
+                ui.add(
+                    egui::DragValue::new(&mut self.region_slope)
+                        .speed(0.01)
+                        .prefix("Slope / point "),
+                );
+                if ui.button("Integrate ppm range").clicked() {
+                    self.measure_region(self.region_a, self.region_b);
                 }
-            }
-        });
+                ui.separator();
+                ui.add(
+                    egui::DragValue::new(&mut self.calibration_value)
+                        .speed(0.1)
+                        .prefix("Reference integral "),
+                );
+                let mut normalize = None;
+                let mut delete = None;
+                for (i, r) in self
+                    .regions
+                    .iter_mut()
+                    .enumerate()
+                    .filter(|(_, r)| r.trace == self.selected)
+                {
+                    ui.collapsing(
+                        format!("#{} {:.3} – {:.3}", i + 1, r.left, r.right),
+                        |ui| {
+                            ui.add(
+                                egui::DragValue::new(&mut r.left)
+                                    .speed(0.01)
+                                    .prefix("From "),
+                            );
+                            ui.add(egui::DragValue::new(&mut r.right).speed(0.01).prefix("To "));
+                            ui.checkbox(&mut r.baseline, "Endpoint baseline correction");
+                            ui.add(
+                                egui::DragValue::new(&mut r.points)
+                                    .range(1..=65536)
+                                    .prefix("Endpoint points "),
+                            );
+                            ui.add(egui::DragValue::new(&mut r.bias).speed(1.).prefix("Bias "));
+                            ui.add(
+                                egui::DragValue::new(&mut r.slope)
+                                    .speed(0.01)
+                                    .prefix("Slope / point "),
+                            );
+                            let scale = self
+                                .traces
+                                .get(r.trace)
+                                .map(|t| t.settings.integral_scale)
+                                .unwrap_or(1.);
+                            ui.label(format!(
+                                "Raw {:.8} · normalized {:.8}",
+                                r.value,
+                                r.value * scale
+                            ));
+                            if let Some(e) = &r.error {
+                                ui.colored_label(error_color, e);
+                            }
+                            if ui.button("Set as reference").clicked() {
+                                normalize = Some(i);
+                            }
+                            if ui.button("Remove region").clicked() {
+                                delete = Some(i);
+                            }
+                        },
+                    );
+                }
+                if let Some(i) = delete {
+                    self.delete_integral(i);
+                }
+                if let Some(i) = normalize
+                    && let Err(e) = self.calibrate_integral(i, self.calibration_value)
+                {
+                    self.status = e;
+                }
+                if ui.button("Clear selected spectrum's regions").clicked() {
+                    self.regions.retain(|r| r.trace != self.selected);
+                    self.integral_edit = None;
+                    self.selected_integral = None;
+                    self.hovered_integral = None;
+                    if let Some(t) = self.traces.get_mut(self.selected) {
+                        t.settings.normalization_frozen = false;
+                    }
+                }
+            });
     }
     pub(super) fn integral_table(&mut self, ui: &mut egui::Ui) {
         ui.heading("INTEGRALS");
@@ -293,6 +295,7 @@ impl App {
         });
     }
     pub fn begin_baseline(&mut self) {
+        self.select_tool(workspace::Tool::Baseline);
         if self.baseline_open {
             return;
         }
@@ -303,9 +306,12 @@ impl App {
             self.status = "Open and select a spectrum first".into();
         }
     }
-    pub(super) fn baseline_controls(&mut self, ctx: &egui::Context) {
+    pub(super) fn baseline_editor(&mut self, ui: &mut egui::Ui) {
         let error_color = self.palette().error;
         if !self.baseline_open {
+            if ui.button("Edit baseline").clicked() {
+                self.begin_baseline();
+            }
             return;
         }
         let Some((path, _before)) = self.baseline_session.clone() else {
@@ -316,27 +322,61 @@ impl App {
             self.baseline_session = None;
             return;
         };
-        let mut open = true;
         let mut action = 0;
-        egui::Window::new("Manual baseline correction").open(&mut open).default_width(450.).show(ctx,|ui|{
+        {
             ui.label(data::dataset_name(&t.data.path));
-            ui.label("Polynomial baseline in sample coordinates: a0 + a1·i + a2·i² + a3·i³ + a4·i⁴");
+            ui.label(
+                "Polynomial baseline in sample coordinates: a0 + a1·i + a2·i² + a3·i³ + a4·i⁴",
+            );
             ui.label("Live preview over the full spectrum. Source files are unchanged.");
-            for i in 0..5{let speed=t.data.max_amplitude.max(1.)*0.001/(t.data.real.len()as f64).powi(i as i32);ui.horizontal(|ui|{ui.label(format!("a{i}"));ui.add(egui::DragValue::new(&mut t.settings.baseline[i]).speed(speed).custom_formatter(|v,_|format!("{v:.10e}")));});}
+            for i in 0..5 {
+                let speed = t.data.max_amplitude.max(1.) * 0.001
+                    / (t.data.real.len() as f64).powi(i as i32);
+                ui.horizontal(|ui| {
+                    ui.label(format!("a{i}"));
+                    ui.add(
+                        egui::DragValue::new(&mut t.settings.baseline[i])
+                            .speed(speed)
+                            .custom_formatter(|v, _| format!("{v:.10e}")),
+                    );
+                });
+            }
             ui.separator();
-            ui.add(egui::DragValue::new(&mut self.baseline_points).range(1..=t.data.real.len().div_ceil(2)).prefix("Points per endpoint "));
+            ui.add(
+                egui::DragValue::new(&mut self.baseline_points)
+                    .range(1..=t.data.real.len().div_ceil(2))
+                    .prefix("Points per endpoint "),
+            );
             if ui.button("Estimate linear coefficients from endpoints").on_hover_text("Starting estimate for the manual polynomial; not the automatic TopSpin abs command").clicked(){
                 let samples=processing::phase(&t.data.real,&t.data.imag,t.settings.p0,t.settings.p1,t.data.ft_size);let n=samples.len();let points=self.baseline_points.max(1).min(n.div_ceil(2));let mut first=0.;let mut last=0.;for i in 0..points{first+=samples[i];last+=samples[n-1-i];}first/=points as f64;last/=points as f64;let slope=if n>points{(last-first)/(n-points)as f64}else{0.};t.settings.baseline=[first-slope*(points-1)as f64/2.,slope,0.,0.,0.];
             }
-            if ui.button("Reset coefficients").clicked(){t.settings.baseline=[0.;5];}
-            if let Some(previous)=t.baseline_undo&&ui.button("Undo last applied correction").clicked(){t.settings.baseline=previous;}
-            let valid=t.refresh();if let Err(e)=&valid{ui.colored_label(error_color,e);}
-            ui.horizontal(|ui|{if ui.add_enabled(valid.is_ok(),egui::Button::new("Apply")).clicked(){action=1;}
-            if ui.button("Cancel").clicked(){action=2;}});
-        });
+            if ui.button("Reset coefficients").clicked() {
+                t.settings.baseline = [0.; 5];
+            }
+            if let Some(previous) = t.baseline_undo
+                && ui.button("Undo last applied correction").clicked()
+            {
+                t.settings.baseline = previous;
+            }
+            let valid = t.refresh();
+            if let Err(e) = &valid {
+                ui.colored_label(error_color, e);
+            }
+            ui.horizontal(|ui| {
+                if ui
+                    .add_enabled(valid.is_ok(), egui::Button::new("Apply"))
+                    .clicked()
+                {
+                    action = 1;
+                }
+                if ui.button("Cancel").clicked() {
+                    action = 2;
+                }
+            });
+        }
         if action == 1 {
             self.finish_baseline(true);
-        } else if action == 2 || !open {
+        } else if action == 2 {
             self.finish_baseline(false);
         }
     }
@@ -390,6 +430,7 @@ mod tests {
             baseline: [0.; 5],
             integral_scale: 1.,
             normalization_frozen: false,
+            checkpoints: vec![],
         };
         app.traces.push(Trace {
             data: Arc::new(data),
@@ -401,6 +442,7 @@ mod tests {
             revision: 0,
             processed_max: 1.,
             baseline_undo: None,
+            history: history::History::default(),
         });
         app.refresh_processing();
         app
@@ -559,7 +601,7 @@ mod tests {
         assert_eq!(fs::read(pdata.join("1r")).unwrap(), bytes);
     }
     #[test]
-    fn native_baseline_window_renders_without_legacy_application() {
+    fn docked_baseline_editor_renders_without_legacy_application() {
         let mut a = app();
         a.begin_baseline();
         let ctx = egui::Context::default();
@@ -570,7 +612,7 @@ mod tests {
             )),
             ..Default::default()
         };
-        let output = ctx.run(input, |ctx| a.baseline_controls(ctx));
+        let output = ctx.run(input, |ctx| a.tool_panel(ctx));
         assert!(!output.shapes.is_empty());
         assert!(a.baseline_open);
         assert_eq!(a.pending, 0);

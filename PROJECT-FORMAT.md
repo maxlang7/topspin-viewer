@@ -55,3 +55,7 @@ The regular suite now passes 29 tests, including automatic named-project/CSV cre
 The optimized release imported MLN1P117 and MLN1P121 into automatic projects. MLN1P117 retained all six saved integration regions. First UI update was 46.13 ms; initial two-spectrum conversion including CSVs reached ready state in 344.00 ms. Reopening their original paths reused the projects and reached ready state in 64.89 ms. These are application instrumentation points. Native tests, Clippy and the release build pass.
 
 Import preserves phase already applied to processed 1r/1i and records original PHC0/PHC1. Additional phase is stored separately in the recipe. Saved intrng bounds, bias/slope and INTSCL normalization are included. Bruker export writes corrected components, accumulated status phase, the latest phase increment, integration regions and normalization. It cannot import unsaved changes held only in a separate TopSpin process.
+
+## Named processing checkpoints
+
+The optional `checkpoints` array in each spectrum's settings stores named phase, baseline, integral-region and normalization recipes. Older projects without it open with an empty checkpoint list. Checkpoints contain no source paths or sample arrays, so portable project copies retain them. They are internal project metadata and are not written into Bruker processing files. The interactive undo/redo stack is session-only; named checkpoints persist in ordinary project revisions and autosaves.

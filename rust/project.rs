@@ -306,6 +306,7 @@ mod tests {
         let (mut a, root, source) = fixture();
         let original = storage::digest(&source.join("1r")).unwrap();
         a.project_path = root.join("work.nmrproj").display().to_string();
+        a.create_checkpoint("Imported");
         a.save_project().unwrap();
         let before = a.traces[0].processed.clone();
         let first = fs::read_to_string(Path::new(&a.project_path).join("HEAD")).unwrap();
@@ -322,6 +323,7 @@ mod tests {
         b.refresh_processing();
         assert_eq!(*before, *b.traces[0].processed);
         assert_eq!(b.traces[0].settings.gain, 3.);
+        assert_eq!(b.traces[0].settings.checkpoints[0].name, "Imported");
         assert_eq!(a.regions[0].value.to_bits(), b.regions[0].value.to_bits());
         let out = root.join("portable-export");
         crate::bruker_export::export(&out, &b.traces[0].data, &b.traces[0].settings, &b.regions)
@@ -511,6 +513,7 @@ mod tests {
                 baseline: [0.; 5],
                 integral_scale: 1.,
                 normalization_frozen: true,
+                checkpoints: vec![],
             };
             let (re, im) = crate::bruker_export::saved(&spectrum, &settings).unwrap();
             for (a, b) in re

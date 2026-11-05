@@ -346,6 +346,7 @@ mod tests {
                 baseline: [0.; 5],
                 integral_scale: 1.,
                 normalization_frozen: false,
+                checkpoints: vec![],
             };
             a.traces.push(Trace {
                 data: Arc::new(data),
@@ -355,6 +356,7 @@ mod tests {
                 revision: 0,
                 processed_max: 1.,
                 baseline_undo: None,
+                history: history::History::default(),
                 cache_key: String::new(),
                 cache: vec![],
             });

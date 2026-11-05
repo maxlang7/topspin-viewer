@@ -169,6 +169,7 @@ pub(super) fn import(source: &Path, base: &Path) -> Result<Imported, String> {
             baseline: [0.; 5],
             integral_scale: data.integral_scale,
             normalization_frozen: !data.saved_regions.is_empty(),
+            checkpoints: vec![],
         };
         let regions = data
             .saved_regions
@@ -219,16 +220,17 @@ pub(super) fn import(source: &Path, base: &Path) -> Result<Imported, String> {
         return Err("Invalid automatic project recipe".into());
     }
     let mut settings = session.traces.into_iter().next().unwrap();
-    if ![
-        settings.p0,
-        settings.p1,
-        settings.gain,
-        settings.offset,
-        settings.integral_scale,
-    ]
-    .iter()
-    .chain(&settings.baseline)
-    .all(|v| v.is_finite())
+    if settings.checkpoints.iter().any(|c| !c.valid())
+        || ![
+            settings.p0,
+            settings.p1,
+            settings.gain,
+            settings.offset,
+            settings.integral_scale,
+        ]
+        .iter()
+        .chain(&settings.baseline)
+        .all(|v| v.is_finite())
     {
         return Err("Invalid automatic processing settings".into());
     }
@@ -411,6 +413,7 @@ mod tests {
             .iter()
             .map(|r| r.value.to_bits())
             .collect::<Vec<_>>();
+        a.create_checkpoint("Processed");
         a.flush_automatic();
         let csv = fs::read_to_string(project.join("sample.csv")).unwrap();
         for (row, v) in csv.lines().skip(1).zip(expected.iter()) {
@@ -429,6 +432,16 @@ mod tests {
         receive(&mut b);
         assert_eq!(b.traces[0].settings.p0, 17.25);
         assert_eq!(b.traces[0].settings.p1, -32.5);
+        assert_eq!(b.traces[0].settings.checkpoints[0].name, "Processed");
+        b.sync_history(true);
+        b.traces[0].settings.p0 = 23.;
+        b.sync_history(true);
+        b.restore_checkpoint(0);
+        assert_eq!(b.traces[0].settings.p0, 17.25);
+        b.undo_redo(false);
+        assert_eq!(b.traces[0].settings.p0, 23.);
+        b.undo_redo(true);
+        assert_eq!(b.traces[0].settings.p0, 17.25);
         assert_eq!(*b.traces[0].processed, *expected);
         assert_eq!(
             b.regions

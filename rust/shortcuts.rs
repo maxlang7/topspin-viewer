@@ -19,8 +19,8 @@ impl App {
                 self.show_export = false;
             } else if self.show_settings {
                 self.show_settings = false;
-            } else if self.show_phase {
-                self.show_phase = false;
+            } else if self.show_inspector {
+                self.show_inspector = false;
             } else {
                 self.integrate = false;
                 self.selected_integral = None;
@@ -34,6 +34,14 @@ impl App {
             return;
         }
         let modifiers = ctx.input(|i| i.modifiers);
+        if modifiers.ctrl && !modifiers.alt {
+            let undo = ctx.input_mut(|i| i.consume_key(modifiers, egui::Key::Z));
+            let redo = ctx.input_mut(|i| i.consume_key(modifiers, egui::Key::Y));
+            if undo || redo {
+                self.undo_redo(redo || modifiers.shift);
+                return;
+            }
+        }
         if modifiers.alt || modifiers.shift {
             return;
         }
@@ -59,7 +67,7 @@ impl App {
         match key {
             Some(egui::Key::Comma) => self.show_settings = true,
             Some(egui::Key::E) => self.show_export = true,
-            Some(egui::Key::P) => self.show_phase = true,
+            Some(egui::Key::P) => self.select_tool(workspace::Tool::Phase),
             Some(egui::Key::B) => self.begin_baseline(),
             _ => {}
         }
@@ -97,7 +105,7 @@ mod tests {
         assert!(a.show_export);
         assert_eq!(a.pending, 0);
         key(&ctx, &mut a, egui::Key::P, egui::Modifiers::CTRL);
-        assert!(a.show_phase);
+        assert!(a.show_inspector && a.active_tool == workspace::Tool::Phase);
         a.start = Some(3.);
         a.integration_drag_trace = Some(0);
         key(&ctx, &mut a, egui::Key::Escape, egui::Modifiers::NONE);

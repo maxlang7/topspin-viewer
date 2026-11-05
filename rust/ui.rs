@@ -25,20 +25,35 @@ impl App {
                             });
                         });
                         ui.menu_button("View", |ui| {
-                            ui.toggle_value(&mut self.show_inspector, "Display");
+                            if ui.button("Display").clicked() {
+                                self.select_tool(workspace::Tool::Display);
+                            }
                             ui.selectable_value(&mut self.stacked, false, "Overlay");
                             ui.selectable_value(&mut self.stacked, true, "Stacked");
                         });
                         ui.menu_button("Tools", |ui| {
+                            if ui.button("History / checkpoints").clicked() {
+                                self.select_tool(workspace::Tool::History);
+                            }
                             if ui.button("Peak picking").clicked()
                                 && let Some(t) = self.traces.get_mut(self.selected)
                             {
                                 self.peaks = t.pick_peaks(self.peak_threshold);
-                                self.show_inspector = true;
+                                self.select_tool(workspace::Tool::Peaks);
                             }
                         });
-                        if ui.selectable_label(self.show_phase, "Phase").clicked() {
-                            self.show_phase = !self.show_phase;
+                        if ui
+                            .selectable_label(
+                                self.show_inspector && self.active_tool == workspace::Tool::Phase,
+                                "Phase",
+                            )
+                            .clicked()
+                        {
+                            if self.show_inspector && self.active_tool == workspace::Tool::Phase {
+                                self.show_inspector = false;
+                            } else {
+                                self.select_tool(workspace::Tool::Phase);
+                            }
                         }
                         if ui
                             .button("Baseline")
@@ -50,6 +65,7 @@ impl App {
                         if ui.selectable_label(self.integrate, "∫ Integrate").clicked() {
                             self.integrate = !self.integrate;
                             self.data_tab = 0;
+                            self.select_tool(workspace::Tool::Integrals);
                         }
                         if ui
                             .button("×2")
@@ -68,6 +84,7 @@ impl App {
                             t.settings.gain = (t.settings.gain / 2.).max(0.001);
                         }
                         ui.separator();
+                        self.history_buttons(ui);
                         if ui.button("+").on_hover_text("Zoom in").clicked() {
                             let r = self.range.unwrap_or_else(|| self.full_range());
                             let m = (r[0] + r[1]) / 2.;
@@ -113,11 +130,12 @@ impl App {
                     match self.command.trim() {
                         ".all" => self.range = None,
                         ".ph" => {
-                            self.show_phase = true;
+                            self.select_tool(workspace::Tool::Phase);
                         }
                         "int" => {
                             self.integrate = true;
                             self.data_tab = 0;
+                            self.select_tool(workspace::Tool::Integrals);
                         }
                         ".multi" => self.stacked = !self.stacked,
                         ".csv" => self.export(ctx.clone()),
@@ -132,50 +150,34 @@ impl App {
             });
         });
     }
-    pub(super) fn phase_panel(&mut self, ctx: &egui::Context) {
-        if !self.show_phase {
-            return;
-        }
-        let mut open = true;
-        egui::TopBottomPanel::top("phase-controls").show(ctx, |ui| {
-            ui.horizontal(|ui| {
-                ui.strong("Phase correction");
-                if ui.small_button("Close").clicked() {
-                    open = false;
-                }
+    pub(super) fn phase_controls(&mut self, ui: &mut egui::Ui) {
+        if let Some(t) = self.traces.get_mut(self.selected) {
+            ui.horizontal_wrapped(|ui| {
+                ui.weak(format!(
+                    "Saved phase: PH0 {:.3}° · PH1 {:.3}°",
+                    t.data.phc0, t.data.phc1
+                ));
             });
-            if let Some(t) = self.traces.get_mut(self.selected) {
-                ui.horizontal_wrapped(|ui| {
-                    ui.label(data::dataset_name(&t.data.path));
-                    ui.weak(format!(
-                        "Saved phase: PH0 {:.3}° · PH1 {:.3}°",
-                        t.data.phc0, t.data.phc1
-                    ));
-                });
-                if t.data.imag.is_empty() {
-                    ui.label("No imaginary component");
-                } else {
-                    ui.horizontal_wrapped(|ui| {
-                        ui.add(
-                            egui::Slider::new(&mut t.settings.p0, -180. ..=180.)
-                                .text("PH0 adjustment"),
-                        );
-                        ui.add(
-                            egui::Slider::new(&mut t.settings.p1, -720. ..=720.)
-                                .text("PH1 adjustment"),
-                        );
-                        if ui.button("Reset adjustments").clicked() {
-                            t.settings.p0 = 0.;
-                            t.settings.p1 = 0.;
-                        }
-                    });
-                }
+            if t.data.imag.is_empty() {
+                ui.label("No imaginary component");
             } else {
-                ui.label("Open a spectrum to adjust its phase");
+                ui.horizontal_wrapped(|ui| {
+                    ui.add(
+                        egui::Slider::new(&mut t.settings.p0, -180. ..=180.).text("PH0 adjustment"),
+                    );
+                    ui.add(
+                        egui::Slider::new(&mut t.settings.p1, -720. ..=720.).text("PH1 adjustment"),
+                    );
+                    if ui.button("Reset adjustments").clicked() {
+                        t.settings.p0 = 0.;
+                        t.settings.p1 = 0.;
+                    }
+                });
             }
-            ui.weak("Edits autosave. Export Bruker to share with TopSpin.");
-        });
-        self.show_phase = open;
+        } else {
+            ui.label("Open a spectrum to adjust its phase");
+        }
+        ui.weak("Edits autosave. Export Bruker to share with TopSpin.");
     }
     pub fn spectrum_tabs(&mut self, ctx: &egui::Context) {
         egui::TopBottomPanel::top("open-spectra").show(ctx, |ui| {
@@ -236,7 +238,7 @@ mod tests {
                 let mut app = App::state(Instant::now(), false);
                 app.theme = theme;
                 app.show_settings = true;
-                app.show_phase = true;
+                app.select_tool(workspace::Tool::Phase);
                 let mut top = 0.;
                 let out = ctx.run(
                     egui::RawInput {
@@ -251,7 +253,7 @@ mod tests {
                         top = ctx.available_rect().top();
                         app.spectrum_tabs(ctx);
                         app.settings_window(ctx);
-                        app.phase_panel(ctx);
+                        app.tool_panel(ctx);
                     },
                 );
                 assert!(
@@ -263,7 +265,11 @@ mod tests {
                     ctx.style().visuals.dark_mode,
                     theme != appearance::Theme::Light
                 );
-                assert!(app.show_settings && app.show_phase);
+                assert!(
+                    app.show_settings
+                        && app.show_inspector
+                        && app.active_tool == workspace::Tool::Phase
+                );
             }
         }
     }
