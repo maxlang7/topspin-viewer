@@ -227,6 +227,9 @@ pub fn load(path: &Path) -> Result<Spectrum, String> {
         .unwrap_or("")
         .to_owned();
     Ok(Spectrum {
+        nc: exponent,
+        phc0: p0,
+        phc1: p1,
         path: path.to_owned(),
         title,
         real,

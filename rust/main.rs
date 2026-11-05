@@ -1,10 +1,13 @@
+mod bruker_export;
 mod data;
 mod integral_plot;
 mod native_ui;
 mod processing;
+mod project;
 #[cfg(feature = "native-raw")]
 mod raw;
 mod stack;
+mod storage;
 mod ui;
 use data::Spectrum;
 use eframe::egui::{self, Color32, Pos2, Stroke};
@@ -61,6 +64,23 @@ struct Region {
     error: Option<String>,
 }
 
+impl Region {
+    fn recipe(&self) -> Self {
+        Self {
+            trace: self.trace,
+            left: self.left,
+            right: self.right,
+            bias: self.bias,
+            slope: self.slope,
+            baseline: self.baseline,
+            points: self.points,
+            value: self.value,
+            calculation_key: vec![],
+            curve: vec![],
+            error: None,
+        }
+    }
+}
 struct Trace {
     data: Arc<Spectrum>,
     settings: Settings,
@@ -138,6 +158,11 @@ struct App {
     peaks: Vec<(f64, f64)>,
     peak_threshold: f64,
     session_path: String,
+    project_path: String,
+    export_path: String,
+    active_project: Option<PathBuf>,
+    saved_project_state: Vec<u8>,
+    project_changed_at: Option<Instant>,
     started: Instant,
     first_frame: bool,
     smoke: bool,
@@ -177,9 +202,7 @@ impl App {
             Message::Exported(r) => self.status = r.unwrap_or_else(|e| e),
             Message::Found(Ok(paths)) => {
                 if paths.is_empty() {
-                    self.status =
-                        "No processed 1D spectra found. Raw FIDs and ZIPs: use run-legacy.sh."
-                            .into()
+                    self.status = "No supported 1D Bruker spectra found.".into()
                 } else {
                     self.status = format!(
                         "Found {} spectra. Select rows to add to comparison.",
@@ -300,6 +323,11 @@ impl App {
             peaks: vec![],
             peak_threshold: 0.05,
             session_path: "comparison.nmr.json".into(),
+            project_path: project::default_path("NMR Projects", "comparison.nmrproj"),
+            export_path: project::default_path("NMR Exports", "export"),
+            active_project: None,
+            saved_project_state: vec![],
+            project_changed_at: None,
             started,
             first_frame: true,
             smoke,
@@ -342,6 +370,15 @@ impl App {
         });
     }
     fn open(&mut self, p: PathBuf, ctx: egui::Context) {
+        if p.join("project.json").is_file() {
+            self.project_path = p.display().to_string();
+            self.status = self.open_project(ctx).unwrap_or_else(|e| e);
+            return;
+        }
+        if p.join("spectrum.json").is_file() {
+            self.load(p, None, ctx);
+            return;
+        }
         self.pending += 1;
         let tx = self.tx.clone();
         std::thread::spawn(move || {
@@ -360,51 +397,7 @@ impl App {
         if r[0] > r[1] { r } else { [12., -1.] }
     }
     fn export(&mut self, ctx: egui::Context) {
-        let Some(t) = self.traces.get(self.selected) else {
-            self.status = "Select a spectrum".into();
-            return;
-        };
-        let data = t.data.clone();
-        let settings = t.settings.clone();
-        let tx = self.tx.clone();
-        self.pending += 1;
-        std::thread::spawn(move || {
-            let result = (|| -> Result<String, String> {
-                let p = data.path.join("spectrum.csv"); // explicit export creates a new file only
-                use std::io::Write;
-                let phased = processing::phase(
-                    &data.real,
-                    &data.imag,
-                    settings.p0,
-                    settings.p1,
-                    data.ft_size,
-                );
-                let processed =
-                    processing::polynomial(&phased, settings.baseline, 0, phased.len())?;
-                let f = std::fs::OpenOptions::new()
-                    .write(true)
-                    .create_new(true)
-                    .open(&p)
-                    .map_err(|e| e.to_string())?;
-                let mut w = std::io::BufWriter::new(f);
-                writeln!(w, "ppm,real,imaginary,processed_preview").map_err(|e| e.to_string())?;
-                for (i, value) in processed.iter().enumerate() {
-                    writeln!(
-                        w,
-                        "{:.17e},{:.17e},{:.17e},{:.17e}",
-                        data.ppm(i),
-                        data.real[i],
-                        data.imag.get(i).copied().unwrap_or(0.),
-                        value
-                    )
-                    .map_err(|e| e.to_string())?;
-                }
-                w.flush().map_err(|e| e.to_string())?;
-                Ok(format!("Exported {}", p.display()))
-            })();
-            let _ = tx.send(Message::Exported(result));
-            ctx.request_repaint();
-        });
+        self.export_selected(ctx, false);
     }
     fn save_session(&self) -> Result<String, String> {
         use std::io::Write;
@@ -418,8 +411,11 @@ impl App {
             normalize: self.normalize,
             range: self.range,
             regions: vec![],
-            integration_regions: self.regions.clone(),
+            integration_regions: self.regions.iter().map(Region::recipe).collect(),
         };
+        for t in &self.traces {
+            storage::outside_source(std::path::Path::new(&self.session_path), &t.data)?;
+        }
         let bytes = serde_json::to_vec_pretty(&s).map_err(|e| e.to_string())?;
         let mut f = std::fs::OpenOptions::new()
             .write(true)
@@ -438,6 +434,11 @@ impl App {
         }
         let bytes = std::fs::read(&self.session_path).map_err(|e| e.to_string())?;
         let s: Session = serde_json::from_slice(&bytes).map_err(|e| e.to_string())?;
+        let result = self.restore_session(s, ctx)?;
+        self.active_project = None;
+        Ok(result)
+    }
+    fn restore_session(&mut self, s: Session, ctx: egui::Context) -> Result<String, String> {
         if ![1, 2].contains(&s.version)
             || s.traces.len() > 128
             || s.traces
@@ -514,6 +515,9 @@ impl App {
     }
 }
 impl eframe::App for App {
+    fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
+        self.flush_project();
+    }
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         while let Ok(m) = self.rx.try_recv() {
             self.handle_message(m, ctx);
@@ -662,7 +666,7 @@ impl eframe::App for App {
                                 t.settings.p0 = 0.;
                                 t.settings.p1 = 0.;
                             }
-                            ui.label("Preview only. Source data stays unchanged.");
+                            ui.label("Save edits in a project; export Bruker to share.");
                         }
                     });
                 }
@@ -691,6 +695,7 @@ impl eframe::App for App {
         self.baseline_controls(ctx);
         self.spectrum_tabs(ctx);
         self.refresh_processing();
+        self.autosave_project(ctx);
         egui::CentralPanel::default().show(ctx,|ui|{
    if self.data_tab==1 {self.integral_table(ui);return;}
 

@@ -1,4 +1,7 @@
 #![allow(dead_code)]
+#[path = "../../rust/storage.rs"]
+mod storage;
+
 #[path = "../../rust/data.rs"]
 mod data;
 #[path = "../../rust/processing.rs"]

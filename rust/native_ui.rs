@@ -366,7 +366,7 @@ impl App {
             }
         }
         self.baseline_open = false;
-        self.status=if apply{"Manual polynomial baseline applied in memory; save comparison or export CSV to retain it."}else{"Baseline preview cancelled"}.into();
+        self.status=if apply{"Manual polynomial baseline applied. Save a working project or export Bruker to retain it."}else{"Baseline preview cancelled"}.into();
     }
 }
 
@@ -376,6 +376,9 @@ mod tests {
     fn app() -> App {
         let mut app = App::state(Instant::now(), false);
         let data = Spectrum {
+            nc: 0,
+            phc0: 0.,
+            phc1: 0.,
             path: PathBuf::from("/synthetic/pdata/1"),
             title: String::new(),
             real: vec![10., 11., 15., 13., 10.],
@@ -516,14 +519,15 @@ mod tests {
         a.session_path = root.join("comparison.json").display().to_string();
         a.save_session().unwrap();
         assert!(a.save_session().is_err());
+        a.export_path = root.join("csv-export").display().to_string();
         a.export(egui::Context::default());
         let message =
             a.rx.recv_timeout(std::time::Duration::from_secs(3))
                 .unwrap();
         assert!(matches!(message, Message::Exported(Ok(_))));
-        let csv = fs::read_to_string(pdata.join("spectrum.csv")).unwrap();
+        let csv = fs::read_to_string(root.join("csv-export/spectrum.csv")).unwrap();
         for (line, expected) in csv.lines().skip(1).zip(expected.iter()) {
-            let got = line.split(',').nth(3).unwrap().parse::<f64>().unwrap();
+            let got = line.split(',').nth(4).unwrap().parse::<f64>().unwrap();
             assert_eq!(got.to_bits(), expected.to_bits());
         }
         let mut b = App::state(Instant::now(), false);

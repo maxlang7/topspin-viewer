@@ -6,6 +6,9 @@ use std::{
 
 #[derive(Clone)]
 pub struct Spectrum {
+    pub nc: i32,
+    pub phc0: f64,
+    pub phc1: f64,
     pub path: PathBuf,
     pub title: String,
     pub real: Vec<f64>,
@@ -42,6 +45,10 @@ pub fn load(path: &Path) -> Result<Spectrum, String> {
         path
     };
     let path = fs::canonicalize(path).map_err(|e| e.to_string())?;
+    #[cfg(feature = "native-project")]
+    if path.join("spectrum.json").is_file() {
+        return crate::storage::load_spectrum(&path);
+    }
     #[cfg(feature = "native-raw")]
     if !path.join("1r").is_file() {
         return crate::raw::load(&path);
@@ -180,6 +187,9 @@ pub fn load(path: &Path) -> Result<Spectrum, String> {
         return Err("Integral corrections overflowed saved units".into());
     }
     Ok(Spectrum {
+        nc: exponent as i32,
+        phc0: number("PHC0", Some(0.))?,
+        phc1: number("PHC1", Some(0.))?,
         path,
         title,
         real,
@@ -200,6 +210,12 @@ pub fn discover_browser(root: &Path) -> Result<Vec<PathBuf>, String> {
     discover_impl(root, true)
 }
 pub fn dataset_name(path: &Path) -> String {
+    if path.join("spectrum.json").is_file() {
+        return fs::read_to_string(path.join("label.txt"))
+            .unwrap_or_else(|_| "Spectrum".into())
+            .trim()
+            .into();
+    }
     path.ancestors()
         .nth(3)
         .and_then(|p| p.file_name())
@@ -331,6 +347,9 @@ mod tests {
     #[test]
     fn phase_and_integral() {
         let s = Spectrum {
+            nc: 0,
+            phc0: 0.,
+            phc1: 0.,
             path: PathBuf::new(),
             title: String::new(),
             max_amplitude: 4.,

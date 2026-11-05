@@ -58,3 +58,16 @@ int nmr_process_raw(const double* fid,int count,int size,int delay,double lb,dou
     for(int i=0;i<size;i++) {output[i+1]=integers[i*2]*scale;output[size+i+1]=integers[i*2+1]*scale;}
     free(data);free(table);return 0;
 }
+/* Save semantics match the validated phaseSaved adapter, including integer truncation. */
+int nmr_save_phase(const double* re,const double* im,int n,double ph0,double ph1,int nc,double* out){
+    double* data=malloc((size_t)n*2*sizeof(double));
+    if(!data)return 1;
+    double input_scale=scalbn(1.0,-nc);
+    for(int i=0;i<n;i++){data[2*i]=re[i]*input_scale;data[2*i+1]=im[i]*input_scale;}
+    reconstructed_phase(positive_angle(ph0),positive_angle(ph1/(double)n),data,n,NULL,0);
+    for(int i=0;i<n*2;i++)if(!isfinite(data[i])||data[i]<-2147483648.0||data[i]>=2147483648.0){free(data);return 2;}
+    reconstructed_convdio((unsigned long)data,n*2,0);
+    int32_t* integers=(int32_t*)data;double scale=scalbn(1.0,nc);
+    for(int i=0;i<n;i++){out[i]=integers[2*i]*scale;out[n+i]=integers[2*i+1]*scale;}
+    free(data);return 0;
+}

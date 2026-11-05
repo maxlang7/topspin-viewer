@@ -1,14 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 cd "$(dirname "$0")"
-if [[ "${1:-}" == --legacy ]]; then
-  shift
-  exec bash run-legacy.sh "$@"
-fi
 # Build explicitly with ./build-rust.sh. Normal launches never invoke Cargo or Nix.
 if [[ ! -x target/release/nmr-viewer ]]; then
   echo 'Build the Rust viewer first: bash build-rust.sh' >&2
-  echo 'The previous viewer is available with: bash run-legacy.sh' >&2
   exit 1
 fi
 if [[ ! -f target/release/runtime-library-path ]]; then

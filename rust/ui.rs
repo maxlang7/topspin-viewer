@@ -1,20 +1,5 @@
 use super::*;
 impl App {
-    fn legacy(&mut self) {
-        let path = self.traces.get(self.selected).map(|t| t.data.path.clone());
-        self.launch_legacy(path.as_deref());
-    }
-    fn launch_legacy(&mut self, path: Option<&std::path::Path>) {
-        let mut c = std::process::Command::new("bash");
-        c.arg(concat!(env!("CARGO_MANIFEST_DIR"), "/run-legacy.sh"));
-        if let Some(path) = path {
-            c.arg(path);
-        }
-        self.status = match c.spawn() {
-            Ok(_) => "Opening advanced processing in the retained viewer".into(),
-            Err(e) => format!("Could not launch retained viewer: {e}"),
-        };
-    }
     pub fn topspin_chrome(&mut self, ctx: &egui::Context) {
         egui::TopBottomPanel::top("navigation")
             .frame(
@@ -25,12 +10,12 @@ impl App {
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
                     ui.menu_button("Menu", |ui| {
-                        if ui.button("Export selected CSV").clicked() {
-                            self.export(ctx.clone());
+                        if ui.button("Projects and export").clicked() {
+                            self.nav = "Manage".into();
                             ui.close();
                         }
-                        if ui.button("Advanced processing").clicked() {
-                            self.legacy();
+                        if ui.button("Export selected CSV").clicked() {
+                            self.export(ctx.clone());
                             ui.close();
                         }
                     });
@@ -69,18 +54,10 @@ impl App {
                             {
                                 self.peaks = t.pick_peaks(self.peak_threshold);
                             }
-                            ui.separator();
-                            if ui
-                                .button("Calib. Axis ↗")
-                                .on_hover_text(
-                                    "Open validated axis calibration in the retained viewer",
-                                )
-                                .clicked()
-                            {
-                                self.legacy();
-                            }
                         }
                         "Manage" => {
+                            self.project_controls(ui, ctx);
+                            ui.separator();
                             if ui.button("Save comparison").clicked() {
                                 self.status = self.save_session().unwrap_or_else(|e| e);
                             }
@@ -93,14 +70,6 @@ impl App {
                             }
                         }
                         _ => {
-                            if ui
-                                .button("Proc. Spectrum ↗")
-                                .on_hover_text("Raw processing in the retained viewer")
-                                .clicked()
-                            {
-                                self.legacy();
-                            }
-                            ui.separator();
                             ui.menu_button("Adjust Phase", |ui| {
                                 if let Some(t) = self.traces.get_mut(self.selected) {
                                     if t.data.imag.is_empty() {
@@ -120,18 +89,10 @@ impl App {
                                         }
                                     }
                                 }
-                                ui.label("Preview only");
+                                ui.label("Save edits in a project; export Bruker to share.");
                             });
                             ui.separator();
                             if ui.button("Baseline").on_hover_text("Native manual polynomial correction with preview, apply and cancel").clicked(){self.begin_baseline();}
-                            ui.separator();
-                            if ui.button("Calib. Axis ↗").clicked() {
-                                self.legacy();
-                            }
-                            ui.separator();
-                            if ui.button("Advanced ↗").clicked() {
-                                self.legacy();
-                            }
                         }
                     }
                 });
@@ -185,7 +146,7 @@ impl App {
                 ui.label("Command");
                 let r = ui.add(
                     egui::TextEdit::singleline(&mut self.command)
-                        .hint_text(".all · .ph · int · .multi · .csv · efp"),
+                        .hint_text(".all · .ph · int · .multi · .csv · .basl"),
                 );
                 if r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
                     match self.command.trim() {
@@ -197,11 +158,8 @@ impl App {
                         }
                         ".multi" => self.stacked = !self.stacked,
                         ".csv" => self.export(ctx.clone()),
-                        "efp" | ".cal" => self.legacy(),
                         ".basl" => self.begin_baseline(),
-                        _ => {
-                            self.status = "Commands: .all, .ph, int, .multi, .csv, efp, .cal".into()
-                        }
+                        _ => self.status = "Commands: .all, .ph, int, .multi, .csv, .basl".into(),
                     };
                     self.command.clear();
                     r.request_focus();
@@ -217,14 +175,7 @@ impl App {
                 ui.horizontal(|ui| {
                     for (i, t) in self.traces.iter_mut().enumerate() {
                         ui.checkbox(&mut t.settings.visible, "");
-                        let name = t
-                            .data
-                            .path
-                            .ancestors()
-                            .nth(3)
-                            .and_then(|p| p.file_name())
-                            .unwrap_or_default()
-                            .to_string_lossy();
+                        let name = data::dataset_name(&t.data.path);
                         if ui
                             .selectable_label(
                                 self.selected == i,
@@ -252,13 +203,6 @@ impl App {
             ui.horizontal(|ui| {
                 ui.selectable_value(&mut self.data_tab, 0, "SPECTRUM");
                 ui.selectable_value(&mut self.data_tab, 1, "INTEGRALS");
-                if ui
-                    .button("FID ↗")
-                    .on_hover_text("Open FID in the retained viewer")
-                    .clicked()
-                {
-                    self.legacy();
-                }
                 ui.separator();
                 ui.label("ppm");
             });

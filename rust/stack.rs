@@ -312,6 +312,9 @@ mod tests {
         let mut a = App::state(Instant::now(), false);
         for name in ["A", "B", "C"] {
             let data = Spectrum {
+                nc: 0,
+                phc0: 0.,
+                phc1: 0.,
                 path: PathBuf::from(format!("/{name}/10/pdata/1")),
                 title: name.into(),
                 real: vec![0.; 4],
