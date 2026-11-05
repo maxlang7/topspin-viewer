@@ -6,7 +6,7 @@ Build with `bash build-rust.sh`, then launch with `bash run.sh [dataset or proje
 
 Click datasets to open them, or hover and press S to stack them. Reorder spectra in the top-right Stack window. Wheel above baseline changes the hovered spectrum's intensity; wheel below baseline zooms ppm. Integration curves remain above baseline, numbers below, and range markers at the top.
 
-The app supports phase adjustment, manual polynomial baseline correction, integration and normalization. **Manage → Working project** creates a portable float64 working copy with acquisition snapshots and versioned edit history. Applied edits then autosave there. Original Bruker files remain untouched.
+The app supports phase adjustment, manual polynomial baseline correction, integration and normalization. Opening an NMR automatically creates or reopens a project with the same dataset name under `~/Documents/NMR Projects`. It keeps a named spectrum CSV, an integrations CSV, exact float64 source data, acquisition snapshots and versioned edit metadata. Phase, applied baseline, integration and normalization edits autosave in the background. No Save action is required. Original Bruker files remain untouched.
 
 **Manage → Export** writes a fresh Bruker dataset for TopSpin or spectrum/integral CSVs to a separate directory. The UI contains only implemented native features; there are no launchers for the earlier viewer.
 

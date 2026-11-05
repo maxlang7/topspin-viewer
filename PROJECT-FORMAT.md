@@ -1,6 +1,10 @@
 # Working projects and Bruker export
 
-A working project is a directory, normally ending in `.nmrproj`. Create or open it through Manage → Working project. Save first copies the data; applied edits then autosave into that project, with an additional flush on normal exit. Saving another new destination creates a separate portable copy. Existing path-only comparison JSON files remain supported.
+Opening an NMR automatically creates or reopens a working project with the dataset's name under `~/Documents/NMR Projects`. For example, `MLN1P117.nmrproj` contains `MLN1P117.csv`, `integrals.csv`, exact float64 source components, the original acquisition snapshot and edit recipes. No explicit Save is required. Different source folders/processing numbers with identical dataset names use separate source-identified parent directories to prevent collisions.
+
+Phase, applied baseline, integration bounds/corrections, normalization and per-spectrum display settings autosave independently for each stacked spectrum after one second without edits. CSV and metadata writes run on a worker. Normal exit and closing a spectrum flush the latest edits. The top bar reports autosave status and its tooltip gives the project location. Reopening the original source restores the working project rather than replacing saved edits with a fresh import.
+
+Automatic projects use the existing portable directory format and can also be opened directly. Manage → Working project retains optional comparison-project save/open controls. Existing path-only comparison JSON files remain supported.
 
 ## Storage
 
@@ -13,11 +17,11 @@ A working project is a directory, normally ending in `.nmrproj`. Create or open 
 
 Checksums validate native components when loaded and source snapshots before export/project reopening. Traversal and escaping symlink paths are rejected. Acquisition/snapshot directories cannot be destinations. Existing unrelated project/export destinations are never overwritten. Source masters are read only; the app does not change their filesystem permissions.
 
-Project saves copy acquisitions synchronously. Large initial imports can briefly pause the UI. Later revisions reuse existing source snapshots. Normal data scans/loads and exports run on workers. Autosave serializes recipe fields without copying cumulative integral buffers each frame.
+Automatic imports copy acquisitions and generate initial CSVs on a worker, then rename the completed staging project into place. Later autosaves reuse exact source snapshots and atomically replace each current CSV and the HEAD pointer. Revisions retain edit recipes; the current CSVs are derived outputs. Optional comparison-project saves still copy acquisitions synchronously. Autosave serializes recipe fields without copying cumulative integral buffers each frame.
 
 ## CSV
 
-`spectrum.csv` has `index,ppm,source_real,source_imaginary,corrected_real,corrected_imaginary`. Missing imaginary samples are blank. Corrected real includes phase then polynomial baseline. Corrected imaginary includes phase; the real baseline model does not alter it.
+The automatic `<dataset>.csv`, or an explicitly exported `spectrum.csv`, has `index,ppm,source_real,source_imaginary,corrected_real,corrected_imaginary`. Missing imaginary samples are blank. Corrected real includes phase then polynomial baseline. Corrected imaginary includes phase; the real baseline model does not alter it.
 
 `integrals.csv` has `left_ppm,right_ppm,raw_area,normalized_area,bias,slope,normalization_factor`. Bias and slope are the effective corrections after optional endpoint estimation. Values use 17 digits after the decimal in scientific notation. CSV reports floating preview samples, not Bruker's quantized output.
 
@@ -42,3 +46,12 @@ This covers supported 1D int32 datasets, validated raw-opening modes, phase adju
 All generated laboratory projects/exports live under ignored `artifacts/`. No original acquisition files are written. The broader phase/integration/polynomial validation remains documented in NATIVE-PROCESSING-VALIDATION.md.
 
 The optimized release smoke check reached the first UI update in 47.15 ms and loaded/rendered two raw-backed spectra in 71.03 ms. A portable project reached the first UI update in 50.24 ms and ready state in 73.61 ms. These are application instrumentation points on this laptop, not compositor presentation timestamps or a browser comparison. The regular suite passes 26 tests, with the laboratory export test run separately; Clippy and the release build also pass.
+
+
+## Automatic workflow validation
+
+The regular suite now passes 29 tests, including automatic named-project/CSV creation, complete scientific-state reopening, imported saved phase and integration metadata, original-file hash preservation, sidebar reopen after closing a tab, independent background saves for stacked/reordered spectra, and separation of equal names from different source folders. A generated automatic project also round-trips through Bruker export with accumulated phase and both integration regions intact.
+
+The optimized release imported MLN1P117 and MLN1P121 into automatic projects. MLN1P117 retained all six saved integration regions. First UI update was 46.13 ms; initial two-spectrum conversion including CSVs reached ready state in 344.00 ms. Reopening their original paths reused the projects and reached ready state in 64.89 ms. These are application instrumentation points. Native tests, Clippy and the release build pass.
+
+Import preserves phase already applied to processed 1r/1i and records original PHC0/PHC1. Additional phase is stored separately in the recipe. Saved intrng bounds, bias/slope and INTSCL normalization are included. Bruker export writes corrected components, accumulated status phase, the latest phase increment, integration regions and normalization. It cannot import unsaved changes held only in a separate TopSpin process.

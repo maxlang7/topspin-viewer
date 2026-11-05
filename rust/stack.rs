@@ -105,6 +105,10 @@ impl App {
         if index >= self.traces.len() || self.restoring {
             return;
         }
+        if self.baseline_open {
+            self.finish_baseline(false);
+        }
+        self.flush_automatic();
         self.traces.remove(index);
         self.regions.retain(|r| r.trace != index);
         for r in &mut self.regions {

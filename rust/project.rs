@@ -52,6 +52,11 @@ impl App {
             storage::outside_source(&root, &t.data)?;
         }
         let continuing = self.active_project.as_ref() == Some(&root);
+        if root.join("project.json").exists() && !continuing {
+            return Err(
+                "This project already exists. Choose a new folder for a comparison copy.".into(),
+            );
+        }
         if !continuing {
             storage::fresh_directory(&root)?;
             storage::fresh_directory(&root.join("traces"))?;
@@ -115,8 +120,26 @@ impl App {
             storage::source_processing(&t.path)?;
             data::load(&t.path)?;
         }
+        let automatic = manifest["automatic"] == true;
+        let native_paths = session
+            .traces
+            .iter()
+            .map(|t| t.path.clone())
+            .collect::<Vec<_>>();
         self.restore_session(session, ctx)?;
-        self.active_project = Some(root);
+        if automatic {
+            for path in native_paths {
+                self.automatic_projects
+                    .entry(path.clone())
+                    .or_insert_with(|| crate::automatic::AutoState::new(root.clone()));
+                if let Some(source) = manifest["source"].as_str() {
+                    self.source_aliases.insert(PathBuf::from(source), path);
+                }
+            }
+            self.active_project = None;
+        } else {
+            self.active_project = Some(root);
+        }
         self.saved_project_state.clear();
         self.project_changed_at = None;
         Ok("Loading portable project".into())
@@ -160,7 +183,14 @@ impl App {
     }
     pub(super) fn project_controls(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
         ui.menu_button("Working project", |ui| {
-            ui.label("Project folder");
+            ui.label("Opened NMRs autosave automatically.");
+            if let Some(t) = self.traces.get(self.selected)
+                && let Some(entry) = self.automatic_projects.get(&t.data.path)
+            {
+                ui.label(entry.root.display().to_string());
+            }
+            ui.separator();
+            ui.label("Optional comparison project folder");
             ui.text_edit_singleline(&mut self.project_path);
             if ui.button("Save project").clicked() {
                 self.status = self.save_project().unwrap_or_else(|e| e);

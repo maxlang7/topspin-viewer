@@ -366,7 +366,12 @@ impl App {
             }
         }
         self.baseline_open = false;
-        self.status=if apply{"Manual polynomial baseline applied. Save a working project or export Bruker to retain it."}else{"Baseline preview cancelled"}.into();
+        self.status = if apply {
+            "Manual polynomial baseline applied. Edits autosave to the working project."
+        } else {
+            "Baseline preview cancelled"
+        }
+        .into();
     }
 }
 

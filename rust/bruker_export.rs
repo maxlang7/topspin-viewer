@@ -325,14 +325,28 @@ pub fn csv(
     regions: &[Region],
 ) -> Result<String, String> {
     storage::outside_source(path, s)?;
+    storage::fresh_directory(path)?;
+    csv_files(path, s, settings, regions, "")?;
+    Ok(format!(
+        "Exported spectrum and integrals CSV to {}",
+        path.display()
+    ))
+}
+/// Write CSVs to new names. Autosave stages both before replacing the current CSVs.
+pub(super) fn csv_files(
+    path: &Path,
+    s: &Spectrum,
+    settings: &Settings,
+    regions: &[Region],
+    suffix: &str,
+) -> Result<(), String> {
     let (phased, im) = phase_complex(s, settings);
     let re = processing::polynomial(&phased, settings.baseline, 0, phased.len())?;
     let rows = integral_rows(s, &re, regions)?;
-    storage::fresh_directory(path)?;
     let f = fs::OpenOptions::new()
         .write(true)
         .create_new(true)
-        .open(path.join("spectrum.csv"))
+        .open(path.join(format!("spectrum.csv{suffix}")))
         .map_err(|e| e.to_string())?;
     let mut w = std::io::BufWriter::new(f);
     writeln!(
@@ -373,9 +387,9 @@ pub fn csv(
             settings.integral_scale
         ));
     }
-    storage::write_new(&path.join("integrals.csv"), integrals.as_bytes())?;
-    Ok(format!(
-        "Exported spectrum and integrals CSV to {}",
-        path.display()
-    ))
+    storage::write_new(
+        &path.join(format!("integrals.csv{suffix}")),
+        integrals.as_bytes(),
+    )?;
+    Ok(())
 }

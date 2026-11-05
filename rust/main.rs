@@ -1,3 +1,4 @@
+mod automatic;
 mod bruker_export;
 mod data;
 mod integral_plot;
@@ -117,6 +118,7 @@ struct LoadView {
     epoch: u64,
 }
 enum Message {
+    Imported(Result<Box<automatic::Imported>, String>, LoadView),
     Exported(Result<String, String>),
     Loaded(Result<Box<Spectrum>, String>, Option<Settings>, LoadView),
     Found(Result<Vec<PathBuf>, String>),
@@ -161,6 +163,9 @@ struct App {
     project_path: String,
     export_path: String,
     active_project: Option<PathBuf>,
+    automatic_root: Option<PathBuf>,
+    automatic_projects: std::collections::HashMap<PathBuf, automatic::AutoState>,
+    source_aliases: std::collections::HashMap<PathBuf, PathBuf>,
     saved_project_state: Vec<u8>,
     project_changed_at: Option<Instant>,
     started: Instant,
@@ -182,6 +187,7 @@ impl App {
         v.selection.bg_fill = Color32::from_rgb(80, 73, 69);
         cc.egui_ctx.set_visuals(v);
         let mut s = Self::state(started, smoke);
+        s.automatic_root = Some(PathBuf::from(project::default_path("NMR Projects", "")));
         if paths.is_empty()
             && let Some(home) = std::env::var_os("HOME")
         {
@@ -197,8 +203,37 @@ impl App {
         s
     }
     fn handle_message(&mut self, m: Message, ctx: &egui::Context) {
+        let m = match m {
+            Message::Imported(Ok(imported), view) => {
+                let automatic::Imported {
+                    data,
+                    settings,
+                    mut regions,
+                    root,
+                    source,
+                } = *imported;
+                self.source_aliases.insert(source, data.path.clone());
+                if !self.traces.iter().any(|t| t.data.path == data.path) {
+                    for r in &mut regions {
+                        r.trace = self.traces.len();
+                    }
+                    self.regions.extend(regions);
+                }
+                self.automatic_projects
+                    .entry(data.path.clone())
+                    .or_insert_with(|| automatic::AutoState::new(root));
+                Message::Loaded(Ok(Box::new(data)), Some(settings), view)
+            }
+            Message::Imported(Err(e), view) => Message::Loaded(
+                Err(format!("Automatic project import failed: {e}")),
+                None,
+                view,
+            ),
+            m => m,
+        };
         self.pending = self.pending.saturating_sub(1);
         match m {
+            Message::Imported(_, _) => unreachable!(),
             Message::Exported(r) => self.status = r.unwrap_or_else(|e| e),
             Message::Found(Ok(paths)) => {
                 if paths.is_empty() {
@@ -326,6 +361,9 @@ impl App {
             project_path: project::default_path("NMR Projects", "comparison.nmrproj"),
             export_path: project::default_path("NMR Exports", "export"),
             active_project: None,
+            automatic_root: None,
+            automatic_projects: std::collections::HashMap::new(),
+            source_aliases: std::collections::HashMap::new(),
             saved_project_state: vec![],
             project_changed_at: None,
             started,
@@ -357,15 +395,24 @@ impl App {
         } else {
             p
         };
-        if self.traces.iter().any(|t| t.data.path == p) {
-            self.apply_view(&p, view);
+        let alias = self.source_aliases.get(&p).unwrap_or(&p);
+        if self.traces.iter().any(|t| t.data.path == *alias) {
+            self.apply_view(&alias.clone(), view);
             return;
         }
         self.pending += 1;
         let tx = self.tx.clone();
+        let automatic_root = self.automatic_root.clone();
         std::thread::spawn(move || {
-            let result = data::load(&p);
-            let _ = tx.send(Message::Loaded(result.map(Box::new), settings, view));
+            let message = if settings.is_none()
+                && !p.join("spectrum.json").is_file()
+                && let Some(automatic_root) = automatic_root
+            {
+                Message::Imported(automatic::import(&p, &automatic_root).map(Box::new), view)
+            } else {
+                Message::Loaded(data::load(&p).map(Box::new), settings, view)
+            };
+            let _ = tx.send(message);
             ctx.request_repaint();
         });
     }
@@ -487,6 +534,7 @@ impl App {
         }) {
             return Err("Invalid integration regions".into());
         }
+        self.flush_automatic();
         self.stacked = s.stacked;
         self.normalize = s.normalize;
         self.range = s.range;
@@ -516,6 +564,10 @@ impl App {
 }
 impl eframe::App for App {
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
+        if self.baseline_open {
+            self.finish_baseline(false);
+        }
+        self.flush_automatic();
         self.flush_project();
     }
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
@@ -652,21 +704,22 @@ impl eframe::App for App {
                             .text("Gain"),
                     );
                     ui.add(egui::Slider::new(&mut t.settings.offset, -2. ..=2.).text("Offset"));
-                    ui.collapsing("Phase preview", |ui| {
+                    ui.collapsing("Phase", |ui| {
+                        ui.label(format!("Saved phase: PH0 {:.3}° · PH1 {:.3}°",t.data.phc0,t.data.phc1));
                         if t.data.imag.is_empty() {
                             ui.label("No 1i component. Phase unavailable.");
                         } else {
                             ui.add(
-                                egui::Slider::new(&mut t.settings.p0, -180. ..=180.).text("PH0"),
+                                egui::Slider::new(&mut t.settings.p0, -180. ..=180.).text("PH0 adjustment"),
                             );
                             ui.add(
-                                egui::Slider::new(&mut t.settings.p1, -720. ..=720.).text("PH1"),
+                                egui::Slider::new(&mut t.settings.p1, -720. ..=720.).text("PH1 adjustment"),
                             );
                             if ui.button("Reset phase").clicked() {
                                 t.settings.p0 = 0.;
                                 t.settings.p1 = 0.;
                             }
-                            ui.label("Save edits in a project; export Bruker to share.");
+                            ui.label("Edits autosave. Export Bruker to share with TopSpin.");
                         }
                     });
                 }
@@ -695,6 +748,7 @@ impl eframe::App for App {
         self.baseline_controls(ctx);
         self.spectrum_tabs(ctx);
         self.refresh_processing();
+        self.autosave_automatic(ctx);
         self.autosave_project(ctx);
         egui::CentralPanel::default().show(ctx,|ui|{
    if self.data_tab==1 {self.integral_table(ui);return;}

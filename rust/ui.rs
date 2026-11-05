@@ -24,6 +24,12 @@ impl App {
                     }
                     ui.separator();
                     ui.label(egui::RichText::new("NMR Viewer").strong());
+                    if let Some(t) = self.traces.get(self.selected)
+                        && let Some(entry) = self.automatic_projects.get(&t.data.path)
+                    {
+                        ui.label(entry.caption())
+                            .on_hover_text(entry.root.display().to_string());
+                    }
                     if self.pending > 0 {
                         ui.spinner();
                         ui.label(format!("{} pending", self.pending));
@@ -72,16 +78,17 @@ impl App {
                         _ => {
                             ui.menu_button("Adjust Phase", |ui| {
                                 if let Some(t) = self.traces.get_mut(self.selected) {
+                                    ui.label(format!("Saved phase: PH0 {:.3}° · PH1 {:.3}°",t.data.phc0,t.data.phc1));
                                     if t.data.imag.is_empty() {
                                         ui.label("No imaginary component");
                                     } else {
                                         ui.add(
                                             egui::Slider::new(&mut t.settings.p0, -180. ..=180.)
-                                                .text("PH0"),
+                                                .text("PH0 adjustment"),
                                         );
                                         ui.add(
                                             egui::Slider::new(&mut t.settings.p1, -720. ..=720.)
-                                                .text("PH1"),
+                                                .text("PH1 adjustment"),
                                         );
                                         if ui.button("Reset").clicked() {
                                             t.settings.p0 = 0.;
@@ -89,7 +96,7 @@ impl App {
                                         }
                                     }
                                 }
-                                ui.label("Save edits in a project; export Bruker to share.");
+                                ui.label("Edits autosave. Export Bruker to share with TopSpin.");
                             });
                             ui.separator();
                             if ui.button("Baseline").on_hover_text("Native manual polynomial correction with preview, apply and cancel").clicked(){self.begin_baseline();}
