@@ -1,6 +1,7 @@
 mod automatic;
 mod bruker_export;
 mod data;
+mod integral_actions;
 mod integral_plot;
 mod native_ui;
 mod processing;
@@ -146,6 +147,11 @@ struct App {
     pending: usize,
     integrate: bool,
     start: Option<f64>,
+    integration_drag_trace: Option<usize>,
+    selected_integral: Option<usize>,
+    integral_edit: Option<integral_actions::IntegralEdit>,
+    hovered_integral: Option<(usize, egui::Rect)>,
+    suppress_scroll_tail: bool,
     regions: Vec<Region>,
     region_bias: f64,
     region_slope: f64,
@@ -344,6 +350,11 @@ impl App {
             pending: 0,
             integrate: false,
             start: None,
+            integration_drag_trace: None,
+            selected_integral: None,
+            integral_edit: None,
+            hovered_integral: None,
+            suppress_scroll_tail: false,
             regions: vec![],
             region_bias: 0.,
             region_slope: 0.,
@@ -535,6 +546,11 @@ impl App {
             return Err("Invalid integration regions".into());
         }
         self.flush_automatic();
+        self.selected_integral = None;
+        self.integral_edit = None;
+        self.hovered_integral = None;
+        self.start = None;
+        self.integration_drag_trace = None;
         self.stacked = s.stacked;
         self.normalize = s.normalize;
         self.range = s.range;
@@ -579,6 +595,7 @@ impl eframe::App for App {
                 self.open(p, ctx.clone());
             }
         }
+        self.handle_integral_delete_shortcut(ctx);
         self.handle_sidebar_shortcut(ctx);
         self.topspin_chrome(ctx);
         self.hovered_sidebar = None;
@@ -773,33 +790,14 @@ impl eframe::App for App {
     painter.with_clip_rect(rect).extend(t.cache.iter().cloned());
     painter.text(Pos2::new(rect.left()+8.,if self.stacked{rect.top()+lane_h*lane as f32+4.}else{rect.top()+lane as f32*18.}),egui::Align2::LEFT_TOP,format!("{} {}",idx+1,d.title),egui::FontId::proportional(12.),COLORS[idx%6]);
    }
-   self.paint_integrals(rect,range,&painter,&response);
+   let hits=self.paint_integrals(rect,range,&painter,&response);
+   let label_blocked=self.integral_interactions(ui,&hits);
+   let integrating=self.integrate || ctx.input(|i|i.modifiers.shift) && self.integral_edit.is_none();
+   self.integration_indicator(ui,rect,integrating);
 
-   if let Some(pos)=response.hover_pos(){let x=ppm(pos.x);painter.line_segment([Pos2::new(pos.x,rect.top()),Pos2::new(pos.x,rect.bottom())],Stroke::new(1.,Color32::from_gray(130)));painter.text(rect.right_top(),egui::Align2::RIGHT_TOP,format!("{x:.5} ppm"),egui::FontId::monospace(12.),COLORS[0]);let scroll=ctx.input(|i|i.smooth_scroll_delta);
-    let lane_h=if self.stacked{rect.height()/count as f32}else{rect.height()};
-    let lane=if self.stacked{((pos.y-rect.top())/lane_h).floor().clamp(0.,count.saturating_sub(1)as f32)as usize}else{0};
-    let hit=self.spectrum_under_pointer(rect,range,pos,have_integrals);
-    let hovered=hit.and_then(|idx|self.traces.get(idx).map(|t|(idx,t)));
-    let offset=hovered.map_or(0.,|(_,t)|t.settings.offset);
-    let integrals=have_integrals&&(!self.stacked||hovered.is_some_and(|(idx,_)|idx==selected));
-    let geometry=integral_plot::lane_layout(rect,self.stacked,count,lane,offset,integrals);
-    let below=pos.y>geometry.baseline;
-    let horizontal=scroll.x;
-    if horizontal!=0.{let shift=horizontal as f64/rect.width()as f64*width;self.range=Some([range[0]+shift,range[1]+shift]);}
-    if below && scroll.y!=0.{
-        let r=self.range.unwrap_or(range);
-        let anchor=r[0]-(pos.x-rect.left())as f64/rect.width()as f64*(r[0]-r[1]);
-        let factor=(-scroll.y as f64*0.003).exp().clamp(0.5,2.);
-        let zoomed=[anchor+(r[0]-anchor)*factor,anchor+(r[1]-anchor)*factor];
-        if zoomed[0]-zoomed[1]>1e-8 && zoomed[0]-zoomed[1]<1e6 {self.range=Some(zoomed);}
-    }
-    if !below && scroll.y!=0. && let Some(idx)=hit{self.zoom_trace(idx,scroll.y);}
-   }
 
-   if response.double_clicked(){self.range=None;}
-   if response.drag_started()&&self.integrate{self.start=response.interact_pointer_pos().map(|p|ppm(p.x));}
-   if response.dragged()&&!self.integrate{let dx=ctx.input(|i|i.pointer.delta().x)as f64/rect.width()as f64*width;self.range=Some([range[0]+dx,range[1]+dx]);}
-   if response.drag_stopped()&&self.integrate&& let (Some(a),Some(p))=(self.start.take(),response.interact_pointer_pos()){self.measure_region(a,ppm(p.x));}
+   self.handle_plot_navigation(ctx,&response,rect,range,have_integrals,label_blocked,integrating,&painter);
+
 
    if self.traces.is_empty(){painter.text(rect.center(),egui::Align2::CENTER_CENTER,"Open a Bruker dataset folder to begin\nAdd several spectra for overlay or stacked comparison",egui::FontId::proportional(20.),COLORS[0]);}
   });

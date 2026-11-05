@@ -109,6 +109,11 @@ impl App {
             self.finish_baseline(false);
         }
         self.flush_automatic();
+        self.integral_edit = None;
+        self.selected_integral = None;
+        self.hovered_integral = None;
+        self.start = None;
+        self.integration_drag_trace = None;
         self.traces.remove(index);
         self.regions.retain(|r| r.trace != index);
         for r in &mut self.regions {

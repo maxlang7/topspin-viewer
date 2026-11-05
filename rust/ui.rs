@@ -145,7 +145,8 @@ impl App {
                 ui.selectable_value(&mut self.stacked, false, "Overlay");
                 ui.selectable_value(&mut self.stacked, true, "Stacked");
                 ui.selectable_value(&mut self.integrate, false, "Navigate");
-                ui.selectable_value(&mut self.integrate, true, "∫  Select region");
+                ui.selectable_value(&mut self.integrate, true, "∫  Integrate").on_hover_text("Drag to create a region. You can also hold Shift temporarily. Shift+scroll does nothing.");
+                ui.weak("Hold Shift to integrate");
             });
         });
         egui::TopBottomPanel::bottom("command-status").show(ctx, |ui| {

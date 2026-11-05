@@ -468,6 +468,22 @@ mod tests {
         receive(&mut b);
         assert_eq!(b.traces[0].settings.baseline, applied);
         assert_eq!(b.traces[0].settings.p0, 22.);
+        b.calibrate_integral(0, 3.).unwrap();
+        b.delete_integral(1);
+        b.flush_automatic();
+        let mut restored = app(&root);
+        restored.load(source.clone(), None, egui::Context::default());
+        receive(&mut restored);
+        assert_eq!(restored.regions.len(), 1);
+        assert!(restored.traces[0].settings.normalization_frozen);
+        assert_eq!(
+            restored.traces[0].settings.integral_scale.to_bits(),
+            b.traces[0].settings.integral_scale.to_bits()
+        );
+        assert!(
+            (restored.regions[0].value * restored.traces[0].settings.integral_scale - 3.).abs()
+                < 1e-12
+        );
         for (f, hash) in ["1r", "1i", "procs", "intrng"].into_iter().zip(hashes) {
             assert_eq!(storage::digest(&source.join(f)).unwrap(), hash);
         }

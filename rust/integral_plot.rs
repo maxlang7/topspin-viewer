@@ -129,9 +129,10 @@ impl App {
         range: [f64; 2],
         painter: &egui::Painter,
         response: &egui::Response,
-    ) {
+    ) -> Vec<(usize, egui::Rect)> {
+        let mut hits = Vec::new();
         if !self.has_visible_integrals() {
-            return;
+            return hits;
         }
         let t = &self.traces[self.selected];
         let count = self
@@ -150,8 +151,8 @@ impl App {
         let band = geometry.band;
         let width = range[0] - range[1];
         let px = |ppm: f64| rect.left() + ((range[0] - ppm) / width) as f32 * rect.width();
-        let font = egui::FontId::monospace(12.);
-        let line_h = 18.;
+        let font = egui::FontId::monospace(14.);
+        let line_h = 21.;
         let mut regions: Vec<_> = self
             .regions
             .iter()
@@ -187,7 +188,7 @@ impl App {
             .collect();
         regions.sort_by(|a, b| a.3.total_cmp(&b.3));
         if regions.is_empty() {
-            return;
+            return hits;
         }
         // Overview markers stay pinned to the plot top while following ppm zoom/pan.
         // Separate overlapping intervals without moving their horizontal endpoints.
@@ -205,8 +206,8 @@ impl App {
             } else {
                 row_ends[row] = x1;
             }
-            let y = response.rect.top() + 6. + row as f32 * 6.;
-            let marker = egui::Rect::from_min_max(Pos2::new(x0, y), Pos2::new(x1, y + 3.));
+            let y = response.rect.top() + 6. + row as f32 * 9.;
+            let marker = egui::Rect::from_min_max(Pos2::new(x0, y), Pos2::new(x1, y + 6.));
             top.rect_filled(marker, 1., COLORS[1]);
             if response
                 .hover_pos()
@@ -222,7 +223,7 @@ impl App {
             }
         }
         if band.height() < 12. {
-            return;
+            return hits;
         }
         let desired: Vec<_> = regions
             .iter()
@@ -315,7 +316,16 @@ impl App {
                     ],
                     Stroke::new(0.7, Color32::from_rgb(122, 105, 55)),
                 );
+                hits.push((*id, label_rect.intersect(band).intersect(rect)));
                 plot.rect_filled(label_rect, 2., Color32::from_rgb(40, 40, 40));
+                if self.selected_integral == Some(*id) {
+                    plot.rect_stroke(
+                        label_rect,
+                        2.,
+                        Stroke::new(1., COLORS[1]),
+                        egui::StrokeKind::Inside,
+                    );
+                }
                 plot.galley(Pos2::new(label_x + 4., y + 1.), text.clone(), COLORS[1]);
             } else {
                 hidden += 1;
@@ -344,6 +354,7 @@ impl App {
                 COLORS[1],
             );
         }
+        hits
     }
 }
 #[cfg(test)]

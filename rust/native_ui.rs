@@ -237,35 +237,18 @@ impl App {
                 );
             }
             if let Some(i) = delete {
-                self.regions.remove(i);
-                let first = self.regions.iter().find(|r| r.trace == self.selected);
-                if let Some(t) = self.traces.get_mut(self.selected) {
-                    if let Some(r) = first {
-                        if !t.settings.normalization_frozen {
-                            t.settings.integral_scale =
-                                processing::normalization(&[r.value], 0, 1., 0., 0);
-                        }
-                    } else {
-                        t.settings.normalization_frozen = false;
-                    }
-                }
+                self.delete_integral(i);
             }
-            self.refresh_processing();
             if let Some(i) = normalize
-                && let Some(r) = self.regions.get(i)
-                && r.error.is_none()
-                && self.calibration_value.is_finite()
+                && let Err(e) = self.calibrate_integral(i, self.calibration_value)
             {
-                let scale = processing::normalization(&[r.value], 0, self.calibration_value, 0., 0);
-                if scale.is_finite() {
-                    self.traces[r.trace].settings.integral_scale = scale;
-                    self.traces[r.trace].settings.normalization_frozen = true;
-                } else {
-                    self.status = "Normalization overflow".into();
-                }
+                self.status = e;
             }
             if ui.button("Clear selected spectrum's regions").clicked() {
                 self.regions.retain(|r| r.trace != self.selected);
+                self.integral_edit = None;
+                self.selected_integral = None;
+                self.hovered_integral = None;
                 if let Some(t) = self.traces.get_mut(self.selected) {
                     t.settings.normalization_frozen = false;
                 }
