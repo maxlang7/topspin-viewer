@@ -136,7 +136,15 @@ pub fn export(
 ) -> Result<String, String> {
     storage::outside_source(path, s)?;
     let (re, im) = saved(s, settings)?;
-    let rows = integral_rows(s, &re, regions)?;
+    let mut rows = integral_rows(s, &re, regions)?;
+    let mut referenced = s.clone();
+    referenced.left += settings.reference_shift;
+    referenced.right += settings.reference_shift;
+    let s = &referenced;
+    for (r, _) in &mut rows {
+        r.left += settings.reference_shift;
+        r.right += settings.reference_shift;
+    }
     let source = storage::source_processing(&s.path)?;
     let template = if source.join("procs").is_file() {
         source.join("procs")
@@ -286,7 +294,12 @@ pub fn export(
             return Err("Export verification failed: spectrum readback differs".into());
         }
     }
-    if reopened.left.to_bits() != s.left.to_bits() || reopened.right.to_bits() != s.right.to_bits()
+    if reopened.left.to_bits() != s.left.to_bits()
+        || (if settings.reference_shift == 0. {
+            reopened.right.to_bits() != s.right.to_bits()
+        } else {
+            (reopened.right - s.right).abs() > 1e-10
+        })
     {
         return Err("Export verification failed: axis differs".into());
     }
@@ -342,7 +355,11 @@ pub(super) fn csv_files(
 ) -> Result<(), String> {
     let (phased, im) = phase_complex(s, settings);
     let re = processing::polynomial(&phased, settings.baseline, 0, phased.len())?;
-    let rows = integral_rows(s, &re, regions)?;
+    let mut rows = integral_rows(s, &re, regions)?;
+    for (r, _) in &mut rows {
+        r.left += settings.reference_shift;
+        r.right += settings.reference_shift;
+    }
     let f = fs::OpenOptions::new()
         .write(true)
         .create_new(true)
@@ -364,7 +381,7 @@ pub(super) fn csv_files(
         writeln!(
             w,
             "{i},{:.17e},{:.17e},{original},{value:.17e},{corrected}",
-            s.ppm(i),
+            s.ppm(i) + settings.reference_shift,
             s.real[i]
         )
         .map_err(|e| e.to_string())?;

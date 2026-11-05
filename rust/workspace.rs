@@ -2,6 +2,8 @@
 use super::*;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum Tool {
+    Process,
+    Export,
     Display,
     Phase,
     Baseline,
@@ -11,6 +13,10 @@ pub(super) enum Tool {
 }
 impl App {
     pub(super) fn select_tool(&mut self, tool: Tool) {
+        if tool != Tool::Process {
+            self.finish_auto_process(false);
+            self.reference.picking = false;
+        }
         if self.baseline_open && tool != Tool::Baseline {
             self.finish_baseline(false);
         }
@@ -37,6 +43,8 @@ impl App {
                 ui.horizontal(|ui| {
                     ui.heading("Tools");
                     if ui.small_button("Hide").clicked() {
+                        self.finish_auto_process(false);
+                        self.reference.picking = false;
                         if self.baseline_open {
                             self.finish_baseline(false);
                         }
@@ -45,6 +53,8 @@ impl App {
                 });
                 ui.horizontal_wrapped(|ui| {
                     for (tool, label) in [
+                        (Tool::Process, "Process"),
+                        (Tool::Export, "Export"),
                         (Tool::Display, "Display"),
                         (Tool::Phase, "Phase"),
                         (Tool::Baseline, "Baseline"),
@@ -52,6 +62,14 @@ impl App {
                         (Tool::Peaks, "Peaks"),
                         (Tool::History, "History"),
                     ] {
+                        if !self.advanced
+                            && matches!(
+                                tool,
+                                Tool::Display | Tool::Phase | Tool::Baseline | Tool::Peaks
+                            )
+                        {
+                            continue;
+                        }
                         if ui
                             .selectable_label(self.active_tool == tool, label)
                             .clicked()
@@ -73,6 +91,10 @@ impl App {
                     .id_salt(("tool-scroll", self.active_tool as u8))
                     .auto_shrink([false, false])
                     .show(ui, |ui| match self.active_tool {
+                        Tool::Process => self.process_controls(ui, ctx),
+                        Tool::Export => {
+                            self.export_controls(ui, ctx);
+                        }
                         Tool::Display => self.display_controls(ui, ctx),
                         Tool::Phase => self.phase_controls(ui),
                         Tool::Baseline => self.baseline_editor(ui),
@@ -142,6 +164,8 @@ mod tests {
                 appearance::Theme::Light,
             ] {
                 for tool in [
+                    Tool::Process,
+                    Tool::Export,
                     Tool::Display,
                     Tool::Phase,
                     Tool::Baseline,
@@ -149,9 +173,12 @@ mod tests {
                     Tool::Peaks,
                     Tool::History,
                 ] {
-                    let mut app = App::state(Instant::now(), false);
+                    let mut app = auto_process::tests::app();
                     app.theme = theme;
                     app.select_tool(tool);
+                    if tool == Tool::Baseline {
+                        app.begin_baseline();
+                    }
                     let ctx = egui::Context::default();
                     theme.apply(&ctx);
                     let mut remaining = width;

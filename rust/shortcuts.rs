@@ -13,6 +13,10 @@ impl App {
                 self.cancel_plot_drag = true;
             } else if ctx.wants_keyboard_input() {
                 return;
+            } else if self.reference.picking {
+                self.reference.picking = false;
+            } else if self.auto_preview.is_some() {
+                self.finish_auto_process(false);
             } else if self.baseline_open {
                 self.finish_baseline(false);
             } else if self.show_export {

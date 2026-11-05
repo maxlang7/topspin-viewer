@@ -1,5 +1,48 @@
 use super::*;
 impl App {
+    fn simple_toolbar(&mut self, ui: &mut egui::Ui) {
+        if ui
+            .button("Open")
+            .on_hover_text("Enter a folder in the dataset browser, or drop it onto the window")
+            .clicked()
+        {
+            self.focus_open = true;
+        }
+        if ui
+            .selectable_label(
+                self.show_inspector && self.active_tool == workspace::Tool::Process,
+                "Process",
+            )
+            .clicked()
+        {
+            self.select_tool(workspace::Tool::Process);
+        }
+        if ui.selectable_label(self.integrate, "Integrate").clicked() {
+            self.integrate = !self.integrate;
+            self.data_tab = 0;
+            self.select_tool(workspace::Tool::Integrals);
+        }
+        if ui.button("Export").clicked() {
+            self.select_tool(workspace::Tool::Export);
+        }
+        ui.separator();
+        self.history_buttons(ui);
+        if ui.button("History").clicked() {
+            self.select_tool(workspace::Tool::History);
+        }
+        if ui.button("Settings").clicked() {
+            self.show_settings = true;
+        }
+        if let Some(t) = self.traces.get(self.selected)
+            && let Some(entry) = self.automatic_projects.get(&t.data.path)
+        {
+            ui.label(entry.caption())
+                .on_hover_text(entry.root.display().to_string());
+        }
+        if self.pending > 0 {
+            ui.spinner();
+        }
+    }
     pub fn topspin_chrome(&mut self, ctx: &egui::Context) {
         egui::TopBottomPanel::top("command-row")
             .frame(
@@ -12,6 +55,13 @@ impl App {
                     ui.horizontal(|ui| {
                         ui.spacing_mut().button_padding = egui::vec2(5., 3.);
                         crate::branding::icon(ui, 24.);
+                        if ui.checkbox(&mut self.advanced, "Advanced").changed() && !self.advanced {
+                            self.select_tool(workspace::Tool::Process);
+                        }
+                        if !self.advanced {
+                            self.simple_toolbar(ui);
+                            return;
+                        }
                         ui.menu_button("File", |ui| {
                             self.project_controls(ui, ctx);
                             ui.menu_button("Comparison file", |ui| {
@@ -120,30 +170,34 @@ impl App {
             });
         egui::TopBottomPanel::bottom("command-status").show(ctx, |ui| {
             ui.horizontal(|ui| {
-                ui.label("Command");
-                let r = ui.add(
-                    egui::TextEdit::singleline(&mut self.command)
-                        .desired_width(205.)
-                        .hint_text(".all · .ph · int · .multi · .csv · .basl"),
-                );
-                if r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
-                    match self.command.trim() {
-                        ".all" => self.range = None,
-                        ".ph" => {
-                            self.select_tool(workspace::Tool::Phase);
-                        }
-                        "int" => {
-                            self.integrate = true;
-                            self.data_tab = 0;
-                            self.select_tool(workspace::Tool::Integrals);
-                        }
-                        ".multi" => self.stacked = !self.stacked,
-                        ".csv" => self.export(ctx.clone()),
-                        ".basl" => self.begin_baseline(),
-                        _ => self.status = "Commands: .all, .ph, int, .multi, .csv, .basl".into(),
-                    };
-                    self.command.clear();
-                    r.request_focus();
+                if self.advanced {
+                    ui.label("Command");
+                    let r = ui.add(
+                        egui::TextEdit::singleline(&mut self.command)
+                            .desired_width(205.)
+                            .hint_text(".all · .ph · int · .multi · .csv · .basl"),
+                    );
+                    if r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+                        match self.command.trim() {
+                            ".all" => self.range = None,
+                            ".ph" => {
+                                self.select_tool(workspace::Tool::Phase);
+                            }
+                            "int" => {
+                                self.integrate = true;
+                                self.data_tab = 0;
+                                self.select_tool(workspace::Tool::Integrals);
+                            }
+                            ".multi" => self.stacked = !self.stacked,
+                            ".csv" => self.export(ctx.clone()),
+                            ".basl" => self.begin_baseline(),
+                            _ => {
+                                self.status = "Commands: .all, .ph, int, .multi, .csv, .basl".into()
+                            }
+                        };
+                        self.command.clear();
+                        r.request_focus();
+                    }
                 }
                 ui.add(egui::Label::new(&self.status).truncate())
                     .on_hover_text(&self.status);

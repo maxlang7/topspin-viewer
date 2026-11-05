@@ -40,8 +40,8 @@ impl App {
         if self.traces.is_empty() {
             return Err("Open a spectrum first".into());
         }
-        if self.pending > 0 || self.baseline_open {
-            return Err("Finish pending operations and baseline preview first".into());
+        if self.pending > 0 || self.has_processing_preview() {
+            return Err("Finish pending operations and processing preview first".into());
         }
         Ok(())
     }
@@ -98,8 +98,8 @@ impl App {
         Ok("Project saved. Edits autosave here; original Bruker files remain untouched.".into())
     }
     pub(super) fn open_project(&mut self, ctx: egui::Context) -> Result<String, String> {
-        if self.pending > 0 || self.baseline_open {
-            return Err("Finish pending operations and baseline preview first".into());
+        if self.pending > 0 || self.has_processing_preview() {
+            return Err("Finish pending operations and processing preview first".into());
         }
         let root = fs::canonicalize(&self.project_path).map_err(|e| e.to_string())?;
         let manifest: serde_json::Value = serde_json::from_slice(
@@ -147,7 +147,7 @@ impl App {
     pub(super) fn flush_project(&mut self) {
         if let Some(root) = self.active_project.clone()
             && self.pending == 0
-            && !self.baseline_open
+            && !self.has_processing_preview()
             && !self.traces.is_empty()
         {
             self.project_path = root.display().to_string();
@@ -157,7 +157,7 @@ impl App {
         }
     }
     pub(super) fn autosave_project(&mut self, ctx: &egui::Context) {
-        if self.active_project.is_none() || self.pending > 0 || self.baseline_open {
+        if self.active_project.is_none() || self.pending > 0 || self.has_processing_preview() {
             return;
         }
         let Ok(bytes) = serde_json::to_vec(&self.snapshot()) else {
@@ -204,7 +204,7 @@ impl App {
             self.export_controls(ui, ctx);
         });
     }
-    fn export_controls(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) -> bool {
+    pub(super) fn export_controls(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) -> bool {
         ui.label("New destination folder");
         ui.text_edit_singleline(&mut self.export_path);
         if ui.button("Bruker / TopSpin").clicked() {
@@ -234,8 +234,8 @@ impl App {
         self.show_export = open && !started;
     }
     pub(super) fn export_selected(&mut self, ctx: egui::Context, bruker: bool) {
-        if self.baseline_open {
-            self.status = "Apply or cancel the baseline preview before exporting".into();
+        if self.has_processing_preview() {
+            self.status = "Apply or cancel the processing preview before exporting".into();
             return;
         }
         let Some(t) = self.traces.get(self.selected) else {
@@ -514,6 +514,7 @@ mod tests {
                 integral_scale: 1.,
                 normalization_frozen: true,
                 checkpoints: vec![],
+                reference_shift: 0.,
             };
             let (re, im) = crate::bruker_export::saved(&spectrum, &settings).unwrap();
             for (a, b) in re

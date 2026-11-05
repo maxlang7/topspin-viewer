@@ -1,4 +1,6 @@
 mod appearance;
+mod auto_algorithms;
+mod auto_process;
 mod automatic;
 mod branding;
 mod bruker_export;
@@ -11,6 +13,7 @@ mod processing;
 mod project;
 #[cfg(feature = "native-raw")]
 mod raw;
+mod reference;
 mod shortcuts;
 mod stack;
 mod storage;
@@ -48,6 +51,8 @@ struct Settings {
     normalization_frozen: bool,
     #[serde(default)]
     checkpoints: Vec<history::Checkpoint>,
+    #[serde(default)]
+    reference_shift: f64,
 }
 fn frozen() -> bool {
     true
@@ -143,6 +148,11 @@ struct App {
     checkpoint_name: String,
     history_wheel_at: Option<Instant>,
     show_export: bool,
+    advanced: bool,
+    focus_open: bool,
+    reference: reference::ReferenceUi,
+    auto_preview: Option<auto_process::Preview>,
+    auto_job: Option<auto_process::Job>,
     cancel_plot_drag: bool,
     data_tab: usize,
     command: String,
@@ -287,6 +297,7 @@ impl App {
                         integral_scale: s.integral_scale,
                         normalization_frozen: !s.saved_regions.is_empty(),
                         checkpoints: vec![],
+                        reference_shift: 0.,
                     });
                     if import_saved {
                         for row in &s.saved_regions {
@@ -351,6 +362,11 @@ impl App {
             checkpoint_name: String::new(),
             history_wheel_at: None,
             show_export: false,
+            advanced: false,
+            focus_open: false,
+            reference: reference::ReferenceUi::default(),
+            auto_preview: None,
+            auto_job: None,
             cancel_plot_drag: false,
             data_tab: 0,
             command: String::new(),
@@ -468,8 +484,8 @@ impl App {
         let mut r = [f64::NEG_INFINITY, f64::INFINITY];
         for t in &self.traces {
             if t.settings.visible {
-                r[0] = r[0].max(t.data.left);
-                r[1] = r[1].min(t.data.right);
+                r[0] = r[0].max(t.left());
+                r[1] = r[1].min(t.right());
             }
         }
         if r[0] > r[1] { r } else { [12., -1.] }
@@ -479,8 +495,8 @@ impl App {
     }
     fn save_session(&self) -> Result<String, String> {
         use std::io::Write;
-        if self.baseline_open {
-            return Err("Apply or cancel the baseline preview before saving".into());
+        if self.has_processing_preview() {
+            return Err("Apply or cancel the processing preview before saving".into());
         }
         let s = Session {
             version: 2,
@@ -504,7 +520,7 @@ impl App {
         Ok("Saved comparison. Choose a new filename for subsequent saves.".into())
     }
     fn restore(&mut self, ctx: egui::Context) -> Result<String, String> {
-        if self.pending > 0 || self.baseline_open {
+        if self.pending > 0 || self.has_processing_preview() {
             return Err(
                 "Finish baseline preview, pending loads and exports before restoring a comparison"
                     .into(),
@@ -529,10 +545,17 @@ impl App {
                 .is_some_and(|r| !r[0].is_finite() || !r[1].is_finite() || r[0] <= r[1])
             || s.traces.iter().any(|t| {
                 t.checkpoints.iter().any(|c| !c.valid())
-                    || ![t.gain, t.offset, t.p0, t.p1, t.integral_scale]
-                        .iter()
-                        .chain(t.baseline.iter())
-                        .all(|n| n.is_finite())
+                    || ![
+                        t.gain,
+                        t.offset,
+                        t.p0,
+                        t.p1,
+                        t.integral_scale,
+                        t.reference_shift,
+                    ]
+                    .iter()
+                    .chain(t.baseline.iter())
+                    .all(|n| n.is_finite())
             })
         {
             return Err("Invalid comparison session".into());
@@ -601,6 +624,7 @@ impl App {
 }
 impl eframe::App for App {
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
+        self.finish_auto_process(false);
         if self.baseline_open {
             self.finish_baseline(false);
         }
@@ -616,6 +640,7 @@ impl eframe::App for App {
                 self.open(p, ctx.clone());
             }
         }
+        self.poll_auto_process(ctx);
         self.sync_history(false);
         self.handle_shortcuts(ctx);
         self.handle_integral_delete_shortcut(ctx);
@@ -640,8 +665,11 @@ impl eframe::App for App {
                     egui::TextEdit::singleline(&mut self.path)
                         .hint_text("Folder or processing number"),
                 );
-                if ctx.input(|i| i.modifiers.command && i.key_pressed(egui::Key::O)) {
+                if self.focus_open
+                    || ctx.input(|i| i.modifiers.command && i.key_pressed(egui::Key::O))
+                {
                     response.request_focus();
+                    self.focus_open = false;
                 }
                 if ui.button("Open / refresh").clicked()
                     || (response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)))
@@ -747,11 +775,11 @@ impl eframe::App for App {
    for (lane,(idx,t)) in self.traces.iter_mut().enumerate().filter(|(_,t)|t.settings.visible).enumerate(){let d=&t.data;let s=&t.settings;if t.processed.is_empty(){continue;}let scale=if self.normalize{t.processed_max}else{common};let lane_h=if self.stacked{rect.height()/count as f32}else{rect.height()};let geometry=integral_plot::lane_layout(rect,self.stacked,count,lane,s.offset,have_integrals&&(!self.stacked||idx==selected));let amp=geometry.amplitude;
     let y=|v:f64|geometry.baseline-((v/scale*s.gain)as f32*amp).clamp(-1e6,1e6);
     // Min/max per physical column retains narrow peaks at all zoom levels.
-    let key=format!("{rect:?}/{range:?}/{:?}/{common}/{}",(s.gain,s.offset,s.p0,s.p1,self.normalize,self.stacked,lane,count,idx,t.revision,have_integrals,selected),ctx.pixels_per_point());
+    let key=format!("{rect:?}/{range:?}/{:?}/{common}/{}/{}",(s.gain,s.offset,s.p0,s.p1,self.normalize,self.stacked,lane,count,idx,t.revision,have_integrals,selected),s.reference_shift,ctx.pixels_per_point());
     if t.cache_key!=key {
     t.cache.clear();
     let columns=(rect.width()*ctx.pixels_per_point()).ceil()as usize;let mut previous=None;
-    for column in 0..columns{let x0=rect.left()+column as f32/columns as f32*rect.width();let x1=rect.left()+(column+1)as f32/columns as f32*rect.width();let index=|p:f64|((d.left-p)/(d.left-d.right)*d.real.len()as f64).floor()as isize;let lo=index(ppm(x0)).max(0)as usize;let hi=index(ppm(x1)).max(0)as usize;if lo>=d.real.len()||ppm(x1)>d.left||ppm(x0)<d.right{previous=None;continue}let hi=hi.max(lo+1).min(d.real.len());let(mut low,mut high)=(f64::INFINITY,f64::NEG_INFINITY);for i in lo..hi{let v=t.processed[i];low=low.min(v);high=high.max(v);}let a=Pos2::new(x0,y(low));let b=Pos2::new(x0,y(high));let stroke=Stroke::new(1.,colors[idx%6]);t.cache.push(egui::Shape::line_segment([a,b],stroke));if let Some(p)=previous{t.cache.push(egui::Shape::line_segment([p,a],stroke));}previous=Some(b);}
+    for column in 0..columns{let x0=rect.left()+column as f32/columns as f32*rect.width();let x1=rect.left()+(column+1)as f32/columns as f32*rect.width();let index=|p:f64|((d.left+s.reference_shift-p)/(d.left-d.right)*d.real.len()as f64).floor()as isize;let lo=index(ppm(x0)).max(0)as usize;let hi=index(ppm(x1)).max(0)as usize;if lo>=d.real.len()||ppm(x1)>d.left+s.reference_shift||ppm(x0)<d.right+s.reference_shift{previous=None;continue}let hi=hi.max(lo+1).min(d.real.len());let(mut low,mut high)=(f64::INFINITY,f64::NEG_INFINITY);for i in lo..hi{let v=t.processed[i];low=low.min(v);high=high.max(v);}let a=Pos2::new(x0,y(low));let b=Pos2::new(x0,y(high));let stroke=Stroke::new(1.,colors[idx%6]);t.cache.push(egui::Shape::line_segment([a,b],stroke));if let Some(p)=previous{t.cache.push(egui::Shape::line_segment([p,a],stroke));}previous=Some(b);}
     t.cache_key=key;
     }
     painter.with_clip_rect(rect).extend(t.cache.iter().cloned());

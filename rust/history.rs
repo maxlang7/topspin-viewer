@@ -13,6 +13,8 @@ pub(super) struct IntegralRecipe {
 }
 #[derive(Clone, Serialize, Deserialize, PartialEq)]
 pub(super) struct EditState {
+    #[serde(default)]
+    reference_shift: f64,
     p0: f64,
     p1: f64,
     baseline: [f64; 5],
@@ -29,7 +31,7 @@ impl Checkpoint {
     pub(super) fn valid(&self) -> bool {
         let s = &self.state;
         !self.name.trim().is_empty()
-            && [s.p0, s.p1, s.scale]
+            && [s.p0, s.p1, s.scale, s.reference_shift]
                 .iter()
                 .chain(&s.baseline)
                 .all(|v| v.is_finite())
@@ -81,7 +83,9 @@ impl History {
     }
 }
 fn description(before: &EditState, after: &EditState) -> &'static str {
-    if before.p0 != after.p0 || before.p1 != after.p1 {
+    if before.reference_shift != after.reference_shift {
+        "Reference spectrum"
+    } else if before.p0 != after.p0 || before.p1 != after.p1 {
         "Phase adjustment"
     } else if before.baseline != after.baseline {
         "Baseline correction"
@@ -105,9 +109,13 @@ impl App {
             .as_ref()
             .filter(|(path, _)| *path == t.data.path)
             .map_or(s.baseline, |(_, before)| *before);
+        let (p0, p1, baseline) = self
+            .preview_recipe(&t.data.path)
+            .unwrap_or((s.p0, s.p1, baseline));
         EditState {
-            p0: s.p0,
-            p1: s.p1,
+            reference_shift: s.reference_shift,
+            p0,
+            p1,
             baseline,
             scale: s.integral_scale,
             frozen: s.normalization_frozen,
@@ -154,6 +162,7 @@ impl App {
     }
     fn apply_edit_state(&mut self, index: usize, state: &EditState) {
         let s = &mut self.traces[index].settings;
+        s.reference_shift = state.reference_shift;
         s.p0 = state.p0;
         s.p1 = state.p1;
         s.baseline = state.baseline;
@@ -183,8 +192,8 @@ impl App {
         self.refresh_processing();
     }
     pub(super) fn undo_redo(&mut self, redo: bool) {
-        if self.baseline_open {
-            self.status = "Apply or cancel the baseline preview before undo/redo".into();
+        if self.has_processing_preview() {
+            self.status = "Apply or cancel the processing preview before undo/redo".into();
             return;
         }
         self.sync_history(true);
@@ -220,9 +229,9 @@ impl App {
     }
     pub(super) fn history_buttons(&mut self, ui: &mut egui::Ui) {
         let h = self.traces.get(self.selected).map(|t| &t.history);
-        let undo =
-            h.is_some_and(|h| !h.undo.is_empty() || h.pending.is_some()) && !self.baseline_open;
-        let redo = h.is_some_and(|h| !h.redo.is_empty()) && !self.baseline_open;
+        let undo = h.is_some_and(|h| !h.undo.is_empty() || h.pending.is_some())
+            && !self.has_processing_preview();
+        let redo = h.is_some_and(|h| !h.redo.is_empty()) && !self.has_processing_preview();
         if ui
             .add_enabled(undo, egui::Button::new("Undo"))
             .on_hover_text("Undo scientific edit · Ctrl+Z")
@@ -239,8 +248,8 @@ impl App {
         }
     }
     pub(super) fn create_checkpoint(&mut self, name: &str) {
-        if self.baseline_open {
-            self.status = "Apply or cancel baseline preview before creating a checkpoint".into();
+        if self.has_processing_preview() {
+            self.status = "Apply or cancel processing preview before creating a checkpoint".into();
             return;
         }
         if self.selected >= self.traces.len() {
@@ -263,8 +272,8 @@ impl App {
         self.status = format!("Checkpoint saved: {name} · autosaving");
     }
     pub(super) fn restore_checkpoint(&mut self, index: usize) {
-        if self.baseline_open {
-            self.status = "Apply or cancel baseline preview before restoring a checkpoint".into();
+        if self.has_processing_preview() {
+            self.status = "Apply or cancel processing preview before restoring a checkpoint".into();
             return;
         }
         let Some(checkpoint) = self
@@ -363,6 +372,7 @@ mod tests {
             integral_scale: 1.,
             normalization_frozen: false,
             checkpoints: vec![],
+            reference_shift: 0.,
         };
         a.traces.push(Trace {
             data: Arc::new(data),

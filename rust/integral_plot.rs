@@ -131,8 +131,8 @@ impl App {
                                 ui.monospace(format!(
                                     "#{}  {:.4}–{:.4} ppm  {:.5}",
                                     index + 1,
-                                    r.left,
-                                    r.right,
+                                    r.left + t.settings.reference_shift,
+                                    r.right + t.settings.reference_shift,
                                     r.value * t.settings.integral_scale
                                 ));
                             }
@@ -195,8 +195,8 @@ impl App {
                     * t.data.real.len() as f64
                     + 0.5) as isize)
                     .clamp(0, t.data.real.len() as isize) as usize;
-                let left = px(t.data.ppm(start));
-                let right = px(t.data.ppm(start + r.curve.len() - 1));
+                let left = px(t.ppm(start));
+                let right = px(t.ppm(start + r.curve.len() - 1));
                 if right < rect.left() || left > rect.right() {
                     return None;
                 }
@@ -247,8 +247,8 @@ impl App {
                 response.clone().on_hover_text_at_pointer(format!(
                     "Integral #{} · {:.5}–{:.5} ppm\n{:.8}",
                     id + 1,
-                    r.left,
-                    r.right,
+                    r.left + t.settings.reference_shift,
+                    r.right + t.settings.reference_shift,
                     r.value * t.settings.integral_scale
                 ));
             }
@@ -297,7 +297,7 @@ impl App {
                 r.curve.len(),
                 *start,
                 t.data.real.len(),
-                [t.data.left, t.data.right],
+                [t.left(), t.right()],
                 range,
             );
             if first > last {
@@ -308,7 +308,7 @@ impl App {
             let high = visible.iter().fold(f64::NEG_INFINITY, |m, v| m.max(*v));
             let point = |i: usize| {
                 Pos2::new(
-                    px(t.data.ppm(start + i)),
+                    px(t.ppm(start + i)),
                     curve_rect.bottom() - curve_fraction(r.curve[i], low, high) * curve_h,
                 )
             };
@@ -395,8 +395,8 @@ impl App {
                 response.clone().on_hover_text_at_pointer(format!(
                     "Integral #{}  {:.5}–{:.5} ppm\nNormalized: {:.12}\nRaw: {:.12}",
                     id + 1,
-                    r.left,
-                    r.right,
+                    r.left + t.settings.reference_shift,
+                    r.right + t.settings.reference_shift,
                     r.value * t.settings.integral_scale,
                     r.value
                 ));

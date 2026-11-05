@@ -1,5 +1,15 @@
 use super::*;
 impl Trace {
+    pub(super) fn left(&self) -> f64 {
+        self.data.left + self.settings.reference_shift
+    }
+    pub(super) fn right(&self) -> f64 {
+        self.data.right + self.settings.reference_shift
+    }
+    pub(super) fn ppm(&self, i: usize) -> f64 {
+        self.data.ppm(i) + self.settings.reference_shift
+    }
+
     pub(super) fn refresh(&mut self) -> Result<(), String> {
         let mut key = vec![self.settings.p0.to_bits(), self.settings.p1.to_bits()];
         key.extend(self.settings.baseline.map(f64::to_bits));
@@ -31,7 +41,7 @@ impl Trace {
                 && v > self.processed[i - 1]
                 && v >= self.processed[i + 1]
             {
-                peaks.push((self.data.ppm(i), v));
+                peaks.push((self.ppm(i), v));
             }
         }
         peaks.sort_by(|a, b| b.1.total_cmp(&a.1));
@@ -93,6 +103,10 @@ impl App {
         }
     }
     pub(super) fn measure_region(&mut self, a: f64, b: f64) {
+        if self.auto_preview.is_some() {
+            self.status = "Accept or cancel processing before integrating".into();
+            return;
+        }
         self.refresh_processing();
         let first_value = self
             .regions
@@ -106,6 +120,8 @@ impl App {
             self.status = e;
             return;
         }
+        let a = a - t.settings.reference_shift;
+        let b = b - t.settings.reference_shift;
         match processing::region(
             &t.processed,
             [t.data.left, t.data.right],
@@ -160,25 +176,27 @@ impl App {
                     ui.add(egui::DragValue::new(&mut self.region_a).speed(0.01));
                     ui.add(egui::DragValue::new(&mut self.region_b).speed(0.01));
                 });
-                ui.checkbox(
-                    &mut self.region_baseline,
-                    "Correct integral baseline from endpoints",
-                );
-                ui.add(
-                    egui::DragValue::new(&mut self.region_points)
-                        .range(1..=65536)
-                        .prefix("Endpoint points "),
-                );
-                ui.add(
-                    egui::DragValue::new(&mut self.region_bias)
-                        .speed(1.)
-                        .prefix("Bias "),
-                );
-                ui.add(
-                    egui::DragValue::new(&mut self.region_slope)
-                        .speed(0.01)
-                        .prefix("Slope / point "),
-                );
+                if self.advanced {
+                    ui.checkbox(
+                        &mut self.region_baseline,
+                        "Correct integral baseline from endpoints",
+                    );
+                    ui.add(
+                        egui::DragValue::new(&mut self.region_points)
+                            .range(1..=65536)
+                            .prefix("Endpoint points "),
+                    );
+                    ui.add(
+                        egui::DragValue::new(&mut self.region_bias)
+                            .speed(1.)
+                            .prefix("Bias "),
+                    );
+                    ui.add(
+                        egui::DragValue::new(&mut self.region_slope)
+                            .speed(0.01)
+                            .prefix("Slope / point "),
+                    );
+                }
                 if ui.button("Integrate ppm range").clicked() {
                     self.measure_region(self.region_a, self.region_b);
                 }
@@ -197,26 +215,42 @@ impl App {
                     .filter(|(_, r)| r.trace == self.selected)
                 {
                     ui.collapsing(
-                        format!("#{} {:.3} – {:.3}", i + 1, r.left, r.right),
+                        format!(
+                            "#{} {:.3} – {:.3}",
+                            i + 1,
+                            r.left + self.traces[r.trace].settings.reference_shift,
+                            r.right + self.traces[r.trace].settings.reference_shift
+                        ),
                         |ui| {
-                            ui.add(
-                                egui::DragValue::new(&mut r.left)
-                                    .speed(0.01)
-                                    .prefix("From "),
-                            );
-                            ui.add(egui::DragValue::new(&mut r.right).speed(0.01).prefix("To "));
-                            ui.checkbox(&mut r.baseline, "Endpoint baseline correction");
-                            ui.add(
-                                egui::DragValue::new(&mut r.points)
-                                    .range(1..=65536)
-                                    .prefix("Endpoint points "),
-                            );
-                            ui.add(egui::DragValue::new(&mut r.bias).speed(1.).prefix("Bias "));
-                            ui.add(
-                                egui::DragValue::new(&mut r.slope)
-                                    .speed(0.01)
-                                    .prefix("Slope / point "),
-                            );
+                            let shift = self.traces[r.trace].settings.reference_shift;
+                            let mut left = r.left + shift;
+                            let mut right = r.right + shift;
+                            if ui
+                                .add(egui::DragValue::new(&mut left).speed(0.01).prefix("From "))
+                                .changed()
+                            {
+                                r.left = left - shift;
+                            }
+                            if ui
+                                .add(egui::DragValue::new(&mut right).speed(0.01).prefix("To "))
+                                .changed()
+                            {
+                                r.right = right - shift;
+                            }
+                            if self.advanced {
+                                ui.checkbox(&mut r.baseline, "Endpoint baseline correction");
+                                ui.add(
+                                    egui::DragValue::new(&mut r.points)
+                                        .range(1..=65536)
+                                        .prefix("Endpoint points "),
+                                );
+                                ui.add(egui::DragValue::new(&mut r.bias).speed(1.).prefix("Bias "));
+                                ui.add(
+                                    egui::DragValue::new(&mut r.slope)
+                                        .speed(0.01)
+                                        .prefix("Slope / point "),
+                                );
+                            }
                             let scale = self
                                 .traces
                                 .get(r.trace)
@@ -281,8 +315,14 @@ impl App {
                             .map(|t| t.settings.integral_scale)
                             .unwrap_or(1.);
                         ui.label(format!("{}", r.trace + 1));
-                        ui.label(format!("{:.5}", r.left));
-                        ui.label(format!("{:.5}", r.right));
+                        ui.label(format!(
+                            "{:.5}",
+                            r.left + self.traces[r.trace].settings.reference_shift
+                        ));
+                        ui.label(format!(
+                            "{:.5}",
+                            r.right + self.traces[r.trace].settings.reference_shift
+                        ));
                         ui.label(format!("{:.8}", r.value));
                         ui.label(if let Some(e) = &r.error {
                             e.clone()
@@ -431,6 +471,7 @@ mod tests {
             integral_scale: 1.,
             normalization_frozen: false,
             checkpoints: vec![],
+            reference_shift: 0.,
         };
         app.traces.push(Trace {
             data: Arc::new(data),

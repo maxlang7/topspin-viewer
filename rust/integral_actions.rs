@@ -76,6 +76,7 @@ impl App {
                 if phase {
                     if let Some(idx) = hit
                         && !typing
+                        && self.auto_preview.is_none()
                         && i.raw_scroll_delta.y != 0.
                         && !self.traces[idx].data.imag.is_empty()
                     {
@@ -144,6 +145,15 @@ impl App {
             }
         }
 
+        if self.reference.picking {
+            if response.clicked()
+                && !label_blocked
+                && let Some(pos) = plot_pointer
+            {
+                self.pick_reference(ppm(pos.x), rect.width(), width);
+            }
+            return;
+        }
         if self.cancel_plot_drag {
             if !ctx.input(|i| i.pointer.primary_down()) {
                 self.cancel_plot_drag = false;
@@ -183,6 +193,9 @@ impl App {
         }
     }
     pub(super) fn calibrate_integral(&mut self, index: usize, target: f64) -> Result<(), String> {
+        if self.auto_preview.is_some() {
+            return Err("Accept or cancel the processing preview first".into());
+        }
         self.refresh_processing();
         let r = self.regions.get(index).ok_or("Integral no longer exists")?;
         if r.error.is_some() || r.value == 0. || !r.value.is_finite() {
@@ -205,6 +218,10 @@ impl App {
         Ok(())
     }
     pub(super) fn delete_integral(&mut self, index: usize) {
+        if self.auto_preview.is_some() {
+            self.status = "Accept or cancel the processing preview first".into();
+            return;
+        }
         if index >= self.regions.len() {
             return;
         }
@@ -398,8 +415,8 @@ impl App {
         let Some(t) = self.integration_drag_trace.and_then(|i| self.traces.get(i)) else {
             return;
         };
-        let left = a.max(b).min(t.data.left);
-        let right = a.min(b).max(t.data.right);
+        let left = a.max(b).min(t.left());
+        let right = a.min(b).max(t.right());
         if left < right {
             return;
         }
@@ -461,6 +478,7 @@ mod tests {
             integral_scale: 1.,
             normalization_frozen: false,
             checkpoints: vec![],
+            reference_shift: 0.,
         };
         a.traces.push(Trace {
             data: Arc::new(s),

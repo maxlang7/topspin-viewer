@@ -59,3 +59,9 @@ Import preserves phase already applied to processed 1r/1i and records original P
 ## Named processing checkpoints
 
 The optional `checkpoints` array in each spectrum's settings stores named phase, baseline, integral-region and normalization recipes. Older projects without it open with an empty checkpoint list. Checkpoints contain no source paths or sample arrays, so portable project copies retain them. They are internal project metadata and are not written into Bruker processing files. The interactive undo/redo stack is session-only; named checkpoints persist in ordinary project revisions and autosaves.
+
+## Referencing and automatic-processing proposals
+
+The optional `reference_shift` setting defaults to zero and shifts the displayed ppm axis. Integral recipes remain in original sample-coordinate ppm, including when reference shifts are stored in named checkpoints. Source spectrum metadata and samples stay unchanged. Spectrum/integral CSV output and Bruker OFFSET/intrng export apply the shift explicitly.
+
+Automatic phase and baseline proposals are ephemeral. Before/After preview settings cannot be saved, exported or checkpointed. Acceptance records ordinary phase and polynomial parameters, using the existing project schema and autosave pipeline. Cancellation and app exit restore the accepted parameters. No new source-array format is introduced.

@@ -1,6 +1,6 @@
 # NMR Viewer
 
-A native Rust desktop viewer for Bruker 1D NMR data, with a compact toolbar and selectable Gruvbox Dark, neutral Dark, and conventional Light themes.
+A native Rust desktop viewer for Bruker 1D NMR data, with a simple Open → Process → Integrate → Export workflow and selectable Gruvbox Dark, neutral Dark, and conventional Light themes.
 
 Build with `bash build-rust.sh`, then launch with `bash run.sh [dataset or project folders...]`. Startup executes the optimized binary directly without compiling or evaluating Nix.
 
@@ -14,8 +14,12 @@ See [RUST.md](RUST.md) for controls and performance, [PROJECT-FORMAT.md](PROJECT
 
 Run native tests with `nix-shell rust-shell.nix --run 'cargo test && cargo clippy -- -D warnings'`. The full source history is backed up to the private GitHub repository `maxlang7/topspin-viewer`. Generated files under `artifacts/`, build outputs and local environments remain ignored.
 
-Phase, Baseline, Integrals, Peaks, Display and History share one collapsible right-hand tool panel. Switching tools replaces its contents; scientific editors no longer open floating windows. The single command row groups File/View/Tools menus beside Phase, Baseline, Integrate, Undo/Redo and zoom controls. The desktop spectrum logo sits at its upper left. Settings remembers the selected theme. Showing integrals keeps the spectrum baseline and intensity scale fixed. Labels use bounded rows below baseline; a +N integrals menu exposes crowded values without moving the spectrum.
+The default toolbar shows Open, Process, Integrate and Export. Advanced reveals manual phase, polynomial coefficients, peak picking, display controls and command entry. Process, Export, Phase, Baseline, Integrals, Peaks, Display and History share one collapsible right-hand tool panel. Switching tools replaces its contents; scientific editors no longer open floating windows. The single command row groups File/View/Tools menus beside Phase, Baseline, Integrate, Undo/Redo and zoom controls. The desktop spectrum logo sits at its upper left. Settings remembers the selected theme. Showing integrals keeps the spectrum baseline and intensity scale fixed. Labels use bounded rows below baseline; a +N integrals menu exposes crowded values without moving the spectrum.
 
 Ctrl+Alt+scroll adjusts zero-order phase on the spectrum under the pointer; Ctrl+scroll also adjusts zero-order phase. There is no first-order phase shortcut. Home restores the full ppm range, Ctrl+Home resets the selected spectrum’s gain and offset, Ctrl+, opens Settings, Ctrl+E opens export options, Ctrl+P opens the docked phase controls, and Ctrl+B opens Baseline. Escape cancels the active interaction or closes a popup or editor. Shortcuts defer to text entry.
 
 Undo scientific edits with Ctrl+Z; redo with Ctrl+Shift+Z or Ctrl+Y. History follows each spectrum through stack reordering and keeps the last 200 edits during the session. Open **Tools → History / checkpoints** to save named processing checkpoints. Checkpoints include phase, baseline, integral regions and calibration, survive project reopening, and restore as an undoable edit. All accepted edits and undo/redo results autosave.
+
+Use **Process** to preview automatic phase, automatic baseline, or both. Calculations run in the background. Compare **Before / After**, then **Accept processing** or **Cancel**. Only accepted processing autosaves and enters undo history. These independent algorithms target routine positive 1D spectra; broad or inverted signals need review. Automatic baseline is a robust degree-four polynomial fit, not TopSpin's automatic `abs` algorithm.
+
+**Process → Reference chemical shifts** lets you pick a peak, enter its known ppm, and apply the reference. Matching nucleus/solvent suggestions currently cover 1H and 13C in CDCl3 and DMSO-d6. Referencing is undoable and persists in projects, CSV and Bruker exports. It leaves source samples and existing integration sample intervals unchanged.

@@ -102,6 +102,7 @@ impl App {
         }
     }
     pub(super) fn close_trace(&mut self, index: usize) {
+        self.finish_auto_process(false);
         if index >= self.traces.len() || self.restoring {
             return;
         }
@@ -166,12 +167,12 @@ impl App {
             .fold(f64::MIN_POSITIVE, |m, (_, t)| m.max(t.processed_max));
         visible
             .iter()
-            .filter(|(_, t)| !t.processed.is_empty() && ppm <= t.data.left && ppm >= t.data.right)
+            .filter(|(_, t)| !t.processed.is_empty() && ppm <= t.left() && ppm >= t.right())
             .map(|(i, t)| {
                 let n = t.processed.len();
                 let half = (range[0] - range[1]) / rect.width() as f64 / 2.;
                 let index = |p: f64| {
-                    (((t.data.left - p) / (t.data.left - t.data.right) * n as f64).floor() as isize)
+                    (((t.left() - p) / (t.data.left - t.data.right) * n as f64).floor() as isize)
                         .clamp(0, n as isize - 1) as usize
                 };
                 let lo = index(ppm + half);
@@ -347,6 +348,7 @@ mod tests {
                 integral_scale: 1.,
                 normalization_frozen: false,
                 checkpoints: vec![],
+                reference_shift: 0.,
             };
             a.traces.push(Trace {
                 data: Arc::new(data),

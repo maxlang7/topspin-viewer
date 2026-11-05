@@ -170,6 +170,7 @@ pub(super) fn import(source: &Path, base: &Path) -> Result<Imported, String> {
             integral_scale: data.integral_scale,
             normalization_frozen: !data.saved_regions.is_empty(),
             checkpoints: vec![],
+            reference_shift: 0.,
         };
         let regions = data
             .saved_regions
@@ -227,6 +228,7 @@ pub(super) fn import(source: &Path, base: &Path) -> Result<Imported, String> {
             settings.gain,
             settings.offset,
             settings.integral_scale,
+            settings.reference_shift,
         ]
         .iter()
         .chain(&settings.baseline)
@@ -266,7 +268,7 @@ impl App {
         (settings, regions, bytes)
     }
     pub(super) fn autosave_automatic(&mut self, ctx: &egui::Context) {
-        if self.baseline_open {
+        if self.has_processing_preview() {
             return;
         }
         for index in 0..self.traces.len() {
@@ -315,7 +317,7 @@ impl App {
         }
     }
     pub(super) fn flush_automatic(&mut self) {
-        if self.baseline_open {
+        if self.has_processing_preview() {
             return;
         }
         self.refresh_processing();
@@ -497,6 +499,54 @@ mod tests {
             (restored.regions[0].value * restored.traces[0].settings.integral_scale - 3.).abs()
                 < 1e-12
         );
+        let area = restored.regions[0].value.to_bits();
+        let source_bounds = [restored.regions[0].left, restored.regions[0].right];
+        restored.apply_reference(7., 7.26).unwrap();
+        restored.refresh_processing();
+        assert_eq!(restored.regions[0].value.to_bits(), area);
+        assert_eq!(
+            [restored.regions[0].left, restored.regions[0].right],
+            source_bounds
+        );
+        let shift = restored.traces[0].settings.reference_shift;
+        restored.flush_automatic();
+        let mut referenced = app(&root);
+        referenced.load(source.clone(), None, egui::Context::default());
+        receive(&mut referenced);
+        assert_eq!(
+            referenced.traces[0].settings.reference_shift.to_bits(),
+            shift.to_bits()
+        );
+        let export = root.join("referenced-export");
+        crate::bruker_export::export(
+            &export,
+            &referenced.traces[0].data,
+            &referenced.traces[0].settings,
+            &referenced.regions,
+        )
+        .unwrap();
+        let reopened = data::load(&export.join("sample/10/pdata/1")).unwrap();
+        assert_eq!(reopened.left, referenced.traces[0].left());
+        assert_eq!(reopened.saved_regions[0][0], source_bounds[0] + shift);
+        let csv = root.join("referenced-csv");
+        crate::bruker_export::csv(
+            &csv,
+            &referenced.traces[0].data,
+            &referenced.traces[0].settings,
+            &referenced.regions,
+        )
+        .unwrap();
+        let csv = fs::read_to_string(csv.join("spectrum.csv")).unwrap();
+        let ppm = csv
+            .lines()
+            .nth(1)
+            .unwrap()
+            .split(',')
+            .nth(1)
+            .unwrap()
+            .parse::<f64>()
+            .unwrap();
+        assert_eq!(ppm.to_bits(), referenced.traces[0].left().to_bits());
         for (f, hash) in ["1r", "1i", "procs", "intrng"].into_iter().zip(hashes) {
             assert_eq!(storage::digest(&source.join(f)).unwrap(), hash);
         }
