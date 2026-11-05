@@ -44,6 +44,10 @@ impl App {
         }
     }
     pub fn topspin_chrome(&mut self, ctx: &egui::Context) {
+        if self.theme == appearance::Theme::TopSpin {
+            self.topspin_reference_chrome(ctx);
+            return;
+        }
         egui::TopBottomPanel::top("command-row")
             .frame(
                 egui::Frame::new()
@@ -55,6 +59,7 @@ impl App {
                     ui.horizontal(|ui| {
                         ui.spacing_mut().button_padding = egui::vec2(5., 3.);
                         crate::branding::icon(ui, 24.);
+                        ui.menu_button("Appearance", |ui| self.appearance_menu(ui));
                         if ui.checkbox(&mut self.advanced, "Advanced").changed() && !self.advanced {
                             self.select_tool(workspace::Tool::Process);
                         }
@@ -234,6 +239,10 @@ impl App {
         ui.weak("Edits autosave. Export Bruker to share with TopSpin.");
     }
     pub fn spectrum_tabs(&mut self, ctx: &egui::Context) {
+        if self.theme == appearance::Theme::TopSpin {
+            self.topspin_spectrum_tabs(ctx);
+            return;
+        }
         egui::TopBottomPanel::top("open-spectra").show(ctx, |ui| {
             let mut close = None;
             egui::ScrollArea::horizontal().show(ui, |ui| {

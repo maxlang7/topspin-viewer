@@ -11,6 +11,7 @@ pub(super) enum Theme {
     GruvboxDark,
     Dark,
     Light,
+    TopSpin,
 }
 #[derive(Clone, Copy)]
 pub(super) struct Palette {
@@ -31,6 +32,7 @@ impl Theme {
             Self::GruvboxDark => "Gruvbox Dark",
             Self::Dark => "Dark",
             Self::Light => "Light",
+            Self::TopSpin => "TopSpin",
         }
     }
     pub fn palette(self) -> Palette {
@@ -67,6 +69,25 @@ impl Theme {
                 ],
                 error: rgb(255, 130, 130),
             },
+            Self::TopSpin => Palette {
+                panel: rgb(207, 207, 207),
+                plot: Color32::WHITE,
+                grid: rgb(245, 245, 245),
+                text: rgb(51, 51, 51),
+                muted: rgb(128, 128, 128),
+                border: rgb(142, 142, 142),
+                accent: rgb(5, 65, 105),
+                badge_text: Color32::WHITE,
+                series: [
+                    Color32::BLUE,
+                    rgb(255, 0, 0),
+                    rgb(0, 128, 0),
+                    rgb(128, 0, 128),
+                    rgb(0, 160, 160),
+                    rgb(180, 120, 0),
+                ],
+                error: rgb(180, 20, 20),
+            },
             Self::Light => Palette {
                 panel: rgb(245, 246, 248),
                 plot: Color32::WHITE,
@@ -90,7 +111,7 @@ impl Theme {
     }
     pub fn apply(self, ctx: &egui::Context) {
         let p = self.palette();
-        let mut v = if self == Self::Light {
+        let mut v = if matches!(self, Self::Light | Self::TopSpin) {
             egui::Visuals::light()
         } else {
             egui::Visuals::dark()
@@ -100,11 +121,69 @@ impl Theme {
         v.extreme_bg_color = p.plot;
         v.override_text_color = Some(p.text);
         v.window_stroke = Stroke::new(1., p.border);
-        if self != Self::Light {
+        if !matches!(self, Self::Light | Self::TopSpin) {
             v.selection.bg_fill = p.border;
             v.selection.stroke = Stroke::new(1., p.text);
         }
+        if self == Self::TopSpin {
+            v.selection.bg_fill = Color32::from_rgb(174, 200, 217);
+            v.selection.stroke = Stroke::new(1., Color32::from_gray(51));
+            v.widgets.inactive.corner_radius = egui::CornerRadius::ZERO;
+            v.widgets.hovered.corner_radius = egui::CornerRadius::ZERO;
+            v.widgets.active.corner_radius = egui::CornerRadius::ZERO;
+            v.widgets.inactive.weak_bg_fill = Color32::WHITE;
+        }
         ctx.set_visuals(v);
+        ctx.style_mut(|style| {
+            style.text_styles = egui::Style::default().text_styles;
+            if self == Self::TopSpin {
+                for text in [
+                    egui::TextStyle::Body,
+                    egui::TextStyle::Button,
+                    egui::TextStyle::Small,
+                ] {
+                    style
+                        .text_styles
+                        .insert(text, egui::FontId::proportional(12.));
+                }
+            }
+        });
+        let mut fonts = egui::FontDefinitions::default();
+        if self == Self::TopSpin {
+            fonts.font_data.insert(
+                "topspin-arial".into(),
+                std::sync::Arc::new(egui::FontData::from_static(include_bytes!(
+                    "../assets/fonts/arial.ttf"
+                ))),
+            );
+            fonts.font_data.insert(
+                "topspin-courier".into(),
+                std::sync::Arc::new(egui::FontData::from_static(include_bytes!(
+                    "../assets/fonts/cour.ttf"
+                ))),
+            );
+            fonts.font_data.insert(
+                "topspin-bold".into(),
+                std::sync::Arc::new(egui::FontData::from_static(include_bytes!(
+                    "../assets/fonts/courbd.ttf"
+                ))),
+            );
+            fonts.families.insert(
+                egui::FontFamily::Name("topspin-bold".into()),
+                vec!["topspin-bold".into()],
+            );
+            fonts
+                .families
+                .get_mut(&egui::FontFamily::Proportional)
+                .unwrap()
+                .insert(0, "topspin-arial".into());
+            fonts
+                .families
+                .get_mut(&egui::FontFamily::Monospace)
+                .unwrap()
+                .insert(0, "topspin-courier".into());
+        }
+        ctx.set_fonts(fonts);
     }
 }
 #[derive(Serialize, Deserialize)]
@@ -154,6 +233,40 @@ fn save_to(path: &Path, theme: Theme) -> Result<(), String> {
     fs::rename(temp, path).map_err(|e| e.to_string())
 }
 impl App {
+    pub(super) fn apply_theme(&mut self, ctx: &egui::Context, theme: Theme) {
+        self.theme = theme;
+        theme.apply(ctx);
+        for t in &mut self.traces {
+            t.cache_key.clear();
+            t.cache.clear();
+        }
+    }
+    pub(super) fn set_theme(&mut self, ctx: &egui::Context, theme: Theme) {
+        if self.theme == theme {
+            return;
+        }
+        self.apply_theme(ctx, theme);
+        if let Err(e) = save_to(&path(), theme) {
+            self.status = format!("Could not save appearance: {e}");
+        }
+    }
+    pub(super) fn appearance_menu(&mut self, ui: &mut egui::Ui) {
+        let ctx = ui.ctx().clone();
+        for theme in [
+            Theme::GruvboxDark,
+            Theme::Dark,
+            Theme::Light,
+            Theme::TopSpin,
+        ] {
+            if ui
+                .selectable_label(self.theme == theme, theme.name())
+                .clicked()
+            {
+                self.set_theme(&ctx, theme);
+                ui.close();
+            }
+        }
+    }
     pub(super) fn palette(&self) -> Palette {
         self.theme.palette()
     }
@@ -172,7 +285,12 @@ impl App {
             .resizable(false)
             .show(ctx, |ui| {
                 ui.heading("Appearance");
-                for theme in [Theme::GruvboxDark, Theme::Dark, Theme::Light] {
+                for theme in [
+                    Theme::GruvboxDark,
+                    Theme::Dark,
+                    Theme::Light,
+                    Theme::TopSpin,
+                ] {
                     ui.selectable_value(&mut self.theme, theme, theme.name());
                 }
                 ui.separator();
@@ -207,7 +325,12 @@ mod tests {
             ))
             .join("settings.json");
         assert_eq!(load_from(&path).unwrap(), Theme::GruvboxDark);
-        for theme in [Theme::GruvboxDark, Theme::Dark, Theme::Light] {
+        for theme in [
+            Theme::GruvboxDark,
+            Theme::Dark,
+            Theme::Light,
+            Theme::TopSpin,
+        ] {
             save_to(&path, theme).unwrap();
             assert_eq!(load_from(&path).unwrap(), theme);
         }

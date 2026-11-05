@@ -25,3 +25,7 @@ Use **Process** to preview automatic phase, automatic baseline, or both. Calcula
 **Process → Reference chemical shifts** lets you pick a peak, enter its known ppm, and apply the reference. Matching nucleus/solvent suggestions currently cover 1H and 13C in CDCl3 and DMSO-d6. Referencing is undoable and persists in projects, CSV and Bruker exports. It leaves source samples and existing integration sample intervals unchanged.
 
 **Ctrl+Alt+P** starts a combined automatic phase/baseline preview. **Enter** accepts the ready preview; **Escape** cancels it. Enter continues to belong to text fields while typing and does not accept processing behind another dialog or popup.
+
+**Appearance → TopSpin** switches live to the TopSpin 5 reference layout: blue two-level ribbon, reference icons and fonts, split browser, command footer and blue-on-white spectrum. The selection is remembered; Gruvbox remains available. In TopSpin mode, the appearance chooser is also available through the upper-right menu and the main menu's Appearance submenu.
+
+Screenshot verification and its limitations are recorded in [TOPSPIN-APPEARANCE-VERIFICATION.md](TOPSPIN-APPEARANCE-VERIFICATION.md). The mode is not certified pixel-exact: text rasterization, some controls, browser contents and editing panels still differ.

@@ -13,6 +13,9 @@ impl App {
                 self.cancel_plot_drag = true;
             } else if ctx.wants_keyboard_input() {
                 return;
+            } else if self.distance_mode {
+                self.distance_mode = false;
+                self.distance_start = None;
             } else if self.reference.picking {
                 self.reference.picking = false;
             } else if self.auto_preview.is_some() {

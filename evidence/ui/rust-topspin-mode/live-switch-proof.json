@@ -1,0 +1,12 @@
+{
+  "menu_to_gruvbox": {
+    "version": 1,
+    "theme": "GruvboxDark"
+  },
+  "menu_back_to_topspin": {
+    "version": 1,
+    "theme": "TopSpin"
+  },
+  "restart_between_switches": false,
+  "pid": 3734944
+}

@@ -116,8 +116,14 @@ impl App {
             let offset = hovered.map_or(0., |(_, t)| t.settings.offset);
             let integrals = have_integrals
                 && (!self.stacked || hovered.is_some_and(|(idx, _)| idx == selected));
-            let geometry =
-                integral_plot::lane_layout(rect, self.stacked, count, lane, offset, integrals);
+            let geometry = integral_plot::lane_layout(
+                rect,
+                self.stacked,
+                count,
+                lane,
+                integral_plot::visual_offset(self.theme, self.stacked, offset),
+                integrals,
+            );
             let below = pos.y > geometry.baseline;
             let horizontal = scroll.x;
             if horizontal != 0. {
@@ -145,6 +151,21 @@ impl App {
             }
         }
 
+        if self.distance_mode {
+            if response.clicked()
+                && let Some(pos) = plot_pointer
+            {
+                let x = ppm(pos.x);
+                if let Some(first) = self.distance_start.take() {
+                    self.status = format!("Distance: {:.6} ppm", (x - first).abs());
+                    self.distance_mode = false;
+                } else {
+                    self.distance_start = Some(x);
+                    self.status = format!("First position {x:.6} ppm · click a second position");
+                }
+            }
+            return;
+        }
         if self.reference.picking {
             if response.clicked()
                 && !label_blocked

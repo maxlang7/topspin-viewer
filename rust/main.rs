@@ -18,6 +18,7 @@ mod reference;
 mod shortcuts;
 mod stack;
 mod storage;
+mod topspin_mode;
 mod ui;
 mod workspace;
 use data::Spectrum;
@@ -150,6 +151,11 @@ struct App {
     history_wheel_at: Option<Instant>,
     show_export: bool,
     advanced: bool,
+    topspin_tab: usize,
+    topspin_previous_range: Option<[f64; 2]>,
+    retain_view: bool,
+    distance_mode: bool,
+    distance_start: Option<f64>,
     focus_open: bool,
     reference: reference::ReferenceUi,
     auto_preview: Option<auto_process::Preview>,
@@ -214,6 +220,9 @@ impl App {
         match appearance::load() {
             Ok(theme) => s.theme = theme,
             Err(e) => s.status = format!("Appearance settings: {e}"),
+        }
+        if std::env::var("NMR_VIEWER_APPEARANCE").as_deref() == Ok("topspin") {
+            s.theme = appearance::Theme::TopSpin;
         }
         s.theme.apply(&cc.egui_ctx);
         diagnostics::start(cc.egui_ctx.clone());
@@ -365,6 +374,11 @@ impl App {
             history_wheel_at: None,
             show_export: false,
             advanced: false,
+            topspin_tab: 0,
+            topspin_previous_range: None,
+            retain_view: false,
+            distance_mode: false,
+            distance_start: None,
             focus_open: false,
             reference: reference::ReferenceUi::default(),
             auto_preview: None,
@@ -653,137 +667,163 @@ impl eframe::App for App {
         self.settings_window(ctx);
         self.export_window(ctx);
         self.hovered_sidebar = None;
-        egui::SidePanel::left("browser")
-            .default_width(245.)
-            .min_width(180.)
-            .resizable(true)
-            .show(ctx, |ui| {
-                ui.horizontal(|ui| {
-                    ui.selectable_label(true, "Data")
-                        .on_hover_text("Bruker datasets");
-                    ui.label("NMR Viewer");
-                });
-                ui.separator();
-                ui.label("Open data directory");
-                let response = ui.add(
-                    egui::TextEdit::singleline(&mut self.path)
-                        .hint_text("Folder or processing number"),
-                );
-                if self.focus_open
-                    || ctx.input(|i| i.modifiers.command && i.key_pressed(egui::Key::O))
-                {
-                    response.request_focus();
-                    self.focus_open = false;
-                }
-                if ui.button("Open / refresh").clicked()
-                    || (response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)))
-                {
-                    self.open(PathBuf::from(&self.path), ctx.clone());
-                }
-                ui.separator();
-                ui.label("Dataset browser");
-                ui.add(egui::TextEdit::singleline(&mut self.filter).hint_text("Filter datasets…"));
-                let previous = self.natural_sort;
-                egui::ComboBox::from_id_salt("dataset-sort")
-                    .selected_text(if self.natural_sort {
-                        "Alphabetical (natural)"
-                    } else {
-                        "Alphabetical (A-Z)"
-                    })
-                    .show_ui(ui, |ui| {
-                        ui.selectable_value(&mut self.natural_sort, true, "Alphabetical (natural)")
-                            .on_hover_text("Compare numbers numerically: MLN1P85 before MLN1P115");
-                        ui.selectable_value(&mut self.natural_sort, false, "Alphabetical (A-Z)");
+        if self.theme == appearance::Theme::TopSpin {
+            self.topspin_browser(ctx);
+        } else {
+            egui::SidePanel::left("browser")
+                .default_width(245.)
+                .min_width(180.)
+                .resizable(true)
+                .show(ctx, |ui| {
+                    ui.horizontal(|ui| {
+                        ui.selectable_label(true, "Data")
+                            .on_hover_text("Bruker datasets");
+                        ui.label("NMR Viewer");
                     });
-                if previous != self.natural_sort {
-                    data::sort_datasets(&mut self.found, self.natural_sort);
-                }
-                if ui.button("Add matching spectra, up to 32").clicked() {
+                    ui.separator();
+                    ui.label("Open data directory");
+                    let response = ui.add(
+                        egui::TextEdit::singleline(&mut self.path)
+                            .hint_text("Folder or processing number"),
+                    );
+                    if self.focus_open
+                        || ctx.input(|i| i.modifiers.command && i.key_pressed(egui::Key::O))
+                    {
+                        response.request_focus();
+                        self.focus_open = false;
+                    }
+                    if ui.button("Open / refresh").clicked()
+                        || (response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)))
+                    {
+                        self.open(PathBuf::from(&self.path), ctx.clone());
+                    }
+                    ui.separator();
+                    ui.label("Dataset browser");
+                    ui.add(
+                        egui::TextEdit::singleline(&mut self.filter).hint_text("Filter datasets…"),
+                    );
+                    let previous = self.natural_sort;
+                    egui::ComboBox::from_id_salt("dataset-sort")
+                        .selected_text(if self.natural_sort {
+                            "Alphabetical (natural)"
+                        } else {
+                            "Alphabetical (A-Z)"
+                        })
+                        .show_ui(ui, |ui| {
+                            ui.selectable_value(
+                                &mut self.natural_sort,
+                                true,
+                                "Alphabetical (natural)",
+                            )
+                            .on_hover_text("Compare numbers numerically: MLN1P85 before MLN1P115");
+                            ui.selectable_value(
+                                &mut self.natural_sort,
+                                false,
+                                "Alphabetical (A-Z)",
+                            );
+                        });
+                    if previous != self.natural_sort {
+                        data::sort_datasets(&mut self.found, self.natural_sort);
+                    }
+                    if ui.button("Add matching spectra, up to 32").clicked() {
+                        let matches: Vec<_> = self
+                            .found
+                            .iter()
+                            .filter(|p| {
+                                p.to_string_lossy()
+                                    .to_lowercase()
+                                    .contains(&self.filter.to_lowercase())
+                            })
+                            .take(32)
+                            .cloned()
+                            .collect();
+                        for p in matches {
+                            self.sidebar_open(p, true, ctx.clone());
+                        }
+                    }
+                    let filter = self.filter.to_lowercase();
                     let matches: Vec<_> = self
                         .found
                         .iter()
-                        .filter(|p| {
-                            p.to_string_lossy()
-                                .to_lowercase()
-                                .contains(&self.filter.to_lowercase())
-                        })
-                        .take(32)
-                        .cloned()
+                        .filter(|p| p.to_string_lossy().to_lowercase().contains(&filter))
                         .collect();
-                    for p in matches {
-                        self.sidebar_open(p, true, ctx.clone());
+                    ui.label(format!("{} / {} datasets", matches.len(), self.found.len()));
+                    let mut add = None;
+                    let row_height = ui
+                        .text_style_height(&egui::TextStyle::Body)
+                        .max(ui.spacing().interact_size.y);
+                    egui::ScrollArea::vertical()
+                        .id_salt("dataset-list")
+                        .auto_shrink([false, false])
+                        .scroll_bar_visibility(
+                            egui::scroll_area::ScrollBarVisibility::AlwaysVisible,
+                        )
+                        .show_rows(ui, row_height, matches.len(), |ui, rows| {
+                            for row in rows {
+                                let p = matches[row];
+                                let raw = !p.join("1r").is_file();
+                                let name = format!(
+                                    "{} / {}{}",
+                                    data::dataset_name(p),
+                                    p.file_name().unwrap_or_default().to_string_lossy(),
+                                    if raw { " (FID)" } else { "" }
+                                );
+                                let row_response = ui
+                                    .add_sized(
+                                        [ui.available_width(), row_height],
+                                        egui::Button::selectable(false, name)
+                                            .wrap_mode(egui::TextWrapMode::Truncate),
+                                    )
+                                    .on_hover_text(format!(
+                                        "{}\nClick: open · Hover + S: add to stack",
+                                        p.display()
+                                    ));
+                                if row_response.hovered() {
+                                    self.hovered_sidebar = Some((p.clone(), row_response.rect));
+                                }
+                                let stack = stack::stack_shortcut(&row_response, ctx);
+                                if row_response.clicked() || stack {
+                                    add = Some((p.clone(), stack));
+                                }
+                            }
+                        });
+                    if let Some((p, stack)) = add {
+                        self.sidebar_open(p, stack, ctx.clone());
                     }
-                }
-                let filter = self.filter.to_lowercase();
-                let matches: Vec<_> = self
-                    .found
-                    .iter()
-                    .filter(|p| p.to_string_lossy().to_lowercase().contains(&filter))
-                    .collect();
-                ui.label(format!("{} / {} datasets", matches.len(), self.found.len()));
-                let mut add = None;
-                let row_height = ui
-                    .text_style_height(&egui::TextStyle::Body)
-                    .max(ui.spacing().interact_size.y);
-                egui::ScrollArea::vertical()
-                    .id_salt("dataset-list")
-                    .auto_shrink([false, false])
-                    .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
-                    .show_rows(ui, row_height, matches.len(), |ui, rows| {
-                        for row in rows {
-                            let p = matches[row];
-                            let raw = !p.join("1r").is_file();
-                            let name = format!(
-                                "{} / {}{}",
-                                data::dataset_name(p),
-                                p.file_name().unwrap_or_default().to_string_lossy(),
-                                if raw { " (FID)" } else { "" }
-                            );
-                            let row_response = ui
-                                .add_sized(
-                                    [ui.available_width(), row_height],
-                                    egui::Button::selectable(false, name)
-                                        .wrap_mode(egui::TextWrapMode::Truncate),
-                                )
-                                .on_hover_text(format!(
-                                    "{}\nClick: open · Hover + S: add to stack",
-                                    p.display()
-                                ));
-                            if row_response.hovered() {
-                                self.hovered_sidebar = Some((p.clone(), row_response.rect));
-                            }
-                            let stack = stack::stack_shortcut(&row_response, ctx);
-                            if row_response.clicked() || stack {
-                                add = Some((p.clone(), stack));
-                            }
-                        }
-                    });
-                if let Some((p, stack)) = add {
-                    self.sidebar_open(p, stack, ctx.clone());
-                }
-            });
+                });
+        }
         {
             let _timer = diagnostics::stage(5);
             self.tool_panel(ctx);
         }
-        self.spectrum_tabs(ctx);
+        if self.theme != appearance::Theme::TopSpin || !self.traces.is_empty() {
+            self.spectrum_tabs(ctx);
+        }
         {
             let _timer = diagnostics::stage(2);
             self.refresh_processing();
         }
         let plot_timer = diagnostics::stage(3);
-        egui::CentralPanel::default().show(ctx,|ui|{
+        let central_frame = if self.theme == appearance::Theme::TopSpin {
+            egui::Frame::new()
+                .fill(Color32::from_gray(245))
+                .inner_margin(if self.traces.is_empty() { 0. } else { 9. })
+        } else {
+            egui::Frame::central_panel(&ctx.style())
+        };
+        egui::CentralPanel::default().frame(central_frame).show(ctx,|ui|{
    if self.data_tab==1 {self.integral_table(ui);return;}
 
-   let (response,painter)=ui.allocate_painter(ui.available_size(),egui::Sense::click_and_drag());let rect=response.rect.shrink2(egui::vec2(14.,28.));if rect.width()<10.||rect.height()<10.{return}
+   let (response,painter)=ui.allocate_painter(ui.available_size(),egui::Sense::click_and_drag());let rect=if self.theme==appearance::Theme::TopSpin{topspin_mode::plot_rect(response.rect)}else{response.rect.shrink2(egui::vec2(14.,28.))};if rect.width()<10.||rect.height()<10.{return}
+   if self.theme==appearance::Theme::TopSpin&&self.traces.is_empty(){painter.rect_filled(response.rect,0.,Color32::from_gray(245));return;}
    let palette=self.palette();let colors=self.colors();
-   painter.rect_filled(response.rect,0.,palette.plot);let range=self.range.unwrap_or_else(||self.full_range());let width=range[0]-range[1];let ppm=|x:f32|range[0]-(x-rect.left())as f64/rect.width()as f64*width;
+   painter.rect_filled(response.rect,0.,if self.theme==appearance::Theme::TopSpin&&self.traces.is_empty(){egui::Color32::from_gray(245)}else{palette.plot});let range=self.range.unwrap_or_else(||self.full_range());let width=range[0]-range[1];let ppm=|x:f32|range[0]-(x-rect.left())as f64/rect.width()as f64*width;
    let ticks=(rect.width()/75.).floor().clamp(2.,10.)as usize;
-   for j in 0..=ticks{let x=rect.left()+rect.width()*j as f32/ticks as f32;painter.line_segment([Pos2::new(x,rect.top()),Pos2::new(x,rect.bottom())],Stroke::new(1.,palette.grid));painter.text(Pos2::new(x,rect.bottom()+8.),egui::Align2::CENTER_TOP,format!("{:.2}",ppm(x)),egui::FontId::monospace(12.),palette.muted);}
+   for j in 0..=ticks{let x=rect.left()+rect.width()*j as f32/ticks as f32;if self.theme!=appearance::Theme::TopSpin{painter.line_segment([Pos2::new(x,rect.top()),Pos2::new(x,rect.bottom())],Stroke::new(1.,palette.grid));}painter.text(Pos2::new(x,rect.bottom()+8.),egui::Align2::CENTER_TOP,format!("{:.2}",ppm(x)),if self.theme==appearance::Theme::TopSpin{topspin_mode::plot_font()}else{egui::FontId::monospace(12.)},palette.muted);}
    let have_integrals=self.has_visible_integrals();
    let selected=self.selected;
    let count=self.traces.iter().filter(|t|t.settings.visible).count().max(1);let common=self.traces.iter().filter(|t|t.settings.visible).fold(f64::MIN_POSITIVE,|m,t|m.max(t.processed_max));
-   for (lane,(idx,t)) in self.traces.iter_mut().enumerate().filter(|(_,t)|t.settings.visible).enumerate(){let d=&t.data;let s=&t.settings;if t.processed.is_empty(){continue;}let scale=if self.normalize{t.processed_max}else{common};let lane_h=if self.stacked{rect.height()/count as f32}else{rect.height()};let geometry=integral_plot::lane_layout(rect,self.stacked,count,lane,s.offset,have_integrals&&(!self.stacked||idx==selected));let amp=geometry.amplitude;
+   for (lane,(idx,t)) in self.traces.iter_mut().enumerate().filter(|(_,t)|t.settings.visible).enumerate(){let d=&t.data;let s=&t.settings;if t.processed.is_empty(){continue;}let scale=if self.normalize{t.processed_max}else{common};let lane_h=if self.stacked{rect.height()/count as f32}else{rect.height()};let geometry=integral_plot::lane_layout(rect,self.stacked,count,lane,integral_plot::visual_offset(self.theme,self.stacked,s.offset),have_integrals&&(!self.stacked||idx==selected));let amp=geometry.amplitude;
     let y=|v:f64|geometry.baseline-((v/scale*s.gain)as f32*amp).clamp(-1e6,1e6);
     // Min/max per physical column retains narrow peaks at all zoom levels.
     let key=format!("{rect:?}/{range:?}/{:?}/{common}/{}/{}",(s.gain,s.offset,s.p0,s.p1,self.normalize,self.stacked,lane,count,idx,t.revision,have_integrals,selected),s.reference_shift,ctx.pixels_per_point());
@@ -794,7 +834,23 @@ impl eframe::App for App {
     t.cache_key=key;
     }
     painter.with_clip_rect(rect).extend(t.cache.iter().cloned());
+    if self.theme==appearance::Theme::TopSpin{
+        let origin=self.source_aliases.iter().find(|(_,native)|*native==&d.path).map_or(d.path.as_path(),|(source,_)|source.as_path());
+        let exp=origin.ancestors().nth(2).and_then(|p|p.file_name()).unwrap_or_default().to_string_lossy();
+        let proc=origin.file_name().unwrap_or_default().to_string_lossy();
+        let root=origin.ancestors().nth(4).unwrap_or(origin);
+        painter.with_clip_rect(rect).text(Pos2::new(rect.left()+3.,rect.top()+4.),egui::Align2::LEFT_TOP,format!("{}  {exp}  {proc}  {}",data::dataset_name(&d.path),root.display()),topspin_mode::plot_font(),Color32::from_gray(128));
+        if idx==selected {
+            painter.rect_stroke(rect,0.,Stroke::new(1.,Color32::from_gray(128)),egui::StrokeKind::Inside);
+            for value in 0..=10 {let y=geometry.baseline-value as f32/10.*amp*s.gain as f32;if y>=rect.top()&&y<=rect.bottom(){
+                painter.line_segment([Pos2::new(rect.right(),y),Pos2::new(rect.right()+if value%5==0{5.}else{3.},y)],Stroke::new(1.,Color32::GRAY));
+                if value%5==0 {painter.text(Pos2::new(rect.right()+9.,y),egui::Align2::LEFT_CENTER,value.to_string(),topspin_mode::plot_font(),Color32::GRAY);}
+            }}
+            painter.text(rect.right_bottom()+egui::vec2(0.,8.),egui::Align2::RIGHT_TOP,"[ppm]",topspin_mode::plot_font(),Color32::GRAY);
+        }
+    }else{
     painter.text(Pos2::new(rect.left()+8.,if self.stacked{rect.top()+lane_h*lane as f32+4.}else{rect.top()+lane as f32*18.}),egui::Align2::LEFT_TOP,format!("{} {}",idx+1,d.title),egui::FontId::proportional(12.),colors[idx%6]);
+    }
    }
    let overlay=self.paint_integrals(rect,range,&painter,&response);
    self.integral_overflow_menu(ui,&overlay);
@@ -872,9 +928,14 @@ fn main() -> eframe::Result {
         .filter(|a| a != "--smoke")
         .map(PathBuf::from)
         .collect();
+    let reference_view = std::env::var("NMR_VIEWER_APPEARANCE").as_deref() == Ok("topspin");
     let opts = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_inner_size([1200., 760.])
+            .with_inner_size(if reference_view {
+                [1438., 911.]
+            } else {
+                [1200., 760.]
+            })
             .with_min_inner_size([700., 420.])
             .with_app_id("nmr-viewer"),
         ..Default::default()

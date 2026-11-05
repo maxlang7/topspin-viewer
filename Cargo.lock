@@ -1313,6 +1313,7 @@ version = "0.1.0"
 dependencies = [
  "cc",
  "eframe",
+ "image",
  "serde",
  "serde_json",
  "sha2",

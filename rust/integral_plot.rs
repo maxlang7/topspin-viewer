@@ -13,6 +13,14 @@ pub(super) struct Lane {
     pub band: egui::Rect,
     pub curve_band: egui::Rect,
 }
+pub(super) fn visual_offset(theme: appearance::Theme, stacked: bool, offset: f64) -> f64 {
+    offset
+        + if theme == appearance::Theme::TopSpin && !stacked {
+            0.03 / 0.7
+        } else {
+            0.
+        }
+}
 pub(super) fn lane_layout(
     rect: egui::Rect,
     stacked: bool,
@@ -178,7 +186,14 @@ impl App {
             .take(self.selected)
             .filter(|t| t.settings.visible)
             .count();
-        let geometry = lane_layout(rect, self.stacked, count, lane, t.settings.offset, true);
+        let geometry = lane_layout(
+            rect,
+            self.stacked,
+            count,
+            lane,
+            visual_offset(self.theme, self.stacked, t.settings.offset),
+            true,
+        );
         let band = geometry.band;
         let width = range[0] - range[1];
         let px = |ppm: f64| rect.left() + ((range[0] - ppm) / width) as f32 * rect.width();
@@ -237,7 +252,13 @@ impl App {
             } else {
                 row_ends[row] = x1;
             }
-            let y = response.rect.top() + 6. + row as f32 * 9.;
+            let y = response.rect.top()
+                + if self.theme == appearance::Theme::TopSpin {
+                    27.
+                } else {
+                    6.
+                }
+                + row as f32 * 9.;
             let marker = egui::Rect::from_min_max(Pos2::new(x0, y), Pos2::new(x1, y + 6.));
             top.rect_filled(marker, 1., self.palette().accent);
             if response

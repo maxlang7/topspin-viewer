@@ -20,16 +20,14 @@ fn solvent_target(nucleus: &str, solvent: &str) -> Option<f64> {
     }
 }
 impl App {
-    pub(super) fn reference_controls(&mut self, ui: &mut egui::Ui) {
-        ui.strong("Reference chemical shifts");
-        let Some(t) = self.traces.get(self.selected) else {
-            ui.label("Open a spectrum first");
+    pub(super) fn prepare_reference(&mut self) {
+        let Some(path) = self.traces.get(self.selected).map(|t| t.data.path.clone()) else {
             return;
         };
-        if self.reference.metadata_path.as_ref() != Some(&t.data.path) {
+        if self.reference.metadata_path.as_ref() != Some(&path) {
             self.reference = ReferenceUi::default();
-            self.reference.metadata_path = Some(t.data.path.clone());
-            if let Ok(p) = storage::source_processing(&t.data.path) {
+            self.reference.metadata_path = Some(path.clone());
+            if let Ok(p) = storage::source_processing(&path) {
                 let acq = p.ancestors().nth(2).map(|p| p.join("acqus"));
                 if let Some(Ok(values)) = acq.map(|p| data::parameters(&p)) {
                     self.reference.nucleus = values
@@ -47,6 +45,14 @@ impl App {
                 }
             }
         }
+    }
+    pub(super) fn reference_controls(&mut self, ui: &mut egui::Ui) {
+        self.prepare_reference();
+        ui.strong("Reference chemical shifts");
+        let Some(t) = self.traces.get(self.selected) else {
+            ui.label("Open a spectrum first");
+            return;
+        };
         ui.label(format!(
             "Current adjustment: {:+.5} ppm",
             t.settings.reference_shift

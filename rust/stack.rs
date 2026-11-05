@@ -65,7 +65,9 @@ impl App {
                 }
                 self.selected = index;
                 self.stacked = false;
-                self.range = None;
+                if !self.retain_view {
+                    self.range = None;
+                }
                 self.data_tab = 0;
                 self.peaks.clear();
             }
@@ -187,7 +189,7 @@ impl App {
                     false,
                     visible.len(),
                     0,
-                    t.settings.offset,
+                    integral_plot::visual_offset(self.theme, false, t.settings.offset),
                     integrals,
                 );
                 let scale = if self.normalize {
