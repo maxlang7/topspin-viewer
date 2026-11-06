@@ -237,39 +237,50 @@ impl App {
             return;
         }
         let mut reorder = None;
-        egui::SidePanel::right("stack-manager")
-            .default_width(170.)
-            .min_width(170.)
-            .max_width(300.)
-            .resizable(true)
+        let Some(plot) = self.last_plot_rect else {
+            return;
+        };
+        egui::Area::new(egui::Id::new("stack-manager"))
+            .order(egui::Order::Foreground)
+            .pivot(egui::Align2::RIGHT_TOP)
+            .fixed_pos(plot.right_top() + egui::vec2(-8., 8.))
+            .movable(false)
+            .constrain_to(plot)
             .show(ctx, |ui| {
-                ui.heading("Stack");
-                ui.horizontal(|ui| {
-                    ui.selectable_value(&mut self.stacked, true, "Stacked");
-                    ui.selectable_value(&mut self.stacked, false, "Overlay");
-                });
-                ui.label("Drag rows to change order · hover a dataset + S to add");
-                if self.restoring {
-                    ui.spinner();
-                    return;
-                }
-                egui::ScrollArea::vertical()
-                    .id_salt("stack-rows")
-                    .max_height(ui.available_height())
+                ui.set_width((plot.width() - 16.).clamp(100., 170.));
+                ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Truncate);
+                egui::Frame::new()
+                    .fill(self.palette().panel)
+                    .stroke(Stroke::new(0.5, self.palette().border))
+                    .inner_margin(5.)
                     .show(ui, |ui| {
-                        for (i, t) in self
-                            .traces
-                            .iter_mut()
-                            .enumerate()
-                            .filter(|(_, t)| t.settings.visible)
-                        {
-                            let path = t.data.path.clone();
-                            let selected = self.selected == i;
-                            let color = colors[i % 6];
-                            let (row, payload) = ui.dnd_drop_zone::<PathBuf, _>(
-                                egui::Frame::new().inner_margin(4.),
-                                |ui| {
-                                    ui.horizontal(|ui| {
+                        ui.label("Stack")
+                            .on_hover_text("Drag rows to reorder · hover a dataset + S to add");
+                        ui.horizontal(|ui| {
+                            ui.selectable_value(&mut self.stacked, true, "Stacked");
+                            ui.selectable_value(&mut self.stacked, false, "Overlay");
+                        });
+                        if self.restoring {
+                            ui.spinner();
+                            return;
+                        }
+                        egui::ScrollArea::vertical()
+                            .id_salt("stack-rows")
+                            .max_height((plot.height() - 70.).clamp(40., 240.))
+                            .show(ui, |ui| {
+                                for (i, t) in self
+                                    .traces
+                                    .iter_mut()
+                                    .enumerate()
+                                    .filter(|(_, t)| t.settings.visible)
+                                {
+                                    let path = t.data.path.clone();
+                                    let selected = self.selected == i;
+                                    let color = colors[i % 6];
+                                    let (row, payload) = ui.dnd_drop_zone::<PathBuf, _>(
+                                        egui::Frame::new().inner_margin(4.),
+                                        |ui| {
+                                            ui.horizontal(|ui| {
                                         ui.checkbox(&mut t.settings.visible, "").on_hover_text(
                                             "Hide from stack; keep its processing and integrals",
                                         );
@@ -295,15 +306,16 @@ impl App {
                                             },
                                         );
                                     });
-                                },
-                            );
-                            if let Some(source) = payload {
-                                let below = ctx
-                                    .pointer_interact_pos()
-                                    .is_some_and(|p| p.y > row.response.rect.center().y);
-                                reorder = Some(((*source).clone(), i + usize::from(below)));
-                            }
-                        }
+                                        },
+                                    );
+                                    if let Some(source) = payload {
+                                        let below = ctx
+                                            .pointer_interact_pos()
+                                            .is_some_and(|p| p.y > row.response.rect.center().y);
+                                        reorder = Some(((*source).clone(), i + usize::from(below)));
+                                    }
+                                }
+                            });
                     });
             });
         if let Some((source, mut target)) = reorder
@@ -500,9 +512,13 @@ mod tests {
         assert_eq!(hit, 1);
     }
     #[test]
-    fn stack_panel_drag_reorders_the_actual_trace_list() {
+    fn fixed_stack_overlay_drag_reorders_without_reserving_plot_space() {
         let mut a = app();
         let ctx = egui::Context::default();
+        a.last_plot_rect = Some(egui::Rect::from_min_max(
+            Pos2::new(180., 100.),
+            Pos2::new(1000., 800.),
+        ));
         let frame = |a: &mut App, events: Vec<egui::Event>| {
             let input = egui::RawInput {
                 screen_rect: Some(egui::Rect::from_min_size(
@@ -512,7 +528,11 @@ mod tests {
                 events,
                 ..Default::default()
             };
-            ctx.run(input, |ctx| a.stack_panel(ctx))
+            ctx.run(input, |ctx| {
+                let available = ctx.available_rect();
+                a.stack_panel(ctx);
+                assert_eq!(ctx.available_rect(), available);
+            })
         };
         // Settle layout before reading the drag targets.
         for _ in 0..5 {

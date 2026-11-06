@@ -42,4 +42,4 @@ The search strip now has the measured full width, magnifier, clear control and f
 
 ## Compact sidebar defaults
 
-The screenshot evidence above records the earlier 340-point reference browser. The default is now a resizable 180-point compact browser, as requested. Widening it restores the reference browser chrome. These reference captures do not represent the new narrow default. Stack and Tools also start at their minimum usable widths.
+The screenshot evidence above records the earlier 340-point reference browser. The default is now a resizable 180-point compact browser, as requested. Widening it restores the reference browser chrome. These reference captures do not represent the new narrow default. Tools also starts at its minimum usable width. Stack is a fixed, minimally bordered overlay inside the plot’s top-right corner, with a scrollable list.

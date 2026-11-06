@@ -4,7 +4,7 @@ A native Rust desktop viewer for Bruker 1D NMR data, with a simple Open → Proc
 
 Build with `bash build-rust.sh`, then launch with `bash run.sh [dataset or project folders...]`. Startup executes the optimized binary directly without compiling or evaluating Nix.
 
-Click datasets to open them, or hover and press S to stack them. Reorder spectra in the docked Stack sidebar on the right. Wheel above baseline changes the hovered spectrum's intensity; wheel below baseline zooms ppm. Integration curves remain above baseline, numbers below, and range markers at the top. Hold Shift and drag to integrate, or use the Integrate button. Hover a number and press D to delete it; double-click a number and enter its proton count to calibrate the spectrum. Shift+scroll does nothing.
+Click datasets to open them, or hover and press S to stack them. Reorder spectra in the fixed Stack overlay in the spectrum’s top-right corner. Wheel above baseline changes the hovered spectrum's intensity; wheel below baseline zooms ppm. Integration curves remain above baseline, numbers below, and range markers at the top. Hold Shift and drag to integrate, or use the Integrate button. Hover a number and press D to delete it; double-click a number and enter its proton count to calibrate the spectrum. Shift+scroll does nothing.
 
 The app supports phase adjustment, manual polynomial baseline correction, integration and normalization. Opening an NMR automatically creates or reopens a project with the same dataset name under `~/Documents/NMR Projects`. It keeps a named spectrum CSV, an integrations CSV, exact float64 source data, acquisition snapshots and versioned edit metadata. Phase, applied baseline, integration and normalization edits autosave in the background. No Save action is required. Original Bruker files remain untouched.
 
@@ -30,4 +30,6 @@ Use **Process** to preview automatic phase, automatic baseline, or both. Calcula
 
 Screenshot verification and its limitations are recorded in [TOPSPIN-APPEARANCE-VERIFICATION.md](TOPSPIN-APPEARANCE-VERIFICATION.md). The mode is not certified pixel-exact: text rasterization, some controls, browser contents and editing panels still differ.
 
-Sidebars start at their minimum usable widths: dataset browser 180 px, Stack 170 px and Tools 220 px. Drag their inner edges to resize. In TopSpin mode the narrow browser uses compact controls; widening it restores the reference browser layout.
+Sidebars start at their minimum usable widths: dataset browser 180 px and Tools 220 px. Drag their inner edges to resize. In TopSpin mode the narrow browser uses compact controls; widening it restores the reference browser layout.
+
+The Stack overlay has a minimal border and a bounded, scrollable list. Its position is fixed to the plot, and it cannot be moved or resized. Reorder its rows by dragging. It appears only when more than one spectrum is visible.
