@@ -143,6 +143,7 @@ struct App {
     view_epoch: u64,
     restoring: bool,
     hovered_sidebar: Option<(PathBuf, egui::Rect)>,
+    last_plot_rect: Option<egui::Rect>,
     show_inspector: bool,
     theme: appearance::Theme,
     show_settings: bool,
@@ -366,6 +367,7 @@ impl App {
             view_epoch: 0,
             restoring: false,
             hovered_sidebar: None,
+            last_plot_rect: None,
             show_inspector: false,
             theme: appearance::Theme::default(),
             show_settings: false,
@@ -814,7 +816,7 @@ impl eframe::App for App {
         egui::CentralPanel::default().frame(central_frame).show(ctx,|ui|{
    if self.data_tab==1 {self.integral_table(ui);return;}
 
-   let (response,painter)=ui.allocate_painter(ui.available_size(),egui::Sense::click_and_drag());let rect=if self.theme==appearance::Theme::TopSpin{topspin_mode::plot_rect(response.rect)}else{response.rect.shrink2(egui::vec2(14.,28.))};if rect.width()<10.||rect.height()<10.{return}
+   let (response,painter)=ui.allocate_painter(ui.available_size(),egui::Sense::click_and_drag());let rect=if self.theme==appearance::Theme::TopSpin{topspin_mode::plot_rect(response.rect)}else{response.rect.shrink2(egui::vec2(14.,28.))};if rect.width()<10.||rect.height()<10.{self.last_plot_rect=None;return} self.last_plot_rect=Some(rect);
    if self.theme==appearance::Theme::TopSpin&&self.traces.is_empty(){painter.rect_filled(response.rect,0.,Color32::from_gray(245));return;}
    let palette=self.palette();let colors=self.colors();
    painter.rect_filled(response.rect,0.,if self.theme==appearance::Theme::TopSpin&&self.traces.is_empty(){egui::Color32::from_gray(245)}else{palette.plot});let range=self.range.unwrap_or_else(||self.full_range());let width=range[0]-range[1];let ppm=|x:f32|range[0]-(x-rect.left())as f64/rect.width()as f64*width;

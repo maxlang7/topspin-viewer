@@ -53,6 +53,22 @@ impl App {
             self.status = "Finish the current processing operation first".into();
             return;
         }
+        // Shortcuts run before this frame's plot. Use its last rendered bounds,
+        // and the same visible-lane hit test as vertical zoom.
+        if self.stacked
+            && self.data_tab == 0
+            && let Some(rect) = self.last_plot_rect
+            && let Some(pos) = ctx.pointer_hover_pos().filter(|p| rect.contains(*p))
+            && let Some(index) = self.spectrum_under_pointer(
+                rect,
+                self.range.unwrap_or_else(|| self.full_range()),
+                pos,
+                self.has_visible_integrals(),
+            )
+        {
+            self.sync_history(true);
+            self.selected = index;
+        }
         let Some(t) = self.traces.get(self.selected) else {
             self.status = "Open a spectrum first".into();
             return;
@@ -305,6 +321,57 @@ pub(super) mod tests {
             std::thread::sleep(std::time::Duration::from_millis(2));
         }
         a.refresh_processing();
+    }
+    #[test]
+    fn stacked_auto_processing_targets_hovered_visible_lane_and_stays_bound() {
+        let mut a = app();
+        for i in 1..3 {
+            let mut t = app().traces.remove(0);
+            let path = PathBuf::from(format!("/synthetic/{i}/10/pdata/1"));
+            Arc::make_mut(&mut t.data).path = path.clone();
+            t.settings.path = path;
+            t.settings.visible = i != 1;
+            a.traces.push(t);
+        }
+        a.stacked = true;
+        a.last_plot_rect = Some(egui::Rect::from_min_size(
+            Pos2::ZERO,
+            egui::vec2(1000., 600.),
+        ));
+        let before = serde_json::to_vec(&a.traces[0].settings).unwrap();
+        let ctx = egui::Context::default();
+        let _ = ctx.run(
+            egui::RawInput {
+                events: vec![egui::Event::PointerMoved(Pos2::new(200., 450.))],
+                ..Default::default()
+            },
+            |ctx| a.start_auto_process(Kind::Both, ctx),
+        );
+        assert_eq!(a.selected, 2);
+        assert_eq!(a.auto_job.as_ref().unwrap().path, a.traces[2].data.path);
+        // Moving to another lane must not retarget an operation already in flight.
+        let _ = ctx.run(
+            egui::RawInput {
+                events: vec![egui::Event::PointerMoved(Pos2::new(200., 100.))],
+                ..Default::default()
+            },
+            |_| {},
+        );
+        finish_job(&mut a, &ctx);
+        assert_eq!(a.auto_preview.as_ref().unwrap().path, a.traces[2].data.path);
+        a.finish_auto_process(true);
+        assert_eq!(serde_json::to_vec(&a.traces[0].settings).unwrap(), before);
+        // Toolbar actions outside the plot keep the selected spectrum.
+        let _ = ctx.run(
+            egui::RawInput {
+                events: vec![egui::Event::PointerMoved(Pos2::new(1200., 100.))],
+                ..Default::default()
+            },
+            |ctx| a.start_auto_process(Kind::Phase, ctx),
+        );
+        assert_eq!(a.selected, 2);
+        finish_job(&mut a, &ctx);
+        a.finish_auto_process(false);
     }
     #[test]
     fn preview_cancels_exactly_and_accept_is_one_undoable_edit() {
