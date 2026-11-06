@@ -224,6 +224,7 @@ impl App {
             self.selected = index;
             if (a - ppm(p.x)).abs() > 1e-9 {
                 self.measure_region(a, ppm(p.x));
+                ctx.request_repaint();
             }
         }
     }
@@ -290,7 +291,7 @@ impl App {
             && self
                 .regions
                 .get(index)
-                .is_some_and(|r| r.trace == self.selected)
+                .is_some_and(|r| self.traces.get(r.trace).is_some_and(|t| t.settings.visible))
             && ctx.pointer_hover_pos().is_some_and(|p| rect.contains(p))
             && ctx.input(|i| {
                 i.key_pressed(egui::Key::D)
@@ -334,6 +335,7 @@ impl App {
                 blocked = true;
             }
             if response.clicked() {
+                self.selected = self.regions[index].trace;
                 self.selected_integral = Some(index);
             }
             if response.double_clicked() {
@@ -718,6 +720,37 @@ mod tests {
         assert_eq!(a.regions.len(), 1);
         assert_eq!(a.regions[0].value, original[0]);
         assert_eq!(a.traces[0].settings.integral_scale, scale);
+    }
+    #[test]
+    fn four_stacked_spectra_keep_integral_values_visible_without_selection() {
+        let mut a = app();
+        for i in 1..4 {
+            let mut t = app().traces.remove(0);
+            let path = PathBuf::from(format!("/stack-{i}/10/pdata/1"));
+            Arc::make_mut(&mut t.data).path = path.clone();
+            t.settings.path = path;
+            a.traces.push(t);
+        }
+        for index in 0..4 {
+            a.selected = index;
+            a.measure_region(7., 5.);
+        }
+        a.refresh_processing();
+        a.stacked = true;
+        let ctx = egui::Context::default();
+        let (hits, _) = frame(&mut a, &ctx, 0., vec![], egui::Modifiers::NONE);
+        assert_eq!(hits.len(), 4, "Each lane must show its own integral value");
+        for (index, hit) in &hits {
+            assert!(hit.height() > 0.);
+            assert_eq!(a.regions[*index].trace, *index);
+        }
+        a.selected = 0;
+        let (hits, _) = frame(&mut a, &ctx, 0.1, vec![], egui::Modifiers::NONE);
+        assert_eq!(
+            hits.len(),
+            4,
+            "Selection must not hide other spectra's integrals"
+        );
     }
     #[test]
     fn stacked_drag_locks_to_press_lane_even_when_crossing_into_another_lane() {

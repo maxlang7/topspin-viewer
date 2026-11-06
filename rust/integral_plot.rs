@@ -169,11 +169,37 @@ impl App {
         painter: &egui::Painter,
         response: &egui::Response,
     ) -> IntegralOverlay {
-        let mut overlay = IntegralOverlay::default();
-        if !self.has_visible_integrals() {
-            return overlay;
+        if !self.stacked {
+            return self.paint_trace_integrals(self.selected, rect, range, painter, response);
         }
-        let t = &self.traces[self.selected];
+        let mut overlay = IntegralOverlay::default();
+        for (index, _) in self
+            .traces
+            .iter()
+            .enumerate()
+            .filter(|(_, t)| t.settings.visible)
+        {
+            let part = self.paint_trace_integrals(index, rect, range, painter, response);
+            overlay.labels.extend(part.labels);
+            overlay.hidden.extend(part.hidden);
+            if index == self.selected {
+                overlay.overflow_rect = part.overflow_rect;
+            }
+        }
+        overlay
+    }
+    fn paint_trace_integrals(
+        &self,
+        index: usize,
+        rect: egui::Rect,
+        range: [f64; 2],
+        painter: &egui::Painter,
+        response: &egui::Response,
+    ) -> IntegralOverlay {
+        let mut overlay = IntegralOverlay::default();
+        let Some(t) = self.traces.get(index).filter(|t| t.settings.visible) else {
+            return overlay;
+        };
         let count = self
             .traces
             .iter()
@@ -183,7 +209,7 @@ impl App {
         let lane = self
             .traces
             .iter()
-            .take(self.selected)
+            .take(index)
             .filter(|t| t.settings.visible)
             .count();
         let geometry = lane_layout(
@@ -197,13 +223,18 @@ impl App {
         let band = geometry.band;
         let width = range[0] - range[1];
         let px = |ppm: f64| rect.left() + ((range[0] - ppm) / width) as f32 * rect.width();
-        let font = egui::FontId::monospace(14.);
-        let line_h = 21.;
+        let font_size = if self.stacked {
+            (band.height() - 5.).clamp(9., 14.)
+        } else {
+            14.
+        };
+        let font = egui::FontId::monospace(font_size);
+        let line_h = if self.stacked { font_size + 3. } else { 21. };
         let mut regions: Vec<_> = self
             .regions
             .iter()
             .enumerate()
-            .filter(|(_, r)| r.trace == self.selected && r.error.is_none() && !r.curve.is_empty())
+            .filter(|(_, r)| r.trace == index && r.error.is_none() && !r.curve.is_empty())
             .filter_map(|(id, r)| {
                 let start = ((((r.left.max(r.right).min(t.data.left) - t.data.left)
                     / (t.data.right - t.data.left))
@@ -252,13 +283,16 @@ impl App {
             } else {
                 row_ends[row] = x1;
             }
-            let y = response.rect.top()
-                + if self.theme == appearance::Theme::TopSpin {
-                    27.
-                } else {
-                    6.
-                }
-                + row as f32 * 9.;
+            let y = if self.stacked {
+                rect.top() + rect.height() / count as f32 * lane as f32 + 4.
+            } else {
+                response.rect.top()
+                    + if self.theme == appearance::Theme::TopSpin {
+                        27.
+                    } else {
+                        6.
+                    }
+            } + row as f32 * 9.;
             let marker = egui::Rect::from_min_max(Pos2::new(x0, y), Pos2::new(x1, y + 6.));
             top.rect_filled(marker, 1., self.palette().accent);
             if response
