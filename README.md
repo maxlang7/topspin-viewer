@@ -39,3 +39,5 @@ In stacked integration, the mouse-down lane owns the entire drag even if the poi
 Stacked spectra display their own integral curves, markers and values together. Integral text adapts to the space below each lane’s baseline; crowded values remain accessible through the integration table. Completing a drag redraws the new integral immediately.
 
 Crowded integral numbers retain spectrum left-to-right order. Selecting a value changes its highlight, not its label position or priority. Values that do not fit remain available in overflow or the integration table.
+
+Open or drop a parent directory to discover NMRs recursively across its projects and subfolders. The sidebar mirrors those folders as collapsible groups in every appearance mode. Search includes folder names and reveals matching spectra inside collapsed groups. Natural sorting applies within each folder. Dataset rows show the acquisition name, experiment number and processing number; click to open, or hover and press S to stack. Files stay in their original locations.

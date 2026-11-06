@@ -3,6 +3,7 @@ mod auto_algorithms;
 mod auto_process;
 mod automatic;
 mod branding;
+mod browser;
 mod bruker_export;
 mod data;
 mod diagnostics;
@@ -140,6 +141,7 @@ enum Message {
     Found(Result<Vec<PathBuf>, String>),
 }
 struct App {
+    browser: browser::Browser,
     view_epoch: u64,
     restoring: bool,
     hovered_sidebar: Option<(PathBuf, egui::Rect)>,
@@ -364,6 +366,7 @@ impl App {
     fn state(started: Instant, smoke: bool) -> Self {
         let (tx, rx) = mpsc::channel();
         Self {
+            browser: browser::Browser::default(),
             view_epoch: 0,
             restoring: false,
             hovered_sidebar: None,
@@ -708,46 +711,7 @@ impl App {
             .filter(|p| p.to_string_lossy().to_lowercase().contains(&filter))
             .collect();
         ui.label(format!("{} / {} datasets", matches.len(), self.found.len()));
-        let mut add = None;
-        let row_height = ui
-            .text_style_height(&egui::TextStyle::Body)
-            .max(ui.spacing().interact_size.y);
-        egui::ScrollArea::vertical()
-            .id_salt("dataset-list")
-            .auto_shrink([false, false])
-            .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
-            .show_rows(ui, row_height, matches.len(), |ui, rows| {
-                for row in rows {
-                    let p = matches[row];
-                    let raw = !p.join("1r").is_file();
-                    let name = format!(
-                        "{} / {}{}",
-                        data::dataset_name(p),
-                        p.file_name().unwrap_or_default().to_string_lossy(),
-                        if raw { " (FID)" } else { "" }
-                    );
-                    let row_response = ui
-                        .add_sized(
-                            [ui.available_width(), row_height],
-                            egui::Button::selectable(false, name)
-                                .wrap_mode(egui::TextWrapMode::Truncate),
-                        )
-                        .on_hover_text(format!(
-                            "{}\nClick: open · Hover + S: add to stack",
-                            p.display()
-                        ));
-                    if row_response.hovered() {
-                        self.hovered_sidebar = Some((p.clone(), row_response.rect));
-                    }
-                    let stack = stack::stack_shortcut(&row_response, ctx);
-                    if row_response.clicked() || stack {
-                        add = Some((p.clone(), stack));
-                    }
-                }
-            });
-        if let Some((p, stack)) = add {
-            self.sidebar_open(p, stack, ctx.clone());
-        }
+        self.dataset_tree(ui, ctx, ui.available_height());
     }
 }
 impl eframe::App for App {

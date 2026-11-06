@@ -750,52 +750,7 @@ impl App {
                         self.topspin_search(ui);
                         egui::Frame::new().fill(Color32::WHITE).show(ui, |ui| {
                             ui.set_min_size(egui::vec2(304., h - 138.));
-                            let paths = self
-                                .found
-                                .iter()
-                                .filter(|p| {
-                                    p.to_string_lossy()
-                                        .to_lowercase()
-                                        .contains(&self.filter.to_lowercase())
-                                })
-                                .cloned()
-                                .collect::<Vec<_>>();
-                            let mut open = None;
-                            egui::ScrollArea::both()
-                                .max_height(h - 138.)
-                                .auto_shrink([false, false])
-                                .show(ui, |ui| {
-                                    egui::CollapsingHeader::new(if self.path.is_empty() {
-                                        "Datasets"
-                                    } else {
-                                        &self.path
-                                    })
-                                    .default_open(false)
-                                    .show(ui, |ui| {
-                                        for p in paths {
-                                            let r = ui.selectable_label(
-                                                false,
-                                                format!(
-                                                    "{} / {}",
-                                                    data::dataset_name(&p),
-                                                    p.file_name()
-                                                        .unwrap_or_default()
-                                                        .to_string_lossy()
-                                                ),
-                                            );
-                                            if r.hovered() {
-                                                self.hovered_sidebar = Some((p.clone(), r.rect));
-                                            }
-                                            let stack = stack::stack_shortcut(&r, ctx);
-                                            if r.clicked() || stack {
-                                                open = Some((p, stack));
-                                            }
-                                        }
-                                    });
-                                });
-                            if let Some((p, stack)) = open {
-                                self.sidebar_open(p, stack, ctx.clone());
-                            }
+                            self.dataset_tree(ui, ctx, h - 138.);
                         });
                         let (footer, _) =
                             ui.allocate_exact_size(egui::vec2(304., 37.), egui::Sense::hover());

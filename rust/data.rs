@@ -265,10 +265,10 @@ fn discover_impl(root: &Path, include_raw: bool) -> Result<Vec<PathBuf>, String>
     if is_dataset(root) {
         return Ok(vec![root.to_owned()]);
     }
-    let mut stack = vec![(root.to_owned(), 0)];
+    let mut stack = vec![root.to_owned()];
     let mut found = Vec::new();
     let mut visited = 0;
-    while let Some((dir, depth)) = stack.pop() {
+    while let Some(dir) = stack.pop() {
         visited += 1;
         if visited > 100_000 {
             return Err("Search exceeded 100,000 folders; choose a smaller folder".into());
@@ -281,8 +281,8 @@ fn discover_impl(root: &Path, include_raw: bool) -> Result<Vec<PathBuf>, String>
                 let p = e.path();
                 if is_dataset(&p) {
                     found.push(p)
-                } else if depth < 12 {
-                    stack.push((p, depth + 1))
+                } else {
+                    stack.push(p)
                 }
             }
         }
@@ -351,6 +351,24 @@ mod tests {
         assert_eq!(dataset_name(&paths[0]), "MLN1P85");
         sort_datasets(&mut paths, false);
         assert_eq!(dataset_name(&paths[0]), "MLN1P115");
+    }
+    #[test]
+    fn recursive_library_scan_finds_projects_beyond_twelve_levels() {
+        let root = std::env::temp_dir().join(format!("nmr-deep-library-{}", std::process::id()));
+        let mut deep = root.join("Project X");
+        for i in 0..20 {
+            deep.push(format!("level-{i}"));
+        }
+        let deep = deep.join("NMR1/10/pdata/1");
+        let sibling = root.join("Project Y/NMR2/20/pdata/2");
+        for path in [&deep, &sibling] {
+            fs::create_dir_all(path).unwrap();
+            fs::write(path.join("procs"), "##$SI= 65536").unwrap();
+            fs::write(path.join("1r"), [0u8; 4]).unwrap();
+        }
+        let found = discover_browser(&root).unwrap();
+        assert_eq!(found.len(), 2);
+        assert!(found.contains(&deep) && found.contains(&sibling));
     }
     #[test]
     fn browser_includes_raw_only_processing_numbers() {
