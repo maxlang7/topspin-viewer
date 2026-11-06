@@ -224,7 +224,7 @@ impl App {
             })
             .map(|(i, _)| i)
     }
-    pub(super) fn stack_window(&mut self, ctx: &egui::Context) {
+    pub(super) fn stack_panel(&mut self, ctx: &egui::Context) {
         let colors = self.colors();
         if self
             .traces
@@ -237,14 +237,13 @@ impl App {
             return;
         }
         let mut reorder = None;
-        egui::Window::new("Stack")
-            .id(egui::Id::new("stack-manager"))
-            .anchor(egui::Align2::RIGHT_TOP, egui::vec2(-12., 12.))
-            .movable(false)
-            .default_width(250.)
+        egui::SidePanel::right("stack-manager")
+            .default_width(230.)
             .min_width(170.)
+            .max_width(300.)
             .resizable(true)
             .show(ctx, |ui| {
+                ui.heading("Stack");
                 ui.horizontal(|ui| {
                     ui.selectable_value(&mut self.stacked, true, "Stacked");
                     ui.selectable_value(&mut self.stacked, false, "Overlay");
@@ -256,7 +255,7 @@ impl App {
                 }
                 egui::ScrollArea::vertical()
                     .id_salt("stack-rows")
-                    .max_height(240.)
+                    .max_height(ui.available_height())
                     .show(ui, |ui| {
                         for (i, t) in self
                             .traces
@@ -501,7 +500,7 @@ mod tests {
         assert_eq!(hit, 1);
     }
     #[test]
-    fn stack_window_drag_reorders_the_actual_trace_list() {
+    fn stack_panel_drag_reorders_the_actual_trace_list() {
         let mut a = app();
         let ctx = egui::Context::default();
         let frame = |a: &mut App, events: Vec<egui::Event>| {
@@ -513,9 +512,9 @@ mod tests {
                 events,
                 ..Default::default()
             };
-            ctx.run(input, |ctx| a.stack_window(ctx))
+            ctx.run(input, |ctx| a.stack_panel(ctx))
         };
-        // Anchored windows settle their measured size before pointer coordinates are read.
+        // Settle layout before reading the drag targets.
         for _ in 0..5 {
             let _ = frame(&mut a, vec![]);
         }

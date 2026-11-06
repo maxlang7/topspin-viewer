@@ -805,6 +805,7 @@ impl eframe::App for App {
             let _timer = diagnostics::stage(2);
             self.refresh_processing();
         }
+        self.stack_panel(ctx);
         let plot_timer = diagnostics::stage(3);
         let central_frame = if self.theme == appearance::Theme::TopSpin {
             egui::Frame::new()
@@ -867,7 +868,6 @@ impl eframe::App for App {
    if self.traces.is_empty(){painter.text(rect.center(),egui::Align2::CENTER_CENTER,"Open a Bruker dataset folder to begin\nAdd several spectra for overlay or stacked comparison",egui::FontId::proportional(20.),colors[0]);}
   });
         drop(plot_timer);
-        self.stack_window(ctx);
         self.track_history(ctx);
         {
             let _timer = diagnostics::stage(4);
