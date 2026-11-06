@@ -35,7 +35,7 @@ impl App {
             return;
         }
         egui::SidePanel::right("scientific-tools")
-            .default_width(285.)
+            .default_width(220.)
             .min_width(220.)
             .max_width(500.)
             .resizable(true)

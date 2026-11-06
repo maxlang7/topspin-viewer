@@ -29,3 +29,5 @@ Use **Process** to preview automatic phase, automatic baseline, or both. Calcula
 **Appearance → TopSpin** switches live to the TopSpin 5 reference layout: blue two-level ribbon, reference icons and fonts, split browser, command footer and blue-on-white spectrum. The selection is remembered; Gruvbox remains available. In TopSpin mode, the appearance chooser is also available through the upper-right menu and the main menu's Appearance submenu.
 
 Screenshot verification and its limitations are recorded in [TOPSPIN-APPEARANCE-VERIFICATION.md](TOPSPIN-APPEARANCE-VERIFICATION.md). The mode is not certified pixel-exact: text rasterization, some controls, browser contents and editing panels still differ.
+
+Sidebars start at their minimum usable widths: dataset browser 180 px, Stack 170 px and Tools 220 px. Drag their inner edges to resize. In TopSpin mode the narrow browser uses compact controls; widening it restores the reference browser layout.

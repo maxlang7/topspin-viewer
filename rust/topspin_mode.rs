@@ -640,8 +640,9 @@ impl App {
             self.focus_open = true;
         }
         egui::SidePanel::left("topspin-browser")
-            .exact_width(340.)
-            .resizable(false)
+            .default_width(180.)
+            .min_width(180.)
+            .resizable(true)
             .frame(egui::Frame::NONE.fill(BG).inner_margin(egui::Margin {
                 left: 9,
                 right: 10,
@@ -649,6 +650,12 @@ impl App {
                 bottom: 0,
             }))
             .show(ctx, |ui| {
+                // Narrow sidebars use the same responsive dataset controls as the
+                // native layout. Widening restores the reference browser chrome.
+                if ui.available_width() < 321. {
+                    self.dataset_browser(ui, ctx);
+                    return;
+                }
                 ui.spacing_mut().item_spacing.y = 0.;
                 let h = ((ui.available_height() - 10.) / 2.).floor().max(120.);
                 egui::Frame::new()
@@ -928,7 +935,7 @@ mod tests {
         assert_eq!(app.traces[0].settings.gain, 1.);
     }
     #[test]
-    fn live_mode_switch_preserves_science_and_matches_reference_geometry() {
+    fn live_mode_switch_preserves_science_and_uses_compact_browser() {
         let mut app = auto_process::tests::app();
         app.measure_region(7., 4.);
         app.refresh_processing();
@@ -958,7 +965,7 @@ mod tests {
                     if theme == appearance::Theme::TopSpin {
                         assert_eq!(ctx.available_rect().top(), 143.);
                         app.topspin_browser(ctx);
-                        assert_eq!(ctx.available_rect().left(), 340.);
+                        assert_eq!(ctx.available_rect().left(), 180.);
                         assert_eq!(ctx.available_rect().bottom(), 864.);
                     }
                 },

@@ -39,3 +39,7 @@ The release application was exercised through real menu clicks: TopSpin → Gruv
 The second screenshot pass improved the full-client identical-pixel count from 95.3784% to 97.3887%, and the browser region from 83.3512% to 93.2402%. Both comparisons use the same reference, size and unmasked regions. The large blank workspace still makes the overall percentage more favorable than the individual controls. Unsupported controls remain hidden.
 
 The search strip now has the measured full width, magnifier, clear control and filter menu. The reference pane split and export strip have fixed measured spacing. The command input has an explicit border and padding. Ctrl+O now opens the folder field in TopSpin mode too, and Escape cancels it.
+
+## Compact sidebar defaults
+
+The screenshot evidence above records the earlier 340-point reference browser. The default is now a resizable 180-point compact browser, as requested. Widening it restores the reference browser chrome. These reference captures do not represent the new narrow default. Stack and Tools also start at their minimum usable widths.

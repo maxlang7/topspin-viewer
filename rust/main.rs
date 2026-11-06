@@ -640,6 +640,116 @@ impl App {
         Ok("Loading comparison".into())
     }
 }
+impl App {
+    fn dataset_browser(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
+        ui.horizontal(|ui| {
+            ui.selectable_label(true, "Data")
+                .on_hover_text("Bruker datasets");
+            ui.label("NMR Viewer");
+        });
+        ui.separator();
+        ui.label("Open data directory");
+        let response = ui.add(
+            egui::TextEdit::singleline(&mut self.path)
+                .desired_width(ui.available_width())
+                .hint_text("Folder or processing number"),
+        );
+        if self.focus_open || ctx.input(|i| i.modifiers.command && i.key_pressed(egui::Key::O)) {
+            response.request_focus();
+            self.focus_open = false;
+        }
+        if ui.button("Open / refresh").clicked()
+            || (response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)))
+        {
+            self.open(PathBuf::from(&self.path), ctx.clone());
+        }
+        ui.separator();
+        ui.label("Dataset browser");
+        ui.add(
+            egui::TextEdit::singleline(&mut self.filter)
+                .desired_width(ui.available_width())
+                .hint_text("Filter datasets…"),
+        );
+        let previous = self.natural_sort;
+        egui::ComboBox::from_id_salt("dataset-sort")
+            .selected_text(if self.natural_sort {
+                "Alphabetical (natural)"
+            } else {
+                "Alphabetical (A-Z)"
+            })
+            .show_ui(ui, |ui| {
+                ui.selectable_value(&mut self.natural_sort, true, "Alphabetical (natural)")
+                    .on_hover_text("Compare numbers numerically: MLN1P85 before MLN1P115");
+                ui.selectable_value(&mut self.natural_sort, false, "Alphabetical (A-Z)");
+            });
+        if previous != self.natural_sort {
+            data::sort_datasets(&mut self.found, self.natural_sort);
+        }
+        if ui.button("Add matching spectra, up to 32").clicked() {
+            let matches: Vec<_> = self
+                .found
+                .iter()
+                .filter(|p| {
+                    p.to_string_lossy()
+                        .to_lowercase()
+                        .contains(&self.filter.to_lowercase())
+                })
+                .take(32)
+                .cloned()
+                .collect();
+            for p in matches {
+                self.sidebar_open(p, true, ctx.clone());
+            }
+        }
+        let filter = self.filter.to_lowercase();
+        let matches: Vec<_> = self
+            .found
+            .iter()
+            .filter(|p| p.to_string_lossy().to_lowercase().contains(&filter))
+            .collect();
+        ui.label(format!("{} / {} datasets", matches.len(), self.found.len()));
+        let mut add = None;
+        let row_height = ui
+            .text_style_height(&egui::TextStyle::Body)
+            .max(ui.spacing().interact_size.y);
+        egui::ScrollArea::vertical()
+            .id_salt("dataset-list")
+            .auto_shrink([false, false])
+            .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
+            .show_rows(ui, row_height, matches.len(), |ui, rows| {
+                for row in rows {
+                    let p = matches[row];
+                    let raw = !p.join("1r").is_file();
+                    let name = format!(
+                        "{} / {}{}",
+                        data::dataset_name(p),
+                        p.file_name().unwrap_or_default().to_string_lossy(),
+                        if raw { " (FID)" } else { "" }
+                    );
+                    let row_response = ui
+                        .add_sized(
+                            [ui.available_width(), row_height],
+                            egui::Button::selectable(false, name)
+                                .wrap_mode(egui::TextWrapMode::Truncate),
+                        )
+                        .on_hover_text(format!(
+                            "{}\nClick: open · Hover + S: add to stack",
+                            p.display()
+                        ));
+                    if row_response.hovered() {
+                        self.hovered_sidebar = Some((p.clone(), row_response.rect));
+                    }
+                    let stack = stack::stack_shortcut(&row_response, ctx);
+                    if row_response.clicked() || stack {
+                        add = Some((p.clone(), stack));
+                    }
+                }
+            });
+        if let Some((p, stack)) = add {
+            self.sidebar_open(p, stack, ctx.clone());
+        }
+    }
+}
 impl eframe::App for App {
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
         diagnostics::stop();
@@ -673,126 +783,10 @@ impl eframe::App for App {
             self.topspin_browser(ctx);
         } else {
             egui::SidePanel::left("browser")
-                .default_width(245.)
+                .default_width(180.)
                 .min_width(180.)
                 .resizable(true)
-                .show(ctx, |ui| {
-                    ui.horizontal(|ui| {
-                        ui.selectable_label(true, "Data")
-                            .on_hover_text("Bruker datasets");
-                        ui.label("NMR Viewer");
-                    });
-                    ui.separator();
-                    ui.label("Open data directory");
-                    let response = ui.add(
-                        egui::TextEdit::singleline(&mut self.path)
-                            .hint_text("Folder or processing number"),
-                    );
-                    if self.focus_open
-                        || ctx.input(|i| i.modifiers.command && i.key_pressed(egui::Key::O))
-                    {
-                        response.request_focus();
-                        self.focus_open = false;
-                    }
-                    if ui.button("Open / refresh").clicked()
-                        || (response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)))
-                    {
-                        self.open(PathBuf::from(&self.path), ctx.clone());
-                    }
-                    ui.separator();
-                    ui.label("Dataset browser");
-                    ui.add(
-                        egui::TextEdit::singleline(&mut self.filter).hint_text("Filter datasets…"),
-                    );
-                    let previous = self.natural_sort;
-                    egui::ComboBox::from_id_salt("dataset-sort")
-                        .selected_text(if self.natural_sort {
-                            "Alphabetical (natural)"
-                        } else {
-                            "Alphabetical (A-Z)"
-                        })
-                        .show_ui(ui, |ui| {
-                            ui.selectable_value(
-                                &mut self.natural_sort,
-                                true,
-                                "Alphabetical (natural)",
-                            )
-                            .on_hover_text("Compare numbers numerically: MLN1P85 before MLN1P115");
-                            ui.selectable_value(
-                                &mut self.natural_sort,
-                                false,
-                                "Alphabetical (A-Z)",
-                            );
-                        });
-                    if previous != self.natural_sort {
-                        data::sort_datasets(&mut self.found, self.natural_sort);
-                    }
-                    if ui.button("Add matching spectra, up to 32").clicked() {
-                        let matches: Vec<_> = self
-                            .found
-                            .iter()
-                            .filter(|p| {
-                                p.to_string_lossy()
-                                    .to_lowercase()
-                                    .contains(&self.filter.to_lowercase())
-                            })
-                            .take(32)
-                            .cloned()
-                            .collect();
-                        for p in matches {
-                            self.sidebar_open(p, true, ctx.clone());
-                        }
-                    }
-                    let filter = self.filter.to_lowercase();
-                    let matches: Vec<_> = self
-                        .found
-                        .iter()
-                        .filter(|p| p.to_string_lossy().to_lowercase().contains(&filter))
-                        .collect();
-                    ui.label(format!("{} / {} datasets", matches.len(), self.found.len()));
-                    let mut add = None;
-                    let row_height = ui
-                        .text_style_height(&egui::TextStyle::Body)
-                        .max(ui.spacing().interact_size.y);
-                    egui::ScrollArea::vertical()
-                        .id_salt("dataset-list")
-                        .auto_shrink([false, false])
-                        .scroll_bar_visibility(
-                            egui::scroll_area::ScrollBarVisibility::AlwaysVisible,
-                        )
-                        .show_rows(ui, row_height, matches.len(), |ui, rows| {
-                            for row in rows {
-                                let p = matches[row];
-                                let raw = !p.join("1r").is_file();
-                                let name = format!(
-                                    "{} / {}{}",
-                                    data::dataset_name(p),
-                                    p.file_name().unwrap_or_default().to_string_lossy(),
-                                    if raw { " (FID)" } else { "" }
-                                );
-                                let row_response = ui
-                                    .add_sized(
-                                        [ui.available_width(), row_height],
-                                        egui::Button::selectable(false, name)
-                                            .wrap_mode(egui::TextWrapMode::Truncate),
-                                    )
-                                    .on_hover_text(format!(
-                                        "{}\nClick: open · Hover + S: add to stack",
-                                        p.display()
-                                    ));
-                                if row_response.hovered() {
-                                    self.hovered_sidebar = Some((p.clone(), row_response.rect));
-                                }
-                                let stack = stack::stack_shortcut(&row_response, ctx);
-                                if row_response.clicked() || stack {
-                                    add = Some((p.clone(), stack));
-                                }
-                            }
-                        });
-                    if let Some((p, stack)) = add {
-                        self.sidebar_open(p, stack, ctx.clone());
-                    }
-                });
+                .show(ctx, |ui| self.dataset_browser(ui, ctx));
         }
         {
             let _timer = diagnostics::stage(5);

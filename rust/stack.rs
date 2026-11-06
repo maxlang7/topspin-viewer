@@ -238,7 +238,7 @@ impl App {
         }
         let mut reorder = None;
         egui::SidePanel::right("stack-manager")
-            .default_width(230.)
+            .default_width(170.)
             .min_width(170.)
             .max_width(300.)
             .resizable(true)
