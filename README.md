@@ -33,3 +33,5 @@ Screenshot verification and its limitations are recorded in [TOPSPIN-APPEARANCE-
 Sidebars start at their minimum usable widths: dataset browser 180 px and Tools 220 px. Drag their inner edges to resize. In TopSpin mode the narrow browser uses compact controls; widening it restores the reference browser layout.
 
 The Stack overlay has a minimal border and a bounded, scrollable list. Its position is fixed to the plot, and it cannot be moved or resized. Reorder its rows by dragging. It appears only when more than one spectrum is visible.
+
+In stacked integration, the mouse-down lane owns the entire drag even if the pointer crosses another lane. The preview shades only that spectrum. Click a lane to select it and inspect its existing integrals.

@@ -181,13 +181,27 @@ impl App {
             }
             return;
         }
+        if self.stacked
+            && response.clicked()
+            && !label_blocked
+            && let Some(pos) = plot_pointer.filter(|p| rect.contains(*p))
+            && let Some(index) = self.spectrum_under_pointer(rect, range, pos, have_integrals)
+        {
+            self.selected = index;
+            self.peaks.clear();
+        }
         if response.double_clicked() && !label_blocked {
             self.range = None;
         }
         if response.drag_started() && !label_blocked && integrating {
-            self.start = ctx.input(|i| i.pointer.press_origin()).map(|p| ppm(p.x));
-            self.integration_drag_trace = plot_pointer
+            let origin = ctx
+                .input(|i| i.pointer.press_origin())
+                .filter(|p| rect.contains(*p));
+            self.integration_drag_trace = origin
                 .and_then(|pos| self.spectrum_under_pointer(rect, range, pos, have_integrals));
+            self.start = origin
+                .filter(|_| self.integration_drag_trace.is_some())
+                .map(|p| ppm(p.x));
             if let Some(index) = self.integration_drag_trace {
                 self.selected = index;
             }
@@ -433,8 +447,32 @@ impl App {
         b: f64,
         painter: &egui::Painter,
     ) {
-        let Some(t) = self.integration_drag_trace.and_then(|i| self.traces.get(i)) else {
+        let Some(index) = self.integration_drag_trace else {
             return;
+        };
+        let Some(t) = self.traces.get(index) else {
+            return;
+        };
+        let lane_rect = if self.stacked {
+            let count = self
+                .traces
+                .iter()
+                .filter(|t| t.settings.visible)
+                .count()
+                .max(1);
+            let lane = self
+                .traces
+                .iter()
+                .take(index)
+                .filter(|t| t.settings.visible)
+                .count();
+            let h = rect.height() / count as f32;
+            egui::Rect::from_min_size(
+                Pos2::new(rect.left(), rect.top() + lane as f32 * h),
+                egui::vec2(rect.width(), h),
+            )
+        } else {
+            rect
         };
         let left = a.max(b).min(t.left());
         let right = a.min(b).max(t.right());
@@ -446,13 +484,20 @@ impl App {
         };
         let x0 = x(left).clamp(rect.left(), rect.right());
         let x1 = x(right).clamp(rect.left(), rect.right());
+        let bar_top = if self.stacked {
+            lane_rect.top() + 4.
+        } else {
+            rect.top() - 25.
+        };
         let bar = egui::Rect::from_min_max(
-            Pos2::new(x0, rect.top() - 25.),
-            Pos2::new(x1.max(x0 + 2.), rect.top() - 16.),
+            Pos2::new(x0, bar_top),
+            Pos2::new(x1.max(x0 + 2.), bar_top + 9.),
         );
         painter.rect_filled(bar, 2., self.palette().accent);
-        let shade =
-            egui::Rect::from_min_max(Pos2::new(x0, rect.top()), Pos2::new(x1, rect.bottom()));
+        let shade = egui::Rect::from_min_max(
+            Pos2::new(x0, lane_rect.top()),
+            Pos2::new(x1, lane_rect.bottom()),
+        );
         painter.with_clip_rect(rect).rect_filled(
             shade,
             0.,
@@ -675,7 +720,7 @@ mod tests {
         assert_eq!(a.traces[0].settings.integral_scale, scale);
     }
     #[test]
-    fn shift_drag_previews_creates_on_hovered_spectrum_and_scroll_is_unchanged_in_button_mode() {
+    fn stacked_drag_locks_to_press_lane_even_when_crossing_into_another_lane() {
         let mut a = app();
         let original = &a.traces[0];
         let mut data = (*original.data).clone();
@@ -700,7 +745,7 @@ mod tests {
             shift: true,
             ..Default::default()
         };
-        let p = Pos2::new(150., 400.);
+        let p = Pos2::new(150., 250.);
         let q = Pos2::new(400., 430.);
         frame(&mut a, &ctx, 0., vec![egui::Event::PointerMoved(p)], shift);
         frame(&mut a, &ctx, 0.1, vec![button(p, true, shift)], shift);
@@ -718,7 +763,24 @@ mod tests {
             egui::Modifiers::NONE,
         );
         assert_eq!(a.regions.len(), 1);
-        assert_eq!(a.regions[0].trace, 1);
+        assert_eq!(a.regions[0].trace, 0);
+        assert_eq!(a.selected, 0);
+        // A normal click switches the lane whose existing integrals are displayed.
+        frame(
+            &mut a,
+            &ctx,
+            0.31,
+            vec![button(q, true, egui::Modifiers::NONE)],
+            egui::Modifiers::NONE,
+        );
+        frame(
+            &mut a,
+            &ctx,
+            0.32,
+            vec![button(q, false, egui::Modifiers::NONE)],
+            egui::Modifiers::NONE,
+        );
+        assert_eq!(a.selected, 1);
         assert!(a.start.is_none());
         assert!(!a.integrate);
         let before = a.traces[1].settings.gain;
