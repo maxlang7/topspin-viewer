@@ -8,5 +8,6 @@
     "theme": "TopSpin"
   },
   "restart_between_switches": false,
-  "pid": 3734944
+  "pid": 3793737,
+  "binary_profile": "release"
 }

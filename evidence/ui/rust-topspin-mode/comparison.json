@@ -10,23 +10,23 @@
   ],
   "regions": {
     "whole_client": {
-      "identical_pixels": 4997897,
+      "identical_pixels": 5103237,
       "pixels": 5240072,
-      "identical_percent": 95.37840319751332,
+      "identical_percent": 97.38868091888814,
       "rgb_rms_difference": [
-        23.470451237340523,
-        22.291853693287756,
-        21.916048458787177
+        22.476214225728377,
+        21.057881363158877,
+        20.337165817958574
       ]
     },
     "ribbon": {
-      "identical_pixels": 544108,
+      "identical_pixels": 554910,
       "pixels": 598208,
-      "identical_percent": 90.95632288434791,
+      "identical_percent": 92.76204932063764,
       "rgb_rms_difference": [
-        42.183827365508925,
-        36.93559830417399,
-        35.167160431233064
+        42.17903258443401,
+        36.02720493868218,
+        32.62222464560944
       ]
     },
     "toolbar": {
@@ -40,13 +40,13 @@
       ]
     },
     "sidebar": {
-      "identical_pixels": 817309,
+      "identical_pixels": 914276,
       "pixels": 980560,
-      "identical_percent": 83.3512482662968,
+      "identical_percent": 93.24018927959533,
       "rgb_rms_difference": [
-        39.1413665372897,
-        38.692905813179785,
-        38.55059085400574
+        34.31133929181016,
+        33.77589778392849,
+        33.525850089367374
       ]
     },
     "empty_workspace": {
@@ -60,13 +60,13 @@
       ]
     },
     "footer": {
-      "identical_pixels": 255747,
+      "identical_pixels": 253318,
       "pixels": 270344,
-      "identical_percent": 94.60058296096825,
+      "identical_percent": 93.70209806764714,
       "rgb_rms_difference": [
-        26.290344468882232,
-        26.290344468882232,
-        26.290344468882232
+        33.06716825671975,
+        33.06716825671975,
+        33.06716825671975
       ]
     }
   },

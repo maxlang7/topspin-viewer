@@ -83,9 +83,9 @@ impl App {
                 let o = area.min;
                 let w = area.width();
                 ui.painter()
-                    .rect_filled(rect(o, 0., 51., w, 53.), 0., LOWER);
+                    .rect_filled(rect(o, 0., 52., w, 51.), 0., LOWER);
                 ui.painter().line_segment(
-                    [o + egui::vec2(0., 51.), o + egui::vec2(w, 51.)],
+                    [o + egui::vec2(0., 51.5), o + egui::vec2(w, 51.5)],
                     Stroke::new(1., Color32::BLACK),
                 );
                 let menu = button(
@@ -309,6 +309,12 @@ impl App {
                     }
                     x += width;
                 }
+                ui.painter().rect_stroke(
+                    area,
+                    0.,
+                    Stroke::new(1., Color32::BLACK),
+                    egui::StrokeKind::Inside,
+                );
             });
         egui::TopBottomPanel::top("topspin-tools")
             .exact_height(39.)
@@ -414,12 +420,20 @@ impl App {
             .show(ctx, |ui| {
                 let o = ui.max_rect().min;
                 let response = ui.put(
-                    rect(o, 9., 8., 360., 30.),
+                    rect(o, 9., 8., 360., 32.),
                     egui::TextEdit::singleline(&mut self.command)
+                        .min_size(egui::vec2(360., 32.))
+                        .margin(egui::vec2(9., 8.))
                         .font(egui::FontId::proportional(12.))
                         .hint_text(
                             egui::RichText::new("Command...").color(Color32::from_gray(204)),
                         ),
+                );
+                ui.painter().rect_stroke(
+                    rect(o, 9., 8., 360., 32.),
+                    0.,
+                    Stroke::new(1., Color32::from_gray(51)),
+                    egui::StrokeKind::Inside,
                 );
                 if response.lost_focus() && ctx.input(|i| i.key_pressed(egui::Key::Enter)) {
                     match self.command.trim() {
@@ -524,7 +538,107 @@ impl App {
         self.topspin_previous_range = Some(r);
         self.range = Some([m + (r[0] - m) * factor, m + (r[1] - m) * factor]);
     }
+    fn topspin_search(&mut self, ui: &mut egui::Ui) {
+        let (area, _) = ui.allocate_exact_size(egui::vec2(304., 50.), egui::Sense::hover());
+        ui.painter().rect_filled(area, 0., Color32::WHITE);
+        let o = area.min;
+        if self.focus_open {
+            let r = ui.put(
+                rect(o, 8., 8., 288., 34.),
+                egui::TextEdit::singleline(&mut self.path)
+                    .hint_text("Dataset folder · Enter to open"),
+            );
+            r.request_focus();
+            if ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+                self.focus_open = false;
+                self.open(PathBuf::from(&self.path), ui.ctx().clone());
+            }
+            if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+                self.focus_open = false;
+                r.surrender_focus();
+            }
+            ui.advance_cursor_after_rect(area);
+            return;
+        }
+        let search = rect(o, 8., 8., 149., 34.);
+        ui.painter().rect_stroke(
+            search,
+            0.,
+            Stroke::new(1., Color32::from_gray(51)),
+            egui::StrokeKind::Inside,
+        );
+        let center = o + egui::vec2(21., 22.);
+        ui.painter()
+            .circle_stroke(center, 5.5, Stroke::new(2., Color32::DARK_GRAY));
+        ui.painter().line_segment(
+            [center + egui::vec2(4., 4.), center + egui::vec2(10., 10.)],
+            Stroke::new(2., Color32::DARK_GRAY),
+        );
+        ui.put(
+            rect(o, 38., 9., 88., 32.),
+            egui::TextEdit::singleline(&mut self.filter)
+                .frame(false)
+                .font(egui::FontId::proportional(12.))
+                .margin(egui::vec2(0., 8.))
+                .hint_text(egui::RichText::new("Search...").color(Color32::from_gray(204))),
+        );
+        ui.painter().line_segment(
+            [o + egui::vec2(126., 10.), o + egui::vec2(126., 40.)],
+            Stroke::new(1., Color32::from_gray(180)),
+        );
+        let clear = ui
+            .interact(
+                rect(o, 127., 9., 29., 32.),
+                ui.id().with("clear-filter"),
+                egui::Sense::click(),
+            )
+            .on_hover_text("Clear search");
+        icon(
+            ui,
+            rect(o, 131., 14., 21., 22.),
+            "clear-filter",
+            include_bytes!("../assets/icons/264cf4e7aa3e3ccb@2x.png"),
+        );
+        if clear.clicked() {
+            self.filter.clear();
+        }
+        let funnel = [
+            o + egui::vec2(165., 22.),
+            o + egui::vec2(181., 22.),
+            o + egui::vec2(176., 30.),
+            o + egui::vec2(176., 38.),
+            o + egui::vec2(170., 38.),
+            o + egui::vec2(170., 30.),
+        ];
+        ui.painter().add(egui::Shape::convex_polygon(
+            funnel.to_vec(),
+            Color32::DARK_GRAY,
+            Stroke::NONE,
+        ));
+        ui.scope_builder(
+            egui::UiBuilder::new().max_rect(rect(o, 184., 21., 110., 22.)),
+            |ui| {
+                ui.menu_button(
+                    egui::RichText::new("Show Filters")
+                        .color(Color32::from_rgb(24, 104, 169))
+                        .underline(),
+                    |ui| {
+                        let old = self.natural_sort;
+                        ui.selectable_value(&mut self.natural_sort, true, "Alphabetical (natural)");
+                        ui.selectable_value(&mut self.natural_sort, false, "Alphabetical (A–Z)");
+                        if old != self.natural_sort {
+                            data::sort_datasets(&mut self.found, self.natural_sort);
+                        }
+                    },
+                );
+            },
+        );
+        ui.advance_cursor_after_rect(area);
+    }
     pub(super) fn topspin_browser(&mut self, ctx: &egui::Context) {
+        if ctx.input(|i| i.modifiers.command && i.key_pressed(egui::Key::O)) {
+            self.focus_open = true;
+        }
         egui::SidePanel::left("topspin-browser")
             .exact_width(340.)
             .resizable(false)
@@ -535,16 +649,22 @@ impl App {
                 bottom: 0,
             }))
             .show(ctx, |ui| {
-                let h = (ui.available_height() - 10.) / 2.;
+                ui.spacing_mut().item_spacing.y = 0.;
+                let h = ((ui.available_height() - 10.) / 2.).floor().max(120.);
                 egui::Frame::new()
                     .fill(Color32::from_gray(204))
                     .stroke(Stroke::new(1., Color32::from_gray(142)))
-                    .inner_margin(8.)
+                    .inner_margin(egui::Margin {
+                        left: 8,
+                        right: 7,
+                        top: 8,
+                        bottom: 0,
+                    })
                     .show(ui, |ui| {
-                        ui.set_width(303.);
-                        ui.set_height(h - 18.);
+                        ui.set_width(304.);
+                        ui.set_height(h - 10.);
                         let (tabs, _) =
-                            ui.allocate_exact_size(egui::vec2(303., 32.), egui::Sense::hover());
+                            ui.allocate_exact_size(egui::vec2(304., 32.), egui::Sense::hover());
                         let o = tabs.min;
                         let selected = Color32::from_rgb(174, 200, 217);
                         let r = rect(o, 0., 0., 72., 32.);
@@ -620,44 +740,9 @@ impl App {
                             }
                         }
                         ui.add_space(9.);
-                        egui::Frame::new()
-                            .fill(Color32::WHITE)
-                            .inner_margin(6.)
-                            .show(ui, |ui| {
-                                if self.focus_open {
-                                    let r = ui.text_edit_singleline(&mut self.path);
-                                    r.request_focus();
-                                    if ctx.input(|i| i.key_pressed(egui::Key::Enter)) {
-                                        self.focus_open = false;
-                                        self.open(PathBuf::from(&self.path), ctx.clone());
-                                    }
-                                }
-                                ui.horizontal(|ui| {
-                                    ui.add_sized(
-                                        [149., 30.],
-                                        egui::TextEdit::singleline(&mut self.filter)
-                                            .hint_text("Search..."),
-                                    );
-                                    ui.menu_button("Show Filters", |ui| {
-                                        let old = self.natural_sort;
-                                        ui.selectable_value(
-                                            &mut self.natural_sort,
-                                            true,
-                                            "Alphabetical (natural)",
-                                        );
-                                        ui.selectable_value(
-                                            &mut self.natural_sort,
-                                            false,
-                                            "Alphabetical (A–Z)",
-                                        );
-                                        if old != self.natural_sort {
-                                            data::sort_datasets(&mut self.found, self.natural_sort);
-                                        }
-                                    });
-                                });
-                            });
+                        self.topspin_search(ui);
                         egui::Frame::new().fill(Color32::WHITE).show(ui, |ui| {
-                            ui.set_min_size(egui::vec2(303., h - 133.));
+                            ui.set_min_size(egui::vec2(304., h - 138.));
                             let paths = self
                                 .found
                                 .iter()
@@ -670,7 +755,8 @@ impl App {
                                 .collect::<Vec<_>>();
                             let mut open = None;
                             egui::ScrollArea::both()
-                                .max_height(h - 135.)
+                                .max_height(h - 138.)
+                                .auto_shrink([false, false])
                                 .show(ui, |ui| {
                                     egui::CollapsingHeader::new(if self.path.is_empty() {
                                         "Datasets"
@@ -704,22 +790,38 @@ impl App {
                                 self.sidebar_open(p, stack, ctx.clone());
                             }
                         });
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            if ui.link("Export").clicked() {
-                                self.select_tool(workspace::Tool::Export);
-                            }
-                        });
+                        let (footer, _) =
+                            ui.allocate_exact_size(egui::vec2(304., 37.), egui::Sense::hover());
+                        ui.painter().rect_filled(footer, 0., BG);
+                        ui.scope_builder(
+                            egui::UiBuilder::new().max_rect(footer.shrink2(egui::vec2(8., 0.))),
+                            |ui| {
+                                ui.with_layout(
+                                    egui::Layout::right_to_left(egui::Align::Center),
+                                    |ui| {
+                                        if ui.link("Export").clicked() {
+                                            self.select_tool(workspace::Tool::Export);
+                                        }
+                                    },
+                                );
+                            },
+                        );
                     });
                 ui.add_space(10.);
                 egui::Frame::new()
                     .fill(Color32::from_gray(204))
                     .stroke(Stroke::new(1., Color32::from_gray(142)))
-                    .inner_margin(8.)
+                    .inner_margin(egui::Margin {
+                        left: 8,
+                        right: 7,
+                        top: 8,
+                        bottom: 0,
+                    })
                     .show(ui, |ui| {
-                        ui.set_width(303.);
-                        ui.set_height(h - 18.);
+                        ui.set_width(304.);
+                        ui.set_height(h - 10.);
                         let (tabs, _) =
-                            ui.allocate_exact_size(egui::vec2(303., 32.), egui::Sense::hover());
+                            ui.allocate_exact_size(egui::vec2(304., 32.), egui::Sense::hover());
                         let o = tabs.min;
                         let items: [(&str, &[u8]); 4] = [
                             (
@@ -755,12 +857,7 @@ impl App {
                                 12.,
                             )
                             .on_hover_text(name);
-                            icon(
-                                ui,
-                                egui::Rect::from_center_size(r.center(), egui::vec2(24., 24.)),
-                                name,
-                                bytes,
-                            );
+                            icon(ui, rect(o, 12. + i as f32 * 48., 4., 24., 24.), name, bytes);
                             if i == 0 {
                                 ui.painter().rect_stroke(
                                     r,
@@ -779,7 +876,7 @@ impl App {
                         }
                         ui.add_space(9.);
                         let (r, _) = ui.allocate_exact_size(
-                            egui::vec2(303., (h - 68.).max(1.)),
+                            egui::vec2(304., (h - 50.).max(1.)),
                             egui::Sense::hover(),
                         );
                         ui.painter().rect_filled(r, 0., BG);
