@@ -308,9 +308,9 @@ impl App {
                 ));
             }
         }
-        // Give the selected label first choice of a bounded row, without moving traces.
-        let mut order = (0..regions.len()).collect::<Vec<_>>();
-        order.sort_by_key(|&i| self.selected_integral != Some(regions[i].0));
+        // Regions are already in spectrum left-to-right order. Selection must
+        // never reorder the packing input or swap nearby numerical labels.
+        let order = (0..regions.len()).collect::<Vec<_>>();
         let desired = order
             .iter()
             .map(|&i| {

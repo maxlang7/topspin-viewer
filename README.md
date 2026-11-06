@@ -37,3 +37,5 @@ The Stack overlay has a minimal border and a bounded, scrollable list. Its posit
 In stacked integration, the mouse-down lane owns the entire drag even if the pointer crosses another lane. The preview shades only that spectrum. Click a lane to select it and inspect its existing integrals.
 
 Stacked spectra display their own integral curves, markers and values together. Integral text adapts to the space below each lane’s baseline; crowded values remain accessible through the integration table. Completing a drag redraws the new integral immediately.
+
+Crowded integral numbers retain spectrum left-to-right order. Selecting a value changes its highlight, not its label position or priority. Values that do not fit remain available in overflow or the integration table.

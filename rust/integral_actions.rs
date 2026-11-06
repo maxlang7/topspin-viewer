@@ -722,6 +722,39 @@ mod tests {
         assert_eq!(a.traces[0].settings.integral_scale, scale);
     }
     #[test]
+    fn crowded_integral_numbers_keep_left_to_right_order_when_selected() {
+        let mut a = app();
+        for (left, right) in [(7., 6.8), (6.7, 6.5), (6.4, 6.2)] {
+            a.measure_region(left, right);
+        }
+        a.refresh_processing();
+        let ctx = egui::Context::default();
+        let mut original = None;
+        for (step, selected) in [None, Some(2), Some(0), Some(1)].into_iter().enumerate() {
+            a.selected_integral = selected;
+            let (hits, _) = frame(
+                &mut a,
+                &ctx,
+                step as f64 * 0.1,
+                vec![],
+                egui::Modifiers::NONE,
+            );
+            assert_eq!(hits.len(), 3);
+            for pair in hits.windows(2) {
+                assert!(
+                    pair[0].1.right() <= pair[1].1.left(),
+                    "Integral labels swapped or overlapped: {hits:?}"
+                );
+            }
+            let positions = hits.iter().map(|(id, r)| (*id, r.min)).collect::<Vec<_>>();
+            if let Some(expected) = &original {
+                assert_eq!(&positions, expected);
+            } else {
+                original = Some(positions);
+            }
+        }
+    }
+    #[test]
     fn four_stacked_spectra_keep_integral_values_visible_without_selection() {
         let mut a = app();
         for i in 1..4 {
@@ -959,7 +992,9 @@ mod tests {
         );
         assert!(anchor.is_some() && !hidden.is_empty());
         assert_eq!(hidden.len() + labels.len(), 30);
-        assert!(labels.iter().any(|(id, _)| *id == 29));
+        // Selection no longer promotes a later value ahead of earlier labels.
+        assert!(hidden.contains(&29));
+        assert!(labels.windows(2).all(|pair| pair[0].0 < pair[1].0));
         for (_, rect) in &labels {
             assert!(
                 !rect.intersects(anchor.unwrap()),
