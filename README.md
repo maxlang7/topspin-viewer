@@ -2,7 +2,7 @@
 
 NMR Viewer is a Rust desktop application for exploring and processing Bruker 1D NMR data. It opens datasets in a searchable folder browser, displays spectra individually or in a stack, and saves processing edits in a separate project. It also offers a TopSpin-inspired appearance.
 
-![NMR Viewer in its Gruvbox appearance, with the dataset browser open](evidence/ui/rust-topspin-mode/live-switch-gruvbox-final.png)
+![NMR Viewer showing stacked spectra, integral curves, the dataset browser, and processing controls](assets/screenshots/viewer-integrals.png)
 
 ## What it does
 
